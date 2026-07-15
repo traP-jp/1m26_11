@@ -2,3 +2,6 @@
 1Monthon 2026　11班
 
 - kaomojikun
+
+- shimeji
+
