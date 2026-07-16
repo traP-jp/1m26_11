@@ -7,4 +7,6 @@
 
 - renkon
 
+- solalyth
+
 - Takenokomeshi
