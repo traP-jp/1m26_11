@@ -7,7 +7,7 @@ updates:
     cooldown:
       default-days: 7
   - package-ecosystem: "docker"
-    directory: "/server"
+    directory: "/"
     schedule:
       interval: "monthly"
     cooldown:

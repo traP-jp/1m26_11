@@ -38,7 +38,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./server/Dockerfile
+          file: ./Dockerfile
           push: ${{ env.CAN_PUSH }}
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}

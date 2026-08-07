@@ -48,17 +48,17 @@ jobs:
     env:
       TEST_DATABASE_URL: mysql://test:test@127.0.0.1:3306/test
     services:
-      mysql:
-        image: mysql:8.4
+      mariadb:
+        image: mariadb:11.8
         env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: test
-          MYSQL_USER: test
-          MYSQL_PASSWORD: test
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: test
+          MARIADB_USER: test
+          MARIADB_PASSWORD: test
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10

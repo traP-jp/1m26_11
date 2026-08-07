@@ -1,6 +1,6 @@
 # Rust backend
 
-Axum、Tokio、SQLx (MySQL)、Serde、Reqwest で実装した API サーバーです。TLS を使う依存関係は rustls を利用します。
+Axum、Tokio、SQLx、MariaDB、Serde、Reqwest で実装した API サーバーです。SQLx は MySQL protocol 互換 driver 経由で MariaDB に接続し、TLS を使う依存関係には rustls を利用します。
 
 ## API
 
@@ -15,7 +15,7 @@ Axum、Tokio、SQLx (MySQL)、Serde、Reqwest で実装した API サーバー�
 ## 必要なもの
 
 - [mise](https://mise.jdx.dev/)
-- Docker / Docker Compose 2.22 以降（開発用 MySQL と Compose Watch を使う場合）
+- Docker / Docker Compose 2.22 以降（開発用 MariaDB と Compose Watch を使う場合）
 
 コマンドはリポジトリルートで実行します。
 
@@ -31,13 +31,15 @@ mise run check
 
 ## 開発環境
 
+コンテナ定義はリポジトリルートの `Dockerfile` と `compose.yaml` にあります。`server/` と共有契約の `openapi/` の両方を build context に含めます。
+
 ```sh
 mise run dev
 ```
 
 API は <http://localhost:8080>、Adminer は <http://localhost:8081> で起動します。通常の Compose 起動／停止には `mise run compose-up` と `mise run compose-down` を使えます。
 
-Docker build はリポジトリルートを context にする前提です。
+Docker build はリポジトリルートを context にします。
 
 ```sh
 mise run docker-build
@@ -48,24 +50,26 @@ mise run docker-build
 | 変数 | 既定値 | 説明 |
 | --- | --- | --- |
 | `APP_ADDR` | `0.0.0.0:8080` | listen address（`:8080` 形式も可） |
-| `DATABASE_URL` | 未設定 | 設定時は個別の `DB_*` より優先する MySQL URL |
-| `DB_USER` | `root` | MySQL user |
-| `DB_PASS` | `pass` | MySQL password |
-| `DB_HOST` | `localhost` | MySQL host |
-| `DB_PORT` | `3306` | MySQL port |
-| `DB_NAME` | `app` | MySQL database |
+| `DATABASE_URL` | 未設定 | 設定時は個別の `DB_*` より優先する MariaDB URL（`mysql://` scheme） |
+| `DB_USER` | `root` | MariaDB user |
+| `DB_PASS` | `pass` | MariaDB password |
+| `DB_HOST` | `localhost` | MariaDB host |
+| `DB_PORT` | `3306` | MariaDB port |
+| `DB_NAME` | `app` | MariaDB database |
 | `PHOTO_API_URL` | `https://jsonplaceholder.typicode.com/photos` | photo API の base URL |
 | `RUST_LOG` | `server=info,tower_http=info` | tracing filter |
 
 起動時に `migrations/` の SQLx migration を自動適用します。
 
-## MySQL 結合テスト
+## MariaDB 結合テスト
 
-MySQL を使う user flow は `#[ignore]` です。`TEST_DATABASE_URL` を設定するか、上記の `DB_USER`、`DB_PASS`、`DB_HOST`、`DB_PORT`、`DB_NAME` を設定して実行します。テストは migration を適用し、開始前後に `users` を削除します。
+MariaDB を使う user flow は `#[ignore]` です。`TEST_DATABASE_URL` を設定するか、上記の `DB_USER`、`DB_PASS`、`DB_HOST`、`DB_PORT`、`DB_NAME` を設定して実行します。テストは migration を適用し、開始前後に `users` を削除します。
 
 ```sh
 TEST_DATABASE_URL=mysql://root:pass@127.0.0.1:3306/app \
   mise run test-integration
 ```
+
+`mysql://` は SQLx が MariaDB との通信に使用する MySQL protocol の scheme です。
 
 

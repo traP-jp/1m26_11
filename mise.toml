@@ -43,19 +43,16 @@ run = "echo All checks passed"
 
 [tasks.docker-build]
 description = "Build the server container image"
-run = "docker build -f server/Dockerfile ."
+run = "docker build ."
 
 [tasks.dev]
 description = "Run the server development stack with Compose watch"
-dir = "server"
 run = "docker compose watch"
 
 [tasks.compose-up]
 description = "Start the server development stack"
-dir = "server"
 run = "docker compose up -d"
 
 [tasks.compose-down]
 description = "Stop the server development stack"
-dir = "server"
 run = "docker compose down"

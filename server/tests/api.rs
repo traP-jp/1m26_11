@@ -230,8 +230,8 @@ async fn invalid_path_and_unknown_route_return_json_errors() {
 }
 
 #[tokio::test]
-#[ignore = "requires TEST_DATABASE_URL or a MySQL service configured with DB_* variables"]
-async fn mysql_user_flow() {
+#[ignore = "requires TEST_DATABASE_URL or a MariaDB service configured with DB_* variables"]
+async fn mariadb_user_flow() {
     let pool = connect_test_database().await;
     migrate(&pool).await.expect("migration should succeed");
     sqlx::query("DELETE FROM users")
@@ -255,7 +255,7 @@ async fn mysql_user_flow() {
     repository
         .get_user(created.id)
         .await
-        .expect("created user should be readable from MySQL");
+        .expect("created user should be readable from MariaDB");
 
     let response = request(
         &app,

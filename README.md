@@ -7,6 +7,8 @@
 - `client/`: クライアントアプリケーション
 - `openapi/`: クライアントとサーバーが共有する OpenAPI 3.1 契約
 - `server/`: Rust 2024 edition のサーバーアプリケーション
+- `Dockerfile`: Rust server の production image 定義
+- `compose.yaml`: server、MariaDB、Adminer を束ねる開発環境定義
 
 ## Requirements
 
@@ -37,11 +39,11 @@ Rust stable は `mise.toml` の定義に従ってセットアップされます�
 | `mise run check` | format、build、lint、DB 不要テストをまとめて実行 | 不要 |
 | `mise run docker-build` | server のコンテナ image をビルド | 不要 |
 
-Integration test をローカルで実行する場合は、MySQL を用意して `TEST_DATABASE_URL` を設定してください。CI では MySQL 8.4 service を起動して実行します。
+Integration test をローカルで実行する場合は、MariaDB を用意して `TEST_DATABASE_URL` を設定してください。CI と Compose では MariaDB 11.8 LTS 系を使用します。SQLx は MariaDB への接続にも MySQL protocol の `mysql://` URL を使用します。
 
 ## Docker development
 
-Docker Compose の watch モードで開発環境を起動します。
+`Dockerfile` と `compose.yaml` は、`server/` と `openapi/` の双方を参照するためリポジトリルートに配置しています。Docker Compose の watch モードで開発環境を起動します。
 
 ```sh
 mise run dev
