@@ -14,7 +14,7 @@ jobs:
     name: Client Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - run: mise run client-check
 
@@ -22,7 +22,7 @@ jobs:
     name: Server Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - run: mise run build
 
@@ -30,7 +30,7 @@ jobs:
     name: Server Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - run: mise run fmt-check
 
@@ -38,7 +38,7 @@ jobs:
     name: Server Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - run: mise run lint
 
@@ -46,7 +46,7 @@ jobs:
     name: Server Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - run: mise run test-unit
 
@@ -71,7 +71,7 @@ jobs:
           --health-timeout=5s
           --health-retries=10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - run: mise run test-integration
 
@@ -93,7 +93,7 @@ jobs:
       - name: Dependabot metadata
         uses: dependabot/fetch-metadata@v3
         id: metadata
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Enable automerge
         if: |
           steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
