@@ -1,0 +1,8 @@
+.git
+server/target
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+mise.local.toml

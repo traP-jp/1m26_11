@@ -1,0 +1,61 @@
+[tools]
+rust = "stable"
+
+[tasks.build]
+description = "Build the server"
+dir = "server"
+run = "cargo build --locked"
+
+[tasks.fmt]
+description = "Format the server"
+dir = "server"
+run = "cargo fmt --all"
+
+[tasks.fmt-check]
+description = "Check server formatting"
+dir = "server"
+run = "cargo fmt --all -- --check"
+
+[tasks.lint]
+description = "Lint the server"
+dir = "server"
+run = "cargo clippy --locked --all-targets --all-features -- -D warnings"
+
+[tasks.test-unit]
+description = "Run server tests that do not require a database"
+dir = "server"
+run = "cargo test --locked"
+
+[tasks.test-integration]
+description = "Run ignored server API integration tests"
+dir = "server"
+run = "cargo test --locked --test api -- --ignored --test-threads=1"
+
+[tasks.test]
+description = "Run server tests that do not require a database"
+dir = "server"
+run = "cargo test --locked"
+
+[tasks.check]
+description = "Run all server checks that do not require a database"
+depends = ["fmt-check", "build", "lint", "test-unit"]
+run = "echo All checks passed"
+
+[tasks.docker-build]
+description = "Build the server container image"
+run = "docker build -f server/Dockerfile ."
+
+[tasks.dev]
+description = "Run the server development stack with Compose watch"
+dir = "server"
+run = "docker compose watch"
+
+[tasks.compose-up]
+description = "Start the server development stack"
+dir = "server"
+run = "docker compose up -d"
+
+[tasks.compose-down]
+description = "Stop the server development stack"
+dir = "server"
+run = "docker compose down"
