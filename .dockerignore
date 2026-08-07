@@ -1,5 +1,8 @@
 .git
 server/target
+client/node_modules
+client/dist
+client/coverage
 .env
 .env.*
 **/.env

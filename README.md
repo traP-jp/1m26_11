@@ -4,7 +4,7 @@
 
 ## 構成
 
-- `client/`: クライアントアプリケーション
+- `client/`: Vue 3 + Vite + TypeScript のクライアントアプリケーション
 - `openapi/`: クライアントとサーバーが共有する OpenAPI 3.1 契約
 - `server/`: Rust 2024 edition のサーバーアプリケーション
 - `Dockerfile`: Rust server の production image 定義
@@ -21,11 +21,11 @@ mise trust
 mise install
 ```
 
-Rust stable は `mise.toml` の定義に従ってセットアップされます。
+Rust stable、Node.js 24、pnpm 11 は `mise.toml` の定義に従ってセットアップされます。
 
 ## Tasks
 
-すべてリポジトリルートで実行します。Cargo コマンドは mise により `server/` で実行されます。
+すべてリポジトリルートで実行します。Cargo と pnpm のコマンドは mise によりそれぞれ `server/` と `client/` で実行されます。
 
 | Command | Description | Database |
 | --- | --- | --- |
@@ -36,20 +36,25 @@ Rust stable は `mise.toml` の定義に従ってセットアップされます�
 | `mise run test-unit` | DB 不要の server test を実行 | 不要 |
 | `mise run test` | DB を必要としない通常テストを実行 | 不要 |
 | `mise run test-integration` | ignored の API integration test を直列実行 | 必要 |
-| `mise run check` | format、build、lint、DB 不要テストをまとめて実行 | 不要 |
+| `mise run client-install` | pnpm 依存関係を lockfile からインストール | 不要 |
+| `mise run client-build` | client の typecheck と production build | 不要 |
+| `mise run client-lint` | client の ESLint/Oxlint | 不要 |
+| `mise run client-test` | client の Vitest | 不要 |
+| `mise run client-check` | client の全チェック | 不要 |
+| `mise run check` | server と client の全チェック | 不要 |
 | `mise run docker-build` | server のコンテナ image をビルド | 不要 |
 
 Integration test をローカルで実行する場合は、MariaDB を用意して `TEST_DATABASE_URL` を設定してください。CI と Compose では MariaDB 11.8 LTS 系を使用します。SQLx は MariaDB への接続にも MySQL protocol の `mysql://` URL を使用します。
 
 ## Docker development
 
-`Dockerfile` と `compose.yaml` は、`server/` と `openapi/` の双方を参照するためリポジトリルートに配置しています。Docker Compose の watch モードで開発環境を起動します。
+`Dockerfile` と `compose.yaml` は、`server/` と `openapi/` の双方を参照するためリポジトリルートに配置しています。次のコマンドで backend の Compose Watch と frontend の Vite dev server を並列起動します。
 
 ```sh
 mise run dev
 ```
 
-バックグラウンドでの起動・停止も mise から実行できます。
+Vite のみ起動する場合は `mise run client-dev`、backend のみ watch する場合は `mise run server-dev` を使用します。backend をバックグラウンドで起動・停止する場合も mise から実行できます。
 
 ```sh
 mise run compose-up
