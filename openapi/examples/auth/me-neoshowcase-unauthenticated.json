@@ -1,0 +1,7 @@
+{
+  "authenticated": false,
+  "auth_mode": "neoshowcase",
+  "user": null,
+  "login_url": "/_oauth/login?redirect=/",
+  "logout_url": null
+}

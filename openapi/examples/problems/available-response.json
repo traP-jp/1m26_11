@@ -1,0 +1,32 @@
+{
+  "id": "22222222-2222-4222-8222-222222222221",
+  "number": 1,
+  "type": "small",
+  "title": "生年月日",
+  "body_markdown": "問題文です",
+  "submission_type": "operation_sequence",
+  "assets": [
+    {
+      "type": "image",
+      "url": "/assets/problems/birthday.png",
+      "alt": "問題資料"
+    }
+  ],
+  "status": "available",
+  "input_schema": {
+    "query": {
+      "type": "operation_sequence",
+      "allowed_controls": [
+        "down",
+        "right",
+        "up"
+      ],
+      "max_operations": 100
+    },
+    "answer": {
+      "type": "string",
+      "max_length": 50
+    }
+  },
+  "hint_count": 2
+}

@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "PROBLEM_LOCKED",
+    "message": "この問題はまだ解放されていません",
+    "details": {}
+  }
+}

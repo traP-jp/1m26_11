@@ -1,0 +1,10 @@
+{
+  "authenticated": true,
+  "auth_mode": "local",
+  "user": {
+    "id": "55555555-5555-4555-8555-555555555555",
+    "display_name": "kaomojikun"
+  },
+  "login_url": null,
+  "logout_url": null
+}

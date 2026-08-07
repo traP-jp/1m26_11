@@ -1,0 +1,13 @@
+{
+  "correct": true,
+  "problem_status": "cleared",
+  "unlocked_problem_ids": [
+    "22222222-2222-4222-8222-222222222222"
+  ],
+  "run_status": "active",
+  "progress": {
+    "cleared_problem_count": 1,
+    "total_problem_count": 4
+  },
+  "elapsed_ms": 48321
+}

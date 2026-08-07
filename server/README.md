@@ -10,7 +10,7 @@ Axum、Tokio、SQLx、MariaDB、Serde、Reqwest で実装した API サーバー
 - `POST /api/v1/users`
 - `GET /api/v1/users/{userID}`
 
-`build.rs` は `../openapi/openapi-v1.yaml` を YAML として読み込み、OpenAPI 3.1.0 と各 path/method に必要な `operationId` (`getOpenApi`、`ping`、`getUsers`、`createUser`、`getUser`) を検証します。検証後の仕様は `OUT_DIR` にコピーされ、バイナリへ `include_str!` で埋め込まれます。
+`build.rs` は `../openapi/openapi-v1.yaml` を YAML として読み込み、OpenAPI 3.1.0 と、契約配信用の`getOpenApi`およびP0認証・ゲームAPI 8本に必要な`operationId`を検証します。検証後の仕様は `OUT_DIR` にコピーされ、バイナリへ `include_str!` で埋め込まれます。P0 API handler本体の実装は、この共通契約・fixture作成とは別Issueです。
 
 ## 必要なもの
 
@@ -71,5 +71,4 @@ TEST_DATABASE_URL=mysql://root:pass@127.0.0.1:3306/app \
 ```
 
 `mysql://` は SQLx が MariaDB との通信に使用する MySQL protocol の scheme です。
-
 
