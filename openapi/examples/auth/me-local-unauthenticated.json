@@ -1,0 +1,7 @@
+{
+  "authenticated": false,
+  "auth_mode": "local",
+  "user": null,
+  "login_url": null,
+  "logout_url": null
+}

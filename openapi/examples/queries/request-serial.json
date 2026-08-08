@@ -1,0 +1,17 @@
+{
+  "source": "serial",
+  "operations": [
+    {
+      "control": "down",
+      "count": 16
+    },
+    {
+      "control": "right",
+      "count": 2
+    },
+    {
+      "control": "up",
+      "count": 1
+    }
+  ]
+}

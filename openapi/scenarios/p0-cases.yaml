@@ -1,0 +1,262 @@
+openapi_document: ../openapi-v1.yaml
+cases:
+  - id: me_neoshowcase_authenticated
+    preconditions:
+      auth_mode: neoshowcase
+      authenticated: true
+    steps:
+      - operation_id: getMe
+        response:
+          status: 200
+          example: neoshowcase_authenticated
+
+  - id: me_neoshowcase_unauthenticated
+    preconditions:
+      auth_mode: neoshowcase
+      authenticated: false
+    steps:
+      - operation_id: getMe
+        response:
+          status: 200
+          example: neoshowcase_unauthenticated
+
+  - id: me_local_authenticated
+    preconditions:
+      auth_mode: local
+      authenticated: true
+    steps:
+      - operation_id: getMe
+        response:
+          status: 200
+          example: local_authenticated
+
+  - id: me_local_unauthenticated
+    preconditions:
+      auth_mode: local
+      authenticated: false
+    steps:
+      - operation_id: getMe
+        response:
+          status: 200
+          example: local_unauthenticated
+
+  - id: local_login_and_logout
+    preconditions:
+      auth_mode: local
+      authenticated: false
+    steps:
+      - operation_id: loginGuest
+        request_example: guest_login
+        response:
+          status: 200
+          example: guest_authenticated
+        state_after:
+          authenticated: true
+      - operation_id: getMe
+        response:
+          status: 200
+          example: local_authenticated
+      - operation_id: logoutLocal
+        response:
+          status: 204
+        state_after:
+          authenticated: false
+      - operation_id: getMe
+        response:
+          status: 200
+          example: local_unauthenticated
+
+  - id: start_new_run
+    preconditions:
+      authenticated: true
+      room_exists: true
+      active_run_exists: false
+    steps:
+      - operation_id: startOrResumeRun
+        response:
+          status: 200
+          example: new_run
+        state_after:
+          active_run_exists: true
+
+  - id: resume_active_run
+    preconditions:
+      authenticated: true
+      room_exists: true
+      active_run_exists: true
+    steps:
+      - operation_id: startOrResumeRun
+        response:
+          status: 200
+          example: resumed_run
+
+  - id: get_current_run
+    preconditions:
+      authenticated: true
+      room_exists: true
+      active_run_exists: true
+    steps:
+      - operation_id: getCurrentRun
+        response:
+          status: 200
+          example: current_run
+
+  - id: current_run_not_found
+    preconditions:
+      authenticated: true
+      room_exists: true
+      active_run_exists: false
+    steps:
+      - operation_id: getCurrentRun
+        response:
+          status: 404
+          example: run_not_found
+
+  - id: game_api_unauthorized
+    preconditions:
+      authenticated: false
+      room_exists: true
+    steps:
+      - operation_id: startOrResumeRun
+        response:
+          status: 401
+          example: unauthorized
+
+  - id: get_available_problem
+    preconditions:
+      authenticated: true
+      room_exists: true
+      active_run_exists: true
+      problem_status: available
+    steps:
+      - operation_id: getProblem
+        response:
+          status: 200
+          example: available_problem
+
+  - id: problem_not_found
+    preconditions:
+      authenticated: true
+      room_exists: true
+      active_run_exists: true
+      problem_exists: false
+    steps:
+      - operation_id: getProblem
+        response:
+          status: 404
+
+  - id: problem_locked
+    preconditions:
+      authenticated: true
+      active_run_exists: true
+      problem_status: locked
+    steps:
+      - operation_id: getProblem
+        response:
+          status: 409
+          example: problem_locked
+
+  - id: query_incorrect
+    preconditions:
+      authenticated: true
+      active_run_exists: true
+      problem_status: available
+      query_judgement: incorrect
+    steps:
+      - operation_id: submitQuery
+        request_example: serial_operations
+        response:
+          status: 200
+          example: incorrect_query
+        state_after:
+          problem_status: available
+
+  - id: query_correct
+    preconditions:
+      authenticated: true
+      active_run_exists: true
+      problem_status: available
+      next_problem_status: locked
+      query_judgement: correct
+    steps:
+      - operation_id: submitQuery
+        request_example: serial_operations
+        response:
+          status: 200
+          example: correct_query
+        state_after:
+          problem_status: cleared
+          next_problem_status: available
+
+  - id: answer_incorrect
+    preconditions:
+      authenticated: true
+      active_run_exists: true
+      problem_status: available
+      answer_judgement: incorrect
+    steps:
+      - operation_id: submitAnswer
+        request_example: submitted_answer
+        response:
+          status: 200
+          example: incorrect_answer
+        state_after:
+          problem_status: available
+          run_status: active
+
+  - id: answer_correct_and_unlock
+    preconditions:
+      authenticated: true
+      active_run_exists: true
+      problem_status: available
+      next_problem_status: locked
+      answer_judgement: correct
+      last_required_problem: false
+    steps:
+      - operation_id: submitAnswer
+        request_example: submitted_answer
+        response:
+          status: 200
+          example: correct_answer_unlocks_problem
+        state_after:
+          problem_status: cleared
+          next_problem_status: available
+          run_status: active
+
+  - id: answer_correct_and_clear_run
+    preconditions:
+      authenticated: true
+      active_run_exists: true
+      problem_status: available
+      answer_judgement: correct
+      last_required_problem: true
+    steps:
+      - operation_id: submitAnswer
+        request_example: submitted_answer
+        response:
+          status: 200
+          example: correct_answer_clears_run
+        state_after:
+          problem_status: cleared
+          run_status: cleared
+
+  - id: answer_input_too_long
+    preconditions:
+      authenticated: true
+      active_run_exists: true
+      problem_status: available
+      answer_max_length: 50
+    steps:
+      - operation_id: submitAnswer
+        request_example: too_long_for_example_problem
+        response:
+          status: 422
+
+  - id: invalid_room_id_format
+    preconditions:
+      authenticated: true
+      room_id_format: invalid_uuid
+    steps:
+      - operation_id: getCurrentRun
+        response:
+          status: 400

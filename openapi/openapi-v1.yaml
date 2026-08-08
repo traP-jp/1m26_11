@@ -2,141 +2,811 @@ openapi: 3.1.0
 info:
   title: 1m26_11 API
   version: 1.0.0
+  description: |
+    フロントエンドとバックエンドが共有するP0 API契約です。
+    room_idとproblem_idに記載したUUIDは契約例であり、開始導線の実IDではありません。
 paths:
   /openapi.yaml:
     get:
-      summary: Get the OpenAPI document
+      summary: OpenAPI文書を取得する
       operationId: getOpenApi
+      tags:
+        - tooling
       responses:
         "200":
-          description: OpenAPI document used by this server build
+          description: このserver buildが使用するOpenAPI文書
           content:
             application/yaml:
               schema:
                 type: string
-        default:
-          $ref: "#/components/responses/Error"
-  /api/v1/ping:
+  /api/me:
     get:
-      summary: Ping API
-      operationId: ping
+      summary: ログイン状態を取得する
+      operationId: getMe
+      tags:
+        - auth
       responses:
         "200":
-          description: pong
-          content:
-            text/plain:
+          $ref: "#/components/responses/MeSuccess"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /api/auth/guest:
+    post:
+      summary: ローカル環境で名前を登録する
+      description: AUTH_MODE=localのときだけ有効です。NeoShowcase modeでは404を返します。
+      operationId: loginGuest
+      tags:
+        - auth
+      requestBody:
+        $ref: "#/components/requestBodies/GuestLogin"
+      responses:
+        "200":
+          $ref: "#/components/responses/GuestLoginSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /api/auth/logout:
+    post:
+      summary: ローカル環境からログアウトする
+      description: AUTH_MODE=localのときだけ使用し、ローカルsessionとCookieを無効化します。
+      operationId: logoutLocal
+      tags:
+        - auth
+      responses:
+        "204":
+          description: ログアウト完了。response bodyはありません。
+          headers:
+            Set-Cookie:
+              description: local session Cookieを削除するためのheader。Cookie名と具体的な属性は未確定です。
               schema:
                 type: string
-                example: pong
-        default:
-          $ref: "#/components/responses/Error"
-  /api/v1/users:
-    get:
-      summary: Get all users
-      operationId: getUsers
-      responses:
-        "200":
-          description: List of users
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/User"
-        default:
-          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /api/rooms/{room_id}/runs:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
     post:
-      summary: Create a user
-      operationId: createUser
-      requestBody:
-        $ref: "#/components/requestBodies/CreateUser"
+      summary: 挑戦を開始または再開する
+      description: |
+        認証済みユーザーとroom_idからactiveなrunを検索します。
+        activeなrunがあれば再開し、なければserver時刻で新規作成します。
+        request bodyは使用しません。
+      operationId: startOrResumeRun
+      tags:
+        - runs
       responses:
         "200":
-          description: Created user ID
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CreateUser"
-        default:
-          $ref: "#/components/responses/Error"
-  /api/v1/users/{userID}:
+          $ref: "#/components/responses/RunStartOrResumeSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /api/rooms/{room_id}/runs/current:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
     get:
-      summary: Get user by ID
-      operationId: getUser
-      parameters:
-        - name: userID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      summary: 現在の挑戦状態を取得する
+      operationId: getCurrentRun
+      tags:
+        - runs
       responses:
         "200":
-          description: User info
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/User"
-        default:
-          $ref: "#/components/responses/Error"
+          $ref: "#/components/responses/CurrentRunSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/RunNotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /api/rooms/{room_id}/problems/{problem_id}:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+      - $ref: "#/components/parameters/ProblemId"
+    get:
+      summary: 問題データを取得する
+      description: 正解、全候補、判定設定、ヒント本文は返しません。
+      operationId: getProblem
+      tags:
+        - problems
+      responses:
+        "200":
+          $ref: "#/components/responses/ProblemSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ProblemLocked"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /api/rooms/{room_id}/problems/{problem_id}/queries:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+      - $ref: "#/components/parameters/ProblemId"
+    post:
+      summary: 絞り込み操作列を送信する
+      description: 操作列全体を一度に送り、不正解も200とcorrect=falseで返します。
+      operationId: submitQuery
+      tags:
+        - queries
+      requestBody:
+        $ref: "#/components/requestBodies/SubmitQuery"
+      responses:
+        "200":
+          $ref: "#/components/responses/QuerySuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ProblemLocked"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /api/rooms/{room_id}/problems/{problem_id}/answers:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+      - $ref: "#/components/parameters/ProblemId"
+    post:
+      summary: 文字列回答を送信する
+      description: 不正解も200とcorrect=falseで返します。
+      operationId: submitAnswer
+      tags:
+        - answers
+      requestBody:
+        $ref: "#/components/requestBodies/SubmitAnswer"
+      responses:
+        "200":
+          $ref: "#/components/responses/AnswerSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ProblemLocked"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 components:
+  parameters:
+    RoomId:
+      name: room_id
+      in: path
+      required: true
+      description: |
+        部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+      schema:
+        type: string
+        format: uuid
+      example: 11111111-1111-4111-8111-111111111111
+    ProblemId:
+      name: problem_id
+      in: path
+      required: true
+      description: |
+        問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+      schema:
+        type: string
+        format: uuid
+      example: 22222222-2222-4222-8222-222222222221
   requestBodies:
-    CreateUser:
+    GuestLogin:
       required: true
       content:
         application/json:
           schema:
-            type: object
-            properties:
-              name:
-                type: string
-                minLength: 1
-                maxLength: 255
-                pattern: '\S'
-              email:
-                type: string
-                format: email
-                maxLength: 255
-            required:
-              - name
-              - email
-  responses:
-    Error:
-      description: Error response
+            $ref: "#/components/schemas/GuestLoginRequest"
+          examples:
+            guest_login:
+              summary: ローカル用の名前登録
+              externalValue: ./examples/auth/guest-request.json
+    SubmitQuery:
+      required: true
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: "#/components/schemas/QueryRequest"
+          examples:
+            serial_operations:
+              summary: シリアル入力から作った操作列
+              externalValue: ./examples/queries/request-serial.json
+    SubmitAnswer:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AnswerRequest"
+          examples:
+            submitted_answer:
+              summary: 文字列回答
+              externalValue: ./examples/answers/request.json
+            too_long_for_example_problem:
+              summary: max_lengthが50の例示問題に対する51文字の入力
+              externalValue: ./examples/answers/request-too-long.json
+  responses:
+    MeSuccess:
+      description: 現在のログイン状態
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/MeResponse"
+          examples:
+            neoshowcase_authenticated:
+              summary: NeoShowcaseでログイン済み
+              externalValue: ./examples/auth/me-neoshowcase-authenticated.json
+            neoshowcase_unauthenticated:
+              summary: NeoShowcaseで未ログイン
+              externalValue: ./examples/auth/me-neoshowcase-unauthenticated.json
+            local_authenticated:
+              summary: ローカルでログイン済み
+              externalValue: ./examples/auth/me-local-authenticated.json
+            local_unauthenticated:
+              summary: ローカルで未ログイン
+              externalValue: ./examples/auth/me-local-unauthenticated.json
+    GuestLoginSuccess:
+      description: ローカル用ユーザーを取得または作成し、session Cookieを発行した状態
+      headers:
+        Set-Cookie:
+          description: HttpOnlyなlocal session Cookie。Cookie名と具体的な属性は未確定です。
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/GuestLoginResponse"
+          examples:
+            guest_authenticated:
+              summary: ローカル用ログイン成功
+              externalValue: ./examples/auth/guest-response.json
+    RunStartOrResumeSuccess:
+      description: activeな挑戦状態
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ActiveRunResponse"
+          examples:
+            new_run:
+              summary: 新規開始したrun
+              externalValue: ./examples/runs/start-new-response.json
+            resumed_run:
+              summary: 既存のactive runを再開
+              externalValue: ./examples/runs/active-response.json
+    CurrentRunSuccess:
+      description: 現在のactiveな挑戦状態
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ActiveRunResponse"
+          examples:
+            current_run:
+              summary: 再読込後に取得したactive run
+              externalValue: ./examples/runs/active-response.json
+    ProblemSuccess:
+      description: 公開可能な問題データ
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProblemResponse"
+          examples:
+            available_problem:
+              summary: 挑戦可能な小なぞ
+              externalValue: ./examples/problems/available-response.json
+    QuerySuccess:
+      description: 操作列の判定結果。不正解もこの200 responseを使用します。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/QueryResponse"
+          examples:
+            incorrect_query:
+              summary: 不正解の操作列
+              externalValue: ./examples/queries/response-incorrect.json
+            correct_query:
+              summary: 正解の操作列
+              externalValue: ./examples/queries/response-correct.json
+    AnswerSuccess:
+      description: 文字列回答の判定結果。不正解もこの200 responseを使用します。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AnswerResponse"
+          examples:
+            incorrect_answer:
+              summary: 不正解の文字列回答
+              externalValue: ./examples/answers/response-incorrect.json
+            correct_answer_unlocks_problem:
+              summary: 正解して次の問題を解放
+              externalValue: ./examples/answers/response-correct-unlock.json
+            correct_answer_clears_run:
+              summary: 最後の必須問題に正解してrunをclear
+              externalValue: ./examples/answers/response-correct-cleared.json
+    BadRequest:
+      description: JSON構文不正またはpath parameterのUUID形式不正。具体的なerror.codeは未確定です。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: 未ログイン
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            unauthorized:
+              summary: ゲームAPIを未ログインで呼び出した場合
+              externalValue: ./examples/auth/error-unauthorized.json
+    NotFound:
+      description: 対象resourceが存在しないか、現在のAUTH_MODEではendpointが有効ではありません。具体的なerror.codeは未確定です。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RunNotFound:
+      description: activeなrunが存在しません。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            run_not_found:
+              summary: 現在挑戦中のrunがない場合
+              externalValue: ./examples/runs/error-run-not-found.json
+    ProblemLocked:
+      description: 問題がまだ解放されていません。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            problem_locked:
+              summary: lockedな問題を操作した場合
+              externalValue: ./examples/problems/error-problem-locked.json
+    UnprocessableEntity:
+      description: 文字数超過など入力内容が不正です。具体的なerror.codeは未確定です。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalServerError:
+      description: server内部エラー。具体的なerror.codeは未確定です。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
   schemas:
-    Error:
-      type: object
-      properties:
-        message:
-          type: string
-      required:
-        - message
-    CreateUser:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-      required:
-        - id
     User:
       type: object
+      required:
+        - id
+        - display_name
       properties:
         id:
           type: string
           format: uuid
-        name:
+        display_name:
           type: string
-        email:
+    MeResponse:
+      oneOf:
+        - $ref: "#/components/schemas/MeNeoshowcaseAuthenticated"
+        - $ref: "#/components/schemas/MeNeoshowcaseUnauthenticated"
+        - $ref: "#/components/schemas/MeLocalAuthenticated"
+        - $ref: "#/components/schemas/MeLocalUnauthenticated"
+    MeNeoshowcaseAuthenticated:
+      type: object
+      required:
+        - authenticated
+        - auth_mode
+        - user
+        - login_url
+        - logout_url
+      properties:
+        authenticated:
+          type: boolean
+          const: true
+        auth_mode:
           type: string
-        iconUrl:
+          const: neoshowcase
+        user:
+          $ref: "#/components/schemas/User"
+        login_url:
+          type: "null"
+        logout_url:
           type: string
+    MeNeoshowcaseUnauthenticated:
+      type: object
+      required:
+        - authenticated
+        - auth_mode
+        - user
+        - login_url
+        - logout_url
+      properties:
+        authenticated:
+          type: boolean
+          const: false
+        auth_mode:
+          type: string
+          const: neoshowcase
+        user:
+          type: "null"
+        login_url:
+          type: string
+        logout_url:
+          type: "null"
+    MeLocalAuthenticated:
+      type: object
+      required:
+        - authenticated
+        - auth_mode
+        - user
+        - login_url
+        - logout_url
+      properties:
+        authenticated:
+          type: boolean
+          const: true
+        auth_mode:
+          type: string
+          const: local
+        user:
+          $ref: "#/components/schemas/User"
+        login_url:
+          type: "null"
+        logout_url:
+          type: "null"
+    MeLocalUnauthenticated:
+      type: object
+      required:
+        - authenticated
+        - auth_mode
+        - user
+        - login_url
+        - logout_url
+      properties:
+        authenticated:
+          type: boolean
+          const: false
+        auth_mode:
+          type: string
+          const: local
+        user:
+          type: "null"
+        login_url:
+          type: "null"
+        logout_url:
+          type: "null"
+    GuestLoginRequest:
+      type: object
+      required:
+        - display_name
+      properties:
+        display_name:
+          type: string
+    GuestLoginResponse:
+      type: object
+      required:
+        - authenticated
+        - user
+      properties:
+        authenticated:
+          type: boolean
+          const: true
+        user:
+          $ref: "#/components/schemas/User"
+    ActiveRunResponse:
+      type: object
+      required:
+        - status
+        - started_at
+        - elapsed_ms
+        - cleared_problem_ids
+        - query_count
+      properties:
+        status:
+          type: string
+          const: active
+        started_at:
+          type: string
+          format: date-time
+        elapsed_ms:
+          type: integer
+        cleared_problem_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        query_count:
+          type: integer
+    ProblemResponse:
+      type: object
       required:
         - id
-        - name
-        - email
-        - iconUrl
+        - number
+        - type
+        - title
+        - body_markdown
+        - submission_type
+        - assets
+        - status
+        - input_schema
+        - hint_count
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: integer
+        type:
+          $ref: "#/components/schemas/ProblemType"
+        title:
+          type: string
+        body_markdown:
+          type: string
+        submission_type:
+          $ref: "#/components/schemas/SubmissionType"
+        assets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Asset"
+        status:
+          $ref: "#/components/schemas/ProblemStatus"
+        input_schema:
+          $ref: "#/components/schemas/ProblemInputSchema"
+        hint_count:
+          type: integer
+    ProblemType:
+      type: string
+      enum:
+        - small
+        - final
+    SubmissionType:
+      type: string
+      enum:
+        - operation_sequence
+        - string
+    ProblemStatus:
+      type: string
+      enum:
+        - locked
+        - available
+        - cleared
+    RunStatus:
+      type: string
+      enum:
+        - active
+        - cleared
+    Asset:
+      type: object
+      required:
+        - type
+        - url
+        - alt
+      properties:
+        type:
+          type: string
+        url:
+          type: string
+        alt:
+          type: string
+    ProblemInputSchema:
+      type: object
+      required:
+        - query
+        - answer
+      properties:
+        query:
+          $ref: "#/components/schemas/QueryInputSchema"
+        answer:
+          $ref: "#/components/schemas/AnswerInputSchema"
+    QueryInputSchema:
+      type: object
+      required:
+        - type
+        - allowed_controls
+        - max_operations
+      properties:
+        type:
+          type: string
+          const: operation_sequence
+        allowed_controls:
+          type: array
+          items:
+            type: string
+        max_operations:
+          type: integer
+    AnswerInputSchema:
+      type: object
+      required:
+        - type
+        - max_length
+      properties:
+        type:
+          type: string
+          const: string
+        max_length:
+          type: integer
+    Operation:
+      type: object
+      required:
+        - control
+        - count
+      properties:
+        control:
+          type: string
+        count:
+          type: integer
+    QueryRequest:
+      type: object
+      required:
+        - source
+        - operations
+      properties:
+        source:
+          type: string
+        operations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Operation"
+    QueryResponse:
+      oneOf:
+        - $ref: "#/components/schemas/IncorrectQueryResponse"
+        - $ref: "#/components/schemas/CorrectQueryResponse"
+    IncorrectQueryResponse:
+      type: object
+      required:
+        - query_id
+        - correct
+        - normalized_operations
+        - remaining_pattern_count
+        - query_count
+        - problem_status
+      properties:
+        query_id:
+          type: string
+          format: uuid
+        correct:
+          type: boolean
+          const: false
+        normalized_operations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Operation"
+        remaining_pattern_count:
+          type: integer
+        query_count:
+          type: integer
+        problem_status:
+          type: string
+          const: available
+    CorrectQueryResponse:
+      type: object
+      required:
+        - query_id
+        - correct
+        - normalized_operations
+        - remaining_pattern_count
+        - query_count
+        - problem_status
+      properties:
+        query_id:
+          type: string
+          format: uuid
+        correct:
+          type: boolean
+          const: true
+        normalized_operations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Operation"
+        remaining_pattern_count:
+          type: integer
+        query_count:
+          type: integer
+        problem_status:
+          type: string
+          const: cleared
+    AnswerRequest:
+      type: object
+      required:
+        - answer
+      properties:
+        answer:
+          type: string
+    AnswerResponse:
+      oneOf:
+        - $ref: "#/components/schemas/IncorrectAnswerResponse"
+        - $ref: "#/components/schemas/CorrectAnswerResponse"
+    IncorrectAnswerResponse:
+      type: object
+      required:
+        - correct
+        - answer_attempt_count
+        - problem_status
+        - run_status
+      properties:
+        correct:
+          type: boolean
+          const: false
+        answer_attempt_count:
+          type: integer
+        problem_status:
+          type: string
+          const: available
+        run_status:
+          type: string
+          const: active
+    CorrectAnswerResponse:
+      type: object
+      required:
+        - correct
+        - problem_status
+        - unlocked_problem_ids
+        - run_status
+        - progress
+        - elapsed_ms
+      properties:
+        correct:
+          type: boolean
+          const: true
+        problem_status:
+          type: string
+          const: cleared
+        unlocked_problem_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        run_status:
+          $ref: "#/components/schemas/RunStatus"
+        progress:
+          $ref: "#/components/schemas/Progress"
+        elapsed_ms:
+          type: integer
+    Progress:
+      type: object
+      required:
+        - cleared_problem_count
+        - total_problem_count
+      properties:
+        cleared_problem_count:
+          type: integer
+        total_problem_count:
+          type: integer
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+            - details
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object

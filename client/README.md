@@ -37,3 +37,13 @@ mise run client-check
 ```
 
 自動修正には `mise run client-lint-fix` と `mise run client-format` を使用します。
+
+## OpenAPI生成型
+
+`src/generated/api.d.ts`は`../openapi/openapi-v1.yaml`から生成される通信境界の型です。直接編集せず、契約変更時はリポジトリルートで次を実行します。
+
+```sh
+mise run openapi-generate-client
+```
+
+API呼び出しでは`paths`または`components`からrequest／response型を参照し、mock payloadは`../openapi/examples/`の共通fixtureを使用してください。

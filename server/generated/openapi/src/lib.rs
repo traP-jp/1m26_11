@@ -1,0 +1,138 @@
+#![allow(
+    missing_docs,
+    trivial_casts,
+    unused_variables,
+    unused_mut,
+    unused_extern_crates,
+    non_camel_case_types,
+    unused_imports,
+    unused_attributes
+)]
+#![allow(
+    clippy::derive_partial_eq_without_eq,
+    clippy::disallowed_names,
+    clippy::too_many_arguments
+)]
+
+extern crate futures_util;
+
+pub const BASE_PATH: &str = "";
+pub const API_VERSION: &str = "1.0.0";
+
+#[cfg(feature = "server")]
+pub mod server;
+
+pub mod apis;
+pub mod models;
+pub mod types;
+
+#[cfg(feature = "server")]
+pub(crate) mod header;
+
+/// A required JSON value whose only valid representation is `null`.
+///
+/// OpenAPI Generator's `rust-axum` generator does not natively support the
+/// OpenAPI 3.1 `null` type. The generator maps that schema type to this value
+/// so the generated Rust API preserves the contract instead of accepting an
+/// arbitrary JSON value.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct NullValue;
+
+impl serde::Serialize for NullValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_unit()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for NullValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        <() as serde::Deserialize>::deserialize(deserializer).map(|()| Self)
+    }
+}
+
+impl std::fmt::Display for NullValue {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("null")
+    }
+}
+
+impl std::str::FromStr for NullValue {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        if value == "null" {
+            Ok(Self)
+        } else {
+            Err(format!("expected null, got {value:?}"))
+        }
+    }
+}
+
+impl validator::Validate for NullValue {
+    fn validate(&self) -> Result<(), validator::ValidationErrors> {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod null_value_tests {
+    use super::NullValue;
+
+    #[test]
+    fn serializes_and_deserializes_json_null() {
+        assert_eq!(
+            serde_json::to_value(NullValue).expect("NullValue should serialize"),
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            serde_json::from_value::<NullValue>(serde_json::Value::Null)
+                .expect("JSON null should deserialize"),
+            NullValue
+        );
+    }
+
+    #[test]
+    fn rejects_non_null_json_values() {
+        for value in [
+            serde_json::json!(false),
+            serde_json::json!(0),
+            serde_json::json!("null"),
+            serde_json::json!([]),
+            serde_json::json!({}),
+        ] {
+            assert!(serde_json::from_value::<NullValue>(value).is_err());
+        }
+    }
+
+    #[test]
+    fn required_null_fields_reject_missing_and_non_null_values() {
+        const FIXTURE: &str =
+            include_str!("../../../../openapi/examples/auth/me-local-unauthenticated.json");
+
+        let expected: serde_json::Value =
+            serde_json::from_str(FIXTURE).expect("fixture should be valid JSON");
+        let model: crate::models::MeLocalUnauthenticated =
+            serde_json::from_value(expected.clone()).expect("fixture should match generated model");
+        assert_eq!(
+            serde_json::to_value(model).expect("generated model should serialize"),
+            expected
+        );
+
+        let mut missing = expected.clone();
+        missing
+            .as_object_mut()
+            .expect("fixture should be an object")
+            .remove("user");
+        assert!(serde_json::from_value::<crate::models::MeLocalUnauthenticated>(missing).is_err());
+
+        let mut non_null = expected;
+        non_null["user"] = serde_json::json!({});
+        assert!(serde_json::from_value::<crate::models::MeLocalUnauthenticated>(non_null).is_err());
+    }
+}

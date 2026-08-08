@@ -1,0 +1,10 @@
+{
+  "authenticated": true,
+  "auth_mode": "neoshowcase",
+  "user": {
+    "id": "44444444-4444-4444-8444-444444444444",
+    "display_name": "kaomojikun"
+  },
+  "login_url": null,
+  "logout_url": "/_oauth/logout?redirect=/"
+}

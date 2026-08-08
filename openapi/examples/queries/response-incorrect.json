@@ -1,0 +1,21 @@
+{
+  "query_id": "33333333-3333-4333-8333-333333333333",
+  "correct": false,
+  "normalized_operations": [
+    {
+      "control": "down",
+      "count": 16
+    },
+    {
+      "control": "right",
+      "count": 2
+    },
+    {
+      "control": "up",
+      "count": 1
+    }
+  ],
+  "remaining_pattern_count": 96,
+  "query_count": 4,
+  "problem_status": "available"
+}

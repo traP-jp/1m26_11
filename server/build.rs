@@ -8,12 +8,28 @@ use std::{
 use serde_yaml::Value;
 
 const OPENAPI_VERSION: &str = "3.1.0";
-const REQUIRED_OPERATIONS: [(&str, &str, &str); 5] = [
+const REQUIRED_OPERATIONS: [(&str, &str, &str); 9] = [
     ("/openapi.yaml", "get", "getOpenApi"),
-    ("/api/v1/ping", "get", "ping"),
-    ("/api/v1/users", "get", "getUsers"),
-    ("/api/v1/users", "post", "createUser"),
-    ("/api/v1/users/{userID}", "get", "getUser"),
+    ("/api/me", "get", "getMe"),
+    ("/api/auth/guest", "post", "loginGuest"),
+    ("/api/auth/logout", "post", "logoutLocal"),
+    ("/api/rooms/{room_id}/runs", "post", "startOrResumeRun"),
+    ("/api/rooms/{room_id}/runs/current", "get", "getCurrentRun"),
+    (
+        "/api/rooms/{room_id}/problems/{problem_id}",
+        "get",
+        "getProblem",
+    ),
+    (
+        "/api/rooms/{room_id}/problems/{problem_id}/queries",
+        "post",
+        "submitQuery",
+    ),
+    (
+        "/api/rooms/{room_id}/problems/{problem_id}/answers",
+        "post",
+        "submitAnswer",
+    ),
 ];
 
 fn main() -> Result<(), Box<dyn Error>> {

@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/@openapitools/openapi-generator-cli/config.schema.json",
+  "spaces": 2,
+  "generator-cli": {
+    "version": "7.24.0",
+    "generators": {
+      "rust-server": {
+        "generatorName": "rust-axum",
+        "inputSpec": "openapi-v1.yaml",
+        "output": "../server/generated/openapi",
+        "templateDir": "templates/rust-axum",
+        "enablePostProcessFile": true,
+        "typeMappings": {
+          "null": "crate::NullValue"
+        },
+        "additionalProperties": {
+          "hideGenerationTimestamp": true,
+          "packageName": "openapi",
+          "packageVersion": "1.0.0"
+        }
+      }
+    }
+  }
+}
