@@ -5,9 +5,6 @@ pub mod queries;
 pub mod runs;
 pub mod tooling;
 
-
-
-
 // Error handler for unhandled errors.
 #[async_trait::async_trait]
 pub trait ErrorHandler<E: std::fmt::Debug + Send + Sync + 'static = ()> {
@@ -18,7 +15,7 @@ pub trait ErrorHandler<E: std::fmt::Debug + Send + Sync + 'static = ()> {
         method: &::http::Method,
         host: &headers::Host,
         cookies: &axum_extra::extract::CookieJar,
-        error: E
+        error: E,
     ) -> Result<axum::response::Response, http::StatusCode> {
         tracing::error!("Unhandled error: {:?}", error);
         axum::response::Response::builder()

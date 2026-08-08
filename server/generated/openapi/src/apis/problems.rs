@@ -13,46 +13,34 @@ use crate::{models, types::*};
 #[allow(clippy::large_enum_variant)]
 pub enum GetProblemResponse {
     /// 公開可能な問題データ
-    Status200
-    (models::ProblemResponse)
-    ,
+    Status200(models::ProblemResponse),
     /// JSON構文不正またはpath parameterのUUID形式不正。具体的なerror.codeは未確定です。
-    Status400_JSON
-    (models::ErrorResponse)
-    ,
+    Status400_JSON(models::ErrorResponse),
     /// 未ログイン
-    Status401
-    (models::ErrorResponse)
-    ,
+    Status401(models::ErrorResponse),
     /// 対象resourceが存在しないか、現在のAUTH_MODEではendpointが有効ではありません。具体的なerror.codeは未確定です。
-    Status404
-    (models::ErrorResponse)
-    ,
+    Status404(models::ErrorResponse),
     /// 問題がまだ解放されていません。
-    Status409
-    (models::ErrorResponse)
-    ,
+    Status409(models::ErrorResponse),
     /// server内部エラー。具体的なerror.codeは未確定です。
-    Status500_Server
-    (models::ErrorResponse)
+    Status500_Server(models::ErrorResponse),
 }
-
-
-
 
 /// Problems
 #[async_trait]
 #[allow(clippy::ptr_arg)]
-pub trait Problems<E: std::fmt::Debug + Send + Sync + 'static = ()>: super::ErrorHandler<E> {
+pub trait Problems<E: std::fmt::Debug + Send + Sync + 'static = ()>:
+    super::ErrorHandler<E>
+{
     /// 問題データを取得する.
     ///
     /// GetProblem - GET /api/rooms/{room_id}/problems/{problem_id}
     async fn get_problem(
-    &self,
-    
-    method: &Method,
-    host: &Host,
-    cookies: &CookieJar,
-      path_params: &models::GetProblemPathParams,
+        &self,
+
+        method: &Method,
+        host: &Host,
+        cookies: &CookieJar,
+        path_params: &models::GetProblemPathParams,
     ) -> Result<GetProblemResponse, E>;
 }

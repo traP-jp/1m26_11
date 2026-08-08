@@ -13,12 +13,8 @@ use crate::{models, types::*};
 #[allow(clippy::large_enum_variant)]
 pub enum GetOpenApiResponse {
     /// このserver buildが使用するOpenAPI文書
-    Status200
-    (String)
+    Status200(String),
 }
-
-
-
 
 /// Tooling
 #[async_trait]
@@ -28,10 +24,10 @@ pub trait Tooling<E: std::fmt::Debug + Send + Sync + 'static = ()>: super::Error
     ///
     /// GetOpenApi - GET /openapi.yaml
     async fn get_open_api(
-    &self,
-    
-    method: &Method,
-    host: &Host,
-    cookies: &CookieJar,
+        &self,
+
+        method: &Method,
+        host: &Host,
+        cookies: &CookieJar,
     ) -> Result<GetOpenApiResponse, E>;
 }
