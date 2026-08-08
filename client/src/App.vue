@@ -17,7 +17,7 @@ const actions = ['Save changes', 'Duplicate', 'Archive']
 
       <Menu as="div" class="py-1 relative inline-block text-left">
         <MenuButton
-          class="rounded bg-sky-600 ugap-2 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-sky-500 active:bg-sky-700">
+          class="rounded bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-sky-500 active:bg-sky-700">
           Open actions
         </MenuButton>
 
