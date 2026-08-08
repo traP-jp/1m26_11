@@ -4,756 +4,764 @@
  */
 
 export interface paths {
-    "/openapi.yaml": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** OpenAPI文書を取得する */
-        get: operations["getOpenApi"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** ログイン状態を取得する */
-        get: operations["getMe"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/guest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * ローカル環境で名前を登録する
-         * @description AUTH_MODE=localのときだけ有効です。NeoShowcase modeでは404を返します。
-         */
-        post: operations["loginGuest"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * ローカル環境からログアウトする
-         * @description AUTH_MODE=localのときだけ使用し、ローカルsessionとCookieを無効化します。
-         */
-        post: operations["logoutLocal"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rooms/{room_id}/runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 挑戦を開始または再開する
-         * @description 認証済みユーザーとroom_idからactiveなrunを検索します。
-         *     activeなrunがあれば再開し、なければserver時刻で新規作成します。
-         *     request bodyは使用しません。
-         */
-        post: operations["startOrResumeRun"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rooms/{room_id}/runs/current": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-            };
-            cookie?: never;
-        };
-        /** 現在の挑戦状態を取得する */
-        get: operations["getCurrentRun"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rooms/{room_id}/problems/{problem_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-            };
-            cookie?: never;
-        };
-        /**
-         * 問題データを取得する
-         * @description 正解、全候補、判定設定、ヒント本文は返しません。
-         */
-        get: operations["getProblem"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rooms/{room_id}/problems/{problem_id}/queries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 絞り込み操作列を送信する
-         * @description 操作列全体を一度に送り、不正解も200とcorrect=falseで返します。
-         */
-        post: operations["submitQuery"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rooms/{room_id}/problems/{problem_id}/answers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 文字列回答を送信する
-         * @description 不正解も200とcorrect=falseで返します。
-         */
-        post: operations["submitAnswer"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-}
-export type webhooks = Record<string, never>;
-export interface components {
-    schemas: {
-        User: {
-            /** Format: uuid */
-            id: string;
-            display_name: string;
-        };
-        MeResponse: components["schemas"]["MeNeoshowcaseAuthenticated"] | components["schemas"]["MeNeoshowcaseUnauthenticated"] | components["schemas"]["MeLocalAuthenticated"] | components["schemas"]["MeLocalUnauthenticated"];
-        MeNeoshowcaseAuthenticated: {
-            /** @constant */
-            authenticated: true;
-            /** @constant */
-            auth_mode: "neoshowcase";
-            user: components["schemas"]["User"];
-            login_url: null;
-            logout_url: string;
-        };
-        MeNeoshowcaseUnauthenticated: {
-            /** @constant */
-            authenticated: false;
-            /** @constant */
-            auth_mode: "neoshowcase";
-            user: null;
-            login_url: string;
-            logout_url: null;
-        };
-        MeLocalAuthenticated: {
-            /** @constant */
-            authenticated: true;
-            /** @constant */
-            auth_mode: "local";
-            user: components["schemas"]["User"];
-            login_url: null;
-            logout_url: null;
-        };
-        MeLocalUnauthenticated: {
-            /** @constant */
-            authenticated: false;
-            /** @constant */
-            auth_mode: "local";
-            user: null;
-            login_url: null;
-            logout_url: null;
-        };
-        GuestLoginRequest: {
-            display_name: string;
-        };
-        GuestLoginResponse: {
-            /** @constant */
-            authenticated: true;
-            user: components["schemas"]["User"];
-        };
-        ActiveRunResponse: {
-            /** @constant */
-            status: "active";
-            /** Format: date-time */
-            started_at: string;
-            elapsed_ms: number;
-            cleared_problem_ids: string[];
-            query_count: number;
-        };
-        ProblemResponse: {
-            /** Format: uuid */
-            id: string;
-            number: number;
-            type: components["schemas"]["ProblemType"];
-            title: string;
-            body_markdown: string;
-            submission_type: components["schemas"]["SubmissionType"];
-            assets: components["schemas"]["Asset"][];
-            status: components["schemas"]["ProblemStatus"];
-            input_schema: components["schemas"]["ProblemInputSchema"];
-            hint_count: number;
-        };
-        /** @enum {string} */
-        ProblemType: "small" | "final";
-        /** @enum {string} */
-        SubmissionType: "operation_sequence" | "string";
-        /** @enum {string} */
-        ProblemStatus: "locked" | "available" | "cleared";
-        /** @enum {string} */
-        RunStatus: "active" | "cleared";
-        Asset: {
-            type: string;
-            url: string;
-            alt: string;
-        };
-        ProblemInputSchema: {
-            query: components["schemas"]["QueryInputSchema"];
-            answer: components["schemas"]["AnswerInputSchema"];
-        };
-        QueryInputSchema: {
-            /** @constant */
-            type: "operation_sequence";
-            allowed_controls: string[];
-            max_operations: number;
-        };
-        AnswerInputSchema: {
-            /** @constant */
-            type: "string";
-            max_length: number;
-        };
-        Operation: {
-            control: string;
-            count: number;
-        };
-        QueryRequest: {
-            source: string;
-            operations: components["schemas"]["Operation"][];
-        };
-        QueryResponse: components["schemas"]["IncorrectQueryResponse"] | components["schemas"]["CorrectQueryResponse"];
-        IncorrectQueryResponse: {
-            /** Format: uuid */
-            query_id: string;
-            /** @constant */
-            correct: false;
-            normalized_operations: components["schemas"]["Operation"][];
-            remaining_pattern_count: number;
-            query_count: number;
-            /** @constant */
-            problem_status: "available";
-        };
-        CorrectQueryResponse: {
-            /** Format: uuid */
-            query_id: string;
-            /** @constant */
-            correct: true;
-            normalized_operations: components["schemas"]["Operation"][];
-            remaining_pattern_count: number;
-            query_count: number;
-            /** @constant */
-            problem_status: "cleared";
-        };
-        AnswerRequest: {
-            answer: string;
-        };
-        AnswerResponse: components["schemas"]["IncorrectAnswerResponse"] | components["schemas"]["CorrectAnswerResponse"];
-        IncorrectAnswerResponse: {
-            /** @constant */
-            correct: false;
-            answer_attempt_count: number;
-            /** @constant */
-            problem_status: "available";
-            /** @constant */
-            run_status: "active";
-        };
-        CorrectAnswerResponse: {
-            /** @constant */
-            correct: true;
-            /** @constant */
-            problem_status: "cleared";
-            unlocked_problem_ids: string[];
-            run_status: components["schemas"]["RunStatus"];
-            progress: components["schemas"]["Progress"];
-            elapsed_ms: number;
-        };
-        Progress: {
-            cleared_problem_count: number;
-            total_problem_count: number;
-        };
-        ErrorResponse: {
-            error: {
-                code: string;
-                message: string;
-                details: Record<string, never>;
-            };
-        };
-    };
-    responses: {
-        /** @description 現在のログイン状態 */
-        MeSuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["MeResponse"];
-            };
-        };
-        /** @description ローカル用ユーザーを取得または作成し、session Cookieを発行した状態 */
-        GuestLoginSuccess: {
-            headers: {
-                /** @description HttpOnlyなlocal session Cookie。Cookie名と具体的な属性は未確定です。 */
-                "Set-Cookie"?: string;
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["GuestLoginResponse"];
-            };
-        };
-        /** @description activeな挑戦状態 */
-        RunStartOrResumeSuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ActiveRunResponse"];
-            };
-        };
-        /** @description 現在のactiveな挑戦状態 */
-        CurrentRunSuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ActiveRunResponse"];
-            };
-        };
-        /** @description 公開可能な問題データ */
-        ProblemSuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ProblemResponse"];
-            };
-        };
-        /** @description 操作列の判定結果。不正解もこの200 responseを使用します。 */
-        QuerySuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["QueryResponse"];
-            };
-        };
-        /** @description 文字列回答の判定結果。不正解もこの200 responseを使用します。 */
-        AnswerSuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["AnswerResponse"];
-            };
-        };
-        /** @description JSON構文不正またはpath parameterのUUID形式不正。具体的なerror.codeは未確定です。 */
-        BadRequest: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description 未ログイン */
-        Unauthorized: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description 対象resourceが存在しないか、現在のAUTH_MODEではendpointが有効ではありません。具体的なerror.codeは未確定です。 */
-        NotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description activeなrunが存在しません。 */
-        RunNotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description 問題がまだ解放されていません。 */
-        ProblemLocked: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description 文字数超過など入力内容が不正です。具体的なerror.codeは未確定です。 */
-        UnprocessableEntity: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description server内部エラー。具体的なerror.codeは未確定です。 */
-        InternalServerError: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-    };
+  '/openapi.yaml': {
     parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** OpenAPI文書を取得する */
+    get: operations['getOpenApi']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/me': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** ログイン状態を取得する */
+    get: operations['getMe']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/auth/guest': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * ローカル環境で名前を登録する
+     * @description AUTH_MODE=localのときだけ有効です。NeoShowcase modeでは404を返します。
+     */
+    post: operations['loginGuest']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/auth/logout': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * ローカル環境からログアウトする
+     * @description AUTH_MODE=localのときだけ使用し、ローカルsessionとCookieを無効化します。
+     */
+    post: operations['logoutLocal']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/rooms/{room_id}/runs': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
         /**
          * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
          * @example 11111111-1111-4111-8111-111111111111
          */
-        RoomId: string;
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * 挑戦を開始または再開する
+     * @description 認証済みユーザーとroom_idからactiveなrunを検索します。
+     *     activeなrunがあれば再開し、なければserver時刻で新規作成します。
+     *     request bodyは使用しません。
+     */
+    post: operations['startOrResumeRun']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/rooms/{room_id}/runs/current': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    /** 現在の挑戦状態を取得する */
+    get: operations['getCurrentRun']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/rooms/{room_id}/problems/{problem_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
         /**
          * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
          * @example 22222222-2222-4222-8222-222222222221
          */
-        ProblemId: string;
-    };
-    requestBodies: {
-        GuestLogin: {
-            content: {
-                "application/json": components["schemas"]["GuestLoginRequest"];
-            };
-        };
-        SubmitQuery: {
-            content: {
-                "application/json": components["schemas"]["QueryRequest"];
-            };
-        };
-        SubmitAnswer: {
-            content: {
-                "application/json": components["schemas"]["AnswerRequest"];
-            };
-        };
-    };
-    headers: never;
-    pathItems: never;
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    /**
+     * 問題データを取得する
+     * @description 正解、全候補、判定設定、ヒント本文は返しません。
+     */
+    get: operations['getProblem']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/rooms/{room_id}/problems/{problem_id}/queries': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * 絞り込み操作列を送信する
+     * @description 操作列全体を一度に送り、不正解も200とcorrect=falseで返します。
+     */
+    post: operations['submitQuery']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/rooms/{room_id}/problems/{problem_id}/answers': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * 文字列回答を送信する
+     * @description 不正解も200とcorrect=falseで返します。
+     */
+    post: operations['submitAnswer']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
 }
-export type $defs = Record<string, never>;
+export type webhooks = Record<string, never>
+export interface components {
+  schemas: {
+    User: {
+      /** Format: uuid */
+      id: string
+      display_name: string
+    }
+    MeResponse:
+      | components['schemas']['MeNeoshowcaseAuthenticated']
+      | components['schemas']['MeNeoshowcaseUnauthenticated']
+      | components['schemas']['MeLocalAuthenticated']
+      | components['schemas']['MeLocalUnauthenticated']
+    MeNeoshowcaseAuthenticated: {
+      /** @constant */
+      authenticated: true
+      /** @constant */
+      auth_mode: 'neoshowcase'
+      user: components['schemas']['User']
+      login_url: null
+      logout_url: string
+    }
+    MeNeoshowcaseUnauthenticated: {
+      /** @constant */
+      authenticated: false
+      /** @constant */
+      auth_mode: 'neoshowcase'
+      user: null
+      login_url: string
+      logout_url: null
+    }
+    MeLocalAuthenticated: {
+      /** @constant */
+      authenticated: true
+      /** @constant */
+      auth_mode: 'local'
+      user: components['schemas']['User']
+      login_url: null
+      logout_url: null
+    }
+    MeLocalUnauthenticated: {
+      /** @constant */
+      authenticated: false
+      /** @constant */
+      auth_mode: 'local'
+      user: null
+      login_url: null
+      logout_url: null
+    }
+    GuestLoginRequest: {
+      display_name: string
+    }
+    GuestLoginResponse: {
+      /** @constant */
+      authenticated: true
+      user: components['schemas']['User']
+    }
+    ActiveRunResponse: {
+      /** @constant */
+      status: 'active'
+      /** Format: date-time */
+      started_at: string
+      elapsed_ms: number
+      cleared_problem_ids: string[]
+      query_count: number
+    }
+    ProblemResponse: {
+      /** Format: uuid */
+      id: string
+      number: number
+      type: components['schemas']['ProblemType']
+      title: string
+      body_markdown: string
+      submission_type: components['schemas']['SubmissionType']
+      assets: components['schemas']['Asset'][]
+      status: components['schemas']['ProblemStatus']
+      input_schema: components['schemas']['ProblemInputSchema']
+      hint_count: number
+    }
+    /** @enum {string} */
+    ProblemType: 'small' | 'final'
+    /** @enum {string} */
+    SubmissionType: 'operation_sequence' | 'string'
+    /** @enum {string} */
+    ProblemStatus: 'locked' | 'available' | 'cleared'
+    /** @enum {string} */
+    RunStatus: 'active' | 'cleared'
+    Asset: {
+      type: string
+      url: string
+      alt: string
+    }
+    ProblemInputSchema: {
+      query: components['schemas']['QueryInputSchema']
+      answer: components['schemas']['AnswerInputSchema']
+    }
+    QueryInputSchema: {
+      /** @constant */
+      type: 'operation_sequence'
+      allowed_controls: string[]
+      max_operations: number
+    }
+    AnswerInputSchema: {
+      /** @constant */
+      type: 'string'
+      max_length: number
+    }
+    Operation: {
+      control: string
+      count: number
+    }
+    QueryRequest: {
+      source: string
+      operations: components['schemas']['Operation'][]
+    }
+    QueryResponse:
+      | components['schemas']['IncorrectQueryResponse']
+      | components['schemas']['CorrectQueryResponse']
+    IncorrectQueryResponse: {
+      /** Format: uuid */
+      query_id: string
+      /** @constant */
+      correct: false
+      normalized_operations: components['schemas']['Operation'][]
+      remaining_pattern_count: number
+      query_count: number
+      /** @constant */
+      problem_status: 'available'
+    }
+    CorrectQueryResponse: {
+      /** Format: uuid */
+      query_id: string
+      /** @constant */
+      correct: true
+      normalized_operations: components['schemas']['Operation'][]
+      remaining_pattern_count: number
+      query_count: number
+      /** @constant */
+      problem_status: 'cleared'
+    }
+    AnswerRequest: {
+      answer: string
+    }
+    AnswerResponse:
+      | components['schemas']['IncorrectAnswerResponse']
+      | components['schemas']['CorrectAnswerResponse']
+    IncorrectAnswerResponse: {
+      /** @constant */
+      correct: false
+      answer_attempt_count: number
+      /** @constant */
+      problem_status: 'available'
+      /** @constant */
+      run_status: 'active'
+    }
+    CorrectAnswerResponse: {
+      /** @constant */
+      correct: true
+      /** @constant */
+      problem_status: 'cleared'
+      unlocked_problem_ids: string[]
+      run_status: components['schemas']['RunStatus']
+      progress: components['schemas']['Progress']
+      elapsed_ms: number
+    }
+    Progress: {
+      cleared_problem_count: number
+      total_problem_count: number
+    }
+    ErrorResponse: {
+      error: {
+        code: string
+        message: string
+        details: Record<string, never>
+      }
+    }
+  }
+  responses: {
+    /** @description 現在のログイン状態 */
+    MeSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['MeResponse']
+      }
+    }
+    /** @description ローカル用ユーザーを取得または作成し、session Cookieを発行した状態 */
+    GuestLoginSuccess: {
+      headers: {
+        /** @description HttpOnlyなlocal session Cookie。Cookie名と具体的な属性は未確定です。 */
+        'Set-Cookie'?: string
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['GuestLoginResponse']
+      }
+    }
+    /** @description activeな挑戦状態 */
+    RunStartOrResumeSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ActiveRunResponse']
+      }
+    }
+    /** @description 現在のactiveな挑戦状態 */
+    CurrentRunSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ActiveRunResponse']
+      }
+    }
+    /** @description 公開可能な問題データ */
+    ProblemSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ProblemResponse']
+      }
+    }
+    /** @description 操作列の判定結果。不正解もこの200 responseを使用します。 */
+    QuerySuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['QueryResponse']
+      }
+    }
+    /** @description 文字列回答の判定結果。不正解もこの200 responseを使用します。 */
+    AnswerSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['AnswerResponse']
+      }
+    }
+    /** @description JSON構文不正またはpath parameterのUUID形式不正。具体的なerror.codeは未確定です。 */
+    BadRequest: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 未ログイン */
+    Unauthorized: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 対象resourceが存在しないか、現在のAUTH_MODEではendpointが有効ではありません。具体的なerror.codeは未確定です。 */
+    NotFound: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description activeなrunが存在しません。 */
+    RunNotFound: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 問題がまだ解放されていません。 */
+    ProblemLocked: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 文字数超過など入力内容が不正です。具体的なerror.codeは未確定です。 */
+    UnprocessableEntity: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description server内部エラー。具体的なerror.codeは未確定です。 */
+    InternalServerError: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+  }
+  parameters: {
+    /**
+     * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+     * @example 11111111-1111-4111-8111-111111111111
+     */
+    RoomId: string
+    /**
+     * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+     * @example 22222222-2222-4222-8222-222222222221
+     */
+    ProblemId: string
+  }
+  requestBodies: {
+    GuestLogin: {
+      content: {
+        'application/json': components['schemas']['GuestLoginRequest']
+      }
+    }
+    SubmitQuery: {
+      content: {
+        'application/json': components['schemas']['QueryRequest']
+      }
+    }
+    SubmitAnswer: {
+      content: {
+        'application/json': components['schemas']['AnswerRequest']
+      }
+    }
+  }
+  headers: never
+  pathItems: never
+}
+export type $defs = Record<string, never>
 export interface operations {
-    getOpenApi: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description このserver buildが使用するOpenAPI文書 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/yaml": string;
-                };
-            };
-        };
-    };
-    getMe: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["MeSuccess"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    loginGuest: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["GuestLogin"];
-        responses: {
-            200: components["responses"]["GuestLoginSuccess"];
-            400: components["responses"]["BadRequest"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    logoutLocal: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ログアウト完了。response bodyはありません。 */
-            204: {
-                headers: {
-                    /** @description local session Cookieを削除するためのheader。Cookie名と具体的な属性は未確定です。 */
-                    "Set-Cookie"?: string;
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    startOrResumeRun: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["RunStartOrResumeSuccess"];
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    getCurrentRun: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["CurrentRunSuccess"];
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["RunNotFound"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    getProblem: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["ProblemSuccess"];
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["ProblemLocked"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    submitQuery: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-            };
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["SubmitQuery"];
-        responses: {
-            200: components["responses"]["QuerySuccess"];
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["ProblemLocked"];
-            422: components["responses"]["UnprocessableEntity"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    submitAnswer: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-            };
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["SubmitAnswer"];
-        responses: {
-            200: components["responses"]["AnswerSuccess"];
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["ProblemLocked"];
-            422: components["responses"]["UnprocessableEntity"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
+  getOpenApi: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description このserver buildが使用するOpenAPI文書 */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/yaml': string
+        }
+      }
+    }
+  }
+  getMe: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['MeSuccess']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  loginGuest: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: components['requestBodies']['GuestLogin']
+    responses: {
+      200: components['responses']['GuestLoginSuccess']
+      400: components['responses']['BadRequest']
+      404: components['responses']['NotFound']
+      422: components['responses']['UnprocessableEntity']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  logoutLocal: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description ログアウト完了。response bodyはありません。 */
+      204: {
+        headers: {
+          /** @description local session Cookieを削除するためのheader。Cookie名と具体的な属性は未確定です。 */
+          'Set-Cookie'?: string
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      500: components['responses']['InternalServerError']
+    }
+  }
+  startOrResumeRun: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['RunStartOrResumeSuccess']
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      404: components['responses']['NotFound']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  getCurrentRun: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['CurrentRunSuccess']
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      404: components['responses']['RunNotFound']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  getProblem: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['ProblemSuccess']
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      404: components['responses']['NotFound']
+      409: components['responses']['ProblemLocked']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  submitQuery: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    requestBody: components['requestBodies']['SubmitQuery']
+    responses: {
+      200: components['responses']['QuerySuccess']
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      404: components['responses']['NotFound']
+      409: components['responses']['ProblemLocked']
+      422: components['responses']['UnprocessableEntity']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  submitAnswer: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    requestBody: components['requestBodies']['SubmitAnswer']
+    responses: {
+      200: components['responses']['AnswerSuccess']
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      404: components['responses']['NotFound']
+      409: components['responses']['ProblemLocked']
+      422: components['responses']['UnprocessableEntity']
+      500: components['responses']['InternalServerError']
+    }
+  }
 }
