@@ -8,6 +8,7 @@ describe('App', () => {
     const wrapper = mount(App)
 
     expect(wrapper.get('h1').text()).toBe('Frontend is ready.')
+    expect(wrapper.get('button').attributes('class')).toContain('bg-sky-600')
     expect(wrapper.get('a').attributes('href')).toBe('/openapi.yaml')
     expect(wrapper.findAll('.stack li')).toHaveLength(4)
   })

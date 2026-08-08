@@ -11,6 +11,11 @@ const stack = ['Vue 3', 'Vite', 'TypeScript', 'pnpm']
         Vue と Rust server をつなぐための、シンプルな開発環境をセットアップしました。
       </p>
 
+      <button
+        class="rounded bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-500 active:bg-sky-700 disabled:bg-gray-500">
+        Save changes
+      </button>
+
       <ul class="stack" aria-label="Frontend stack">
         <li v-for="item in stack" :key="item">{{ item }}</li>
       </ul>

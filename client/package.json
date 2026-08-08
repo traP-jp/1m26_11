@@ -22,6 +22,8 @@
     "format:check": "prettier --check --experimental-cli src/"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "tailwindcss": "^4.3.3",
     "vue": "^3.5.40"
   },
   "devDependencies": {
