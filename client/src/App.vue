@@ -15,7 +15,7 @@ const actions = ['Save changes', 'Duplicate', 'Archive']
         Vue と Rust server をつなぐための、シンプルな開発環境をセットアップしました。
       </p>
 
-      <Menu as="div" class="py-1 relative inline-block text-left">
+      <Menu as="div" class="relative inline-block py-1 text-left">
         <MenuButton
           class="rounded bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-sky-500 active:bg-sky-700">
           Open actions
