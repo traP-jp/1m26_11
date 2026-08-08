@@ -41,6 +41,8 @@ Rust stable、Node.js 24、pnpm 11 は `mise.toml` の定義に従ってセッ�
 | `mise run client-lint` | client の ESLint/Oxlint | 不要 |
 | `mise run client-test` | client の Vitest | 不要 |
 | `mise run client-check` | client の全チェック | 不要 |
+| `mise run openapi-generate` | Rust・TypeScript の契約コードを再生成 | 不要 |
+| `mise run openapi-generate-check` | 再生成後の差分がないことを検査 | 不要 |
 | `mise run check` | server と client の全チェック | 不要 |
 | `mise run docker-build` | server のコンテナ image をビルド | 不要 |
 
@@ -63,7 +65,9 @@ mise run compose-down
 
 ## OpenAPI
 
-API の共有契約は `openapi/openapi-v1.yaml` です。これはサーバーコード生成用のファイルではありません。`server/build.rs` がサーバービルド時に YAML、OpenAPI version、必須 path/method の `operationId` を検証して埋め込むため、契約を変更したら `mise run build` で契約の基本検証を行ってください。
+API の共有契約は `openapi/openapi-v1.yaml` です。この1ファイルから`server/generated/openapi/`のRust契約クレートと`client/src/generated/api.d.ts`のTypeScript型を生成します。生成物へ直接変更を加えず、契約を変更したら`mise run openapi-generate`で更新してください。
+
+`server/build.rs`はサーバービルド時にYAML、OpenAPI version、必須path/methodの`operationId`を検証して埋め込みます。`mise run check`では生成Rustクレートもbuildとformatの対象になり、Clippy時には依存としてコンパイルされます。親serverの回帰testで生成された契約型を検査します。
 
 詳細は `openapi/README.md` を参照してください。
 

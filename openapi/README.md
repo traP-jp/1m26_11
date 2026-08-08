@@ -1,12 +1,15 @@
 # OpenAPI contract
 
-`openapi-v1.yaml` は、フロントエンドとバックエンドが共有するOpenAPI 3.1.0のAPI契約です。P0の認証3本・ゲーム5本を定義し、`GET /openapi.yaml`は契約を配信する既存のtooling endpointとして残しています。API server本体を生成するための入力ではありません。
+`openapi-v1.yaml` は、フロントエンドとバックエンドが共有するOpenAPI 3.1.0のAPI契約です。P0の認証3本・ゲーム5本を定義し、`GET /openapi.yaml`は契約を配信する既存のtooling endpointとして残しています。この契約から通信境界のRust crateとTypeScript型を生成しますが、DB処理やゲームロジックなどのAPI実装本体は生成しません。
 
 ## ファイル構成
 
 ```text
 openapi/
 ├── openapi-v1.yaml
+├── openapitools.json
+├── templates/
+│   └── rust-axum/
 ├── examples/
 │   ├── auth/
 │   ├── runs/
@@ -23,6 +26,29 @@ request／response payloadの正本は`examples/`のJSONです。`openapi-v1.yam
 既存の`GET /openapi.yaml`はmain YAMLだけを配信し、`examples/`をHTTP配信しません。`externalValue`はrepository上の`openapi-v1.yaml`を基準に解決してください。フロントのmockとAxum testはいずれもrepository内の同じJSONを直接読みます。
 
 例に使う`11111111-...`の`room_id`と`22222222-...`の`problem_id`は契約確認用です。実際の最初の部屋・問題を示すIDではありません。
+
+## コード生成
+
+リポジトリルートから次を実行すると、RustとTypeScriptの両方を再生成して各formatterを適用します。
+
+```sh
+mise run openapi-generate
+```
+
+個別に生成する場合は`mise run openapi-generate-server`または`mise run openapi-generate-client`を使用します。生成後にコミット済み出力との差分が残るか確認する場合は、作業treeがcleanな状態で次を実行します。
+
+```sh
+mise run openapi-generate-check
+```
+
+生成versionはRust側がOpenAPI Generator CLI wrapper 2.40.1／Generator 7.24.0、TypeScript側がopenapi-typescript 7.13.0です。初回生成にはpackageとGenerator JARの取得、およびJava 11以上が必要です。通常のbuild・testでは再生成しないため不要です。
+
+Rustの`rust-axum` Generator 7.24.0はOpenAPI 3.1の`type: "null"`を標準ではRust型へ変換できません。`openapitools.json`の小文字`null` type mappingと`templates/rust-axum/lib.mustache`により、必須かつnullだけを許す`NullValue`を生成します。`serde_json::Value`や`Option<T>`へ緩めると契約が変わるため使用しません。
+
+生成先は次の2か所です。生成物へ直接変更を加えず、必要な修正はOpenAPI、生成設定、またはtemplateへ反映してください。
+
+- `server/generated/openapi/`: Axum用のAPI trait、response enum、request／response model
+- `client/src/generated/api.d.ts`: frontend用のpath、operation、schema型
 
 ## operationとexample
 

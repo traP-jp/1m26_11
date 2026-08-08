@@ -2258,12 +2258,10 @@ pub struct MeLocalAuthenticated {
     pub user: models::User,
 
     #[serde(rename = "login_url")]
-    #[validate(nested)]
-    pub login_url: models::Null,
+    pub login_url: crate::NullValue,
 
     #[serde(rename = "logout_url")]
-    #[validate(nested)]
-    pub logout_url: models::Null,
+    pub logout_url: crate::NullValue,
 }
 
 impl MeLocalAuthenticated {
@@ -2272,8 +2270,8 @@ impl MeLocalAuthenticated {
         authenticated: bool,
         auth_mode: String,
         user: models::User,
-        login_url: models::Null,
-        logout_url: models::Null,
+        login_url: crate::NullValue,
+        logout_url: crate::NullValue,
     ) -> MeLocalAuthenticated {
         MeLocalAuthenticated {
             authenticated,
@@ -2324,8 +2322,8 @@ impl std::str::FromStr for MeLocalAuthenticated {
             pub authenticated: Vec<bool>,
             pub auth_mode: Vec<String>,
             pub user: Vec<models::User>,
-            pub login_url: Vec<models::Null>,
-            pub logout_url: Vec<models::Null>,
+            pub login_url: Vec<crate::NullValue>,
+            pub logout_url: Vec<crate::NullValue>,
         }
 
         let mut intermediate_rep = IntermediateRep::default();
@@ -2362,12 +2360,12 @@ impl std::str::FromStr for MeLocalAuthenticated {
                     ),
                     #[allow(clippy::redundant_clone)]
                     "login_url" => intermediate_rep.login_url.push(
-                        <models::Null as std::str::FromStr>::from_str(val)
+                        <crate::NullValue as std::str::FromStr>::from_str(val)
                             .map_err(|x| x.to_string())?,
                     ),
                     #[allow(clippy::redundant_clone)]
                     "logout_url" => intermediate_rep.logout_url.push(
-                        <models::Null as std::str::FromStr>::from_str(val)
+                        <crate::NullValue as std::str::FromStr>::from_str(val)
                             .map_err(|x| x.to_string())?,
                     ),
                     _ => {
@@ -2468,16 +2466,13 @@ pub struct MeLocalUnauthenticated {
     pub auth_mode: String,
 
     #[serde(rename = "user")]
-    #[validate(nested)]
-    pub user: models::Null,
+    pub user: crate::NullValue,
 
     #[serde(rename = "login_url")]
-    #[validate(nested)]
-    pub login_url: models::Null,
+    pub login_url: crate::NullValue,
 
     #[serde(rename = "logout_url")]
-    #[validate(nested)]
-    pub logout_url: models::Null,
+    pub logout_url: crate::NullValue,
 }
 
 impl MeLocalUnauthenticated {
@@ -2485,9 +2480,9 @@ impl MeLocalUnauthenticated {
     pub fn new(
         authenticated: bool,
         auth_mode: String,
-        user: models::Null,
-        login_url: models::Null,
-        logout_url: models::Null,
+        user: crate::NullValue,
+        login_url: crate::NullValue,
+        logout_url: crate::NullValue,
     ) -> MeLocalUnauthenticated {
         MeLocalUnauthenticated {
             authenticated,
@@ -2537,9 +2532,9 @@ impl std::str::FromStr for MeLocalUnauthenticated {
         struct IntermediateRep {
             pub authenticated: Vec<bool>,
             pub auth_mode: Vec<String>,
-            pub user: Vec<models::Null>,
-            pub login_url: Vec<models::Null>,
-            pub logout_url: Vec<models::Null>,
+            pub user: Vec<crate::NullValue>,
+            pub login_url: Vec<crate::NullValue>,
+            pub logout_url: Vec<crate::NullValue>,
         }
 
         let mut intermediate_rep = IntermediateRep::default();
@@ -2571,17 +2566,17 @@ impl std::str::FromStr for MeLocalUnauthenticated {
                     ),
                     #[allow(clippy::redundant_clone)]
                     "user" => intermediate_rep.user.push(
-                        <models::Null as std::str::FromStr>::from_str(val)
+                        <crate::NullValue as std::str::FromStr>::from_str(val)
                             .map_err(|x| x.to_string())?,
                     ),
                     #[allow(clippy::redundant_clone)]
                     "login_url" => intermediate_rep.login_url.push(
-                        <models::Null as std::str::FromStr>::from_str(val)
+                        <crate::NullValue as std::str::FromStr>::from_str(val)
                             .map_err(|x| x.to_string())?,
                     ),
                     #[allow(clippy::redundant_clone)]
                     "logout_url" => intermediate_rep.logout_url.push(
-                        <models::Null as std::str::FromStr>::from_str(val)
+                        <crate::NullValue as std::str::FromStr>::from_str(val)
                             .map_err(|x| x.to_string())?,
                     ),
                     _ => {
@@ -2686,8 +2681,7 @@ pub struct MeNeoshowcaseAuthenticated {
     pub user: models::User,
 
     #[serde(rename = "login_url")]
-    #[validate(nested)]
-    pub login_url: models::Null,
+    pub login_url: crate::NullValue,
 
     #[serde(rename = "logout_url")]
     #[validate(custom(function = "check_xss_string"))]
@@ -2700,7 +2694,7 @@ impl MeNeoshowcaseAuthenticated {
         authenticated: bool,
         auth_mode: String,
         user: models::User,
-        login_url: models::Null,
+        login_url: crate::NullValue,
         logout_url: String,
     ) -> MeNeoshowcaseAuthenticated {
         MeNeoshowcaseAuthenticated {
@@ -2752,7 +2746,7 @@ impl std::str::FromStr for MeNeoshowcaseAuthenticated {
             pub authenticated: Vec<bool>,
             pub auth_mode: Vec<String>,
             pub user: Vec<models::User>,
-            pub login_url: Vec<models::Null>,
+            pub login_url: Vec<crate::NullValue>,
             pub logout_url: Vec<String>,
         }
 
@@ -2790,7 +2784,7 @@ impl std::str::FromStr for MeNeoshowcaseAuthenticated {
                     ),
                     #[allow(clippy::redundant_clone)]
                     "login_url" => intermediate_rep.login_url.push(
-                        <models::Null as std::str::FromStr>::from_str(val)
+                        <crate::NullValue as std::str::FromStr>::from_str(val)
                             .map_err(|x| x.to_string())?,
                     ),
                     #[allow(clippy::redundant_clone)]
@@ -2895,16 +2889,14 @@ pub struct MeNeoshowcaseUnauthenticated {
     pub auth_mode: String,
 
     #[serde(rename = "user")]
-    #[validate(nested)]
-    pub user: models::Null,
+    pub user: crate::NullValue,
 
     #[serde(rename = "login_url")]
     #[validate(custom(function = "check_xss_string"))]
     pub login_url: String,
 
     #[serde(rename = "logout_url")]
-    #[validate(nested)]
-    pub logout_url: models::Null,
+    pub logout_url: crate::NullValue,
 }
 
 impl MeNeoshowcaseUnauthenticated {
@@ -2912,9 +2904,9 @@ impl MeNeoshowcaseUnauthenticated {
     pub fn new(
         authenticated: bool,
         auth_mode: String,
-        user: models::Null,
+        user: crate::NullValue,
         login_url: String,
-        logout_url: models::Null,
+        logout_url: crate::NullValue,
     ) -> MeNeoshowcaseUnauthenticated {
         MeNeoshowcaseUnauthenticated {
             authenticated,
@@ -2963,9 +2955,9 @@ impl std::str::FromStr for MeNeoshowcaseUnauthenticated {
         struct IntermediateRep {
             pub authenticated: Vec<bool>,
             pub auth_mode: Vec<String>,
-            pub user: Vec<models::Null>,
+            pub user: Vec<crate::NullValue>,
             pub login_url: Vec<String>,
-            pub logout_url: Vec<models::Null>,
+            pub logout_url: Vec<crate::NullValue>,
         }
 
         let mut intermediate_rep = IntermediateRep::default();
@@ -2997,7 +2989,7 @@ impl std::str::FromStr for MeNeoshowcaseUnauthenticated {
                     ),
                     #[allow(clippy::redundant_clone)]
                     "user" => intermediate_rep.user.push(
-                        <models::Null as std::str::FromStr>::from_str(val)
+                        <crate::NullValue as std::str::FromStr>::from_str(val)
                             .map_err(|x| x.to_string())?,
                     ),
                     #[allow(clippy::redundant_clone)]
@@ -3006,7 +2998,7 @@ impl std::str::FromStr for MeNeoshowcaseUnauthenticated {
                     ),
                     #[allow(clippy::redundant_clone)]
                     "logout_url" => intermediate_rep.logout_url.push(
-                        <models::Null as std::str::FromStr>::from_str(val)
+                        <crate::NullValue as std::str::FromStr>::from_str(val)
                             .map_err(|x| x.to_string())?,
                     ),
                     _ => {
@@ -4519,7 +4511,9 @@ impl std::str::FromStr for User {
             let val = match string_iter.next() {
                 Some(x) => x,
                 None => {
-                    return std::result::Result::Err("Missing value while parsing User".to_string());
+                    return std::result::Result::Err(
+                        "Missing value while parsing User".to_string(),
+                    );
                 }
             };
 

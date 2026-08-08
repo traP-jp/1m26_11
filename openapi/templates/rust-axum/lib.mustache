@@ -1,3 +1,4 @@
+{{! Based on OpenAPI Generator 7.24.0 rust-axum/lib.mustache (Apache-2.0), with strict OpenAPI 3.1 null support. }}
 #![allow(
     missing_docs,
     trivial_casts,
@@ -6,7 +7,7 @@
     unused_extern_crates,
     non_camel_case_types,
     unused_imports,
-    unused_attributes
+    unused_attributes,
 )]
 #![allow(
     clippy::derive_partial_eq_without_eq,
@@ -16,15 +17,17 @@
 
 extern crate futures_util;
 
-pub const BASE_PATH: &str = "";
-pub const API_VERSION: &str = "1.0.0";
+pub const BASE_PATH: &str = "{{{basePathWithoutHost}}}";
+{{#appVersion}}
+pub const API_VERSION: &str = "{{{.}}}";
+{{/appVersion}}
 
 #[cfg(feature = "server")]
 pub mod server;
 
-pub mod apis;
 pub mod models;
 pub mod types;
+pub mod apis;
 
 #[cfg(feature = "server")]
 pub(crate) mod header;
@@ -112,8 +115,9 @@ mod null_value_tests {
 
     #[test]
     fn required_null_fields_reject_missing_and_non_null_values() {
-        const FIXTURE: &str =
-            include_str!("../../../../openapi/examples/auth/me-local-unauthenticated.json");
+        const FIXTURE: &str = include_str!(
+            "../../../../openapi/examples/auth/me-local-unauthenticated.json"
+        );
 
         let expected: serde_json::Value =
             serde_json::from_str(FIXTURE).expect("fixture should be valid JSON");
@@ -129,10 +133,14 @@ mod null_value_tests {
             .as_object_mut()
             .expect("fixture should be an object")
             .remove("user");
-        assert!(serde_json::from_value::<crate::models::MeLocalUnauthenticated>(missing).is_err());
+        assert!(
+            serde_json::from_value::<crate::models::MeLocalUnauthenticated>(missing).is_err()
+        );
 
         let mut non_null = expected;
         non_null["user"] = serde_json::json!({});
-        assert!(serde_json::from_value::<crate::models::MeLocalUnauthenticated>(non_null).is_err());
+        assert!(
+            serde_json::from_value::<crate::models::MeLocalUnauthenticated>(non_null).is_err()
+        );
     }
 }

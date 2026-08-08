@@ -11,12 +11,18 @@ run = "cargo build --locked"
 [tasks.fmt]
 description = "Format the server"
 dir = "server"
-run = "cargo fmt --all"
+run = """
+cargo fmt --all
+cargo fmt --manifest-path generated/openapi/Cargo.toml --all
+"""
 
 [tasks.fmt-check]
 description = "Check server formatting"
 dir = "server"
-run = "cargo fmt --all -- --check"
+run = """
+cargo fmt --all -- --check
+cargo fmt --manifest-path generated/openapi/Cargo.toml --all -- --check
+"""
 
 [tasks.lint]
 description = "Lint the server"
@@ -99,6 +105,38 @@ run = "echo Client checks passed"
 description = "Run all server and client checks"
 depends = ["server-check", "client-check"]
 run = "echo All checks passed"
+
+[tasks.openapi-generate-server]
+description = "Generate and format the Rust Axum contract crate"
+dir = "openapi"
+run = """
+pnpm dlx @openapitools/openapi-generator-cli@2.40.1 generate --generator-key rust-server
+cargo fmt --manifest-path ../server/generated/openapi/Cargo.toml --all
+"""
+
+[tasks.openapi-generate-client]
+description = "Generate and format the TypeScript contract types"
+depends = ["client-install"]
+run = """
+pnpm dlx openapi-typescript@7.13.0 openapi/openapi-v1.yaml --output client/src/generated/api.d.ts
+pnpm --dir client exec prettier --write --experimental-cli src/generated/api.d.ts
+"""
+
+[tasks.openapi-generate]
+description = "Generate Rust and TypeScript code from the shared OpenAPI contract"
+depends = ["openapi-generate-server", "openapi-generate-client"]
+run = "echo OpenAPI code generation completed"
+
+[tasks.openapi-generate-check]
+description = "Regenerate OpenAPI code and fail when committed output is stale"
+depends = ["openapi-generate"]
+run = """
+generated_changes=$(git status --porcelain --untracked-files=all -- server/generated/openapi client/src/generated/api.d.ts)
+if [ -n "$generated_changes" ]; then
+  echo "$generated_changes"
+  exit 1
+fi
+"""
 
 [tasks.docker-build]
 description = "Build the server container image"

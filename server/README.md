@@ -12,6 +12,16 @@ Axum、Tokio、SQLx、MariaDB、Serde、Reqwest で実装した API サーバー
 
 `build.rs` は `../openapi/openapi-v1.yaml` を YAML として読み込み、OpenAPI 3.1.0 と、契約配信用の`getOpenApi`およびP0認証・ゲームAPI 8本に必要な`operationId`を検証します。検証後の仕様は `OUT_DIR` にコピーされ、バイナリへ `include_str!` で埋め込まれます。P0 API handler本体の実装は、この共通契約・fixture作成とは別Issueです。
 
+## 生成されたAPI境界
+
+`generated/openapi/`は`../openapi/openapi-v1.yaml`から生成される独立crateで、`openapi_generated`という依存名で参照できます。request／response型は`openapi_generated::models`、生成Routerは`openapi_generated::server`にあります。
+
+```rust
+use openapi_generated::models::AnswerRequest;
+```
+
+生成crateは手書きserverのpath dependencyです。通常のbuildとClippyで依存としてコンパイルされ、formatはmise taskから生成crateも明示的に検査されます。親serverの回帰testでは生成された契約型も検査します。生成物へ直接変更を加えず、API契約を変更した場合はリポジトリルートで`mise run openapi-generate-server`を実行してください。handler、service、repositoryなどの実装本体は`src/`へ置きます。
+
 ## 必要なもの
 
 - [mise](https://mise.jdx.dev/)
@@ -71,4 +81,3 @@ TEST_DATABASE_URL=mysql://root:pass@127.0.0.1:3306/app \
 ```
 
 `mysql://` は SQLx が MariaDB との通信に使用する MySQL protocol の scheme です。
-
