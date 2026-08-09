@@ -18,8 +18,8 @@
     "lint:fix": "run-s lint:oxlint:fix lint:eslint:fix",
     "lint:oxlint:fix": "oxlint . --fix",
     "lint:eslint:fix": "eslint . --fix --cache",
-    "format": "prettier --write --experimental-cli src/",
-    "format:check": "prettier --check --experimental-cli src/"
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/"
   },
   "dependencies": {
     "@headlessui/vue": "^1.7.23",
