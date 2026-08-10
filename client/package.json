@@ -8,6 +8,9 @@
     "dev": "vite",
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
+    "histoire": "histoire dev",
+    "histoire:build": "histoire build",
+    "histoire:preview": "histoire preview",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "build-only": "vite build",
@@ -26,6 +29,7 @@
     "vue": "^3.5.40"
   },
   "devDependencies": {
+    "@histoire/plugin-vue": "1.0.0-beta.1",
     "@tailwindcss/vite": "^4.3.3",
     "@tsconfig/node24": "^24.0.4",
     "@types/jsdom": "^28.0.3",
@@ -39,6 +43,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-oxlint": "~1.77.0",
     "eslint-plugin-vue": "~10.9.2",
+    "histoire": "1.0.0-beta.1",
     "jiti": "^2.7.0",
     "jsdom": "^29.1.1",
     "npm-run-all2": "^9.0.2",

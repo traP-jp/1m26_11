@@ -98,7 +98,7 @@ run = "pnpm test:unit"
 
 [tasks.client-check]
 description = "Run all client checks"
-depends = ["client-format-check", "client-build", "client-lint", "client-test"]
+depends = ["client-format-check", "client-build", "client-histoire-build", "client-lint", "client-test"]
 run = "echo Client checks passed"
 
 [tasks.check]
@@ -151,6 +151,24 @@ description = "Run the Vite development server"
 depends = ["client-install"]
 dir = "client"
 run = "pnpm dev"
+
+[tasks.client-histoire]
+description = "Run the Histoire component preview"
+depends = ["client-install"]
+dir = "client"
+run = "pnpm histoire"
+
+[tasks.client-histoire-build]
+description = "Build the Histoire component preview"
+depends = ["client-install"]
+dir = "client"
+run = "pnpm histoire:build"
+
+[tasks.client-histoire-preview]
+description = "Build and preview the Histoire site"
+depends = ["client-histoire-build"]
+dir = "client"
+run = "pnpm histoire:preview"
 
 [tasks.dev]
 description = "Run the backend stack and Vite development server"
