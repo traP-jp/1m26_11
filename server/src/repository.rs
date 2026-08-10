@@ -3,47 +3,12 @@ use sqlx::{FromRow, MySqlPool};
 use thiserror::Error;
 use uuid::Uuid;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct UserRecord {
-    pub id: Uuid,
-    pub name: String,
-    pub email: String,
-}
-
-#[derive(FromRow)]
-struct DatabaseUser {
-    id: String,
-    name: String,
-    email: String,
-}
-
-impl TryFrom<DatabaseUser> for UserRecord {
-    type Error = uuid::Error;
-
-    fn try_from(user: DatabaseUser) -> Result<Self, Self::Error> {
-        Ok(Self {
-            id: Uuid::parse_str(&user.id)?,
-            name: user.name,
-            email: user.email,
-        })
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum RepositoryError {
-    #[error("user not found")]
-    NotFound,
     #[error("database operation failed")]
     Database(#[source] sqlx::Error),
-    #[error("database contains an invalid user ID")]
-    InvalidUserId(#[source] uuid::Error),
-}
-
-#[async_trait]
-pub trait UserRepository: Send + Sync {
-    async fn get_users(&self) -> Result<Vec<UserRecord>, RepositoryError>;
-    async fn create_user(&self, name: &str, email: &str) -> Result<Uuid, RepositoryError>;
-    async fn get_user(&self, user_id: Uuid) -> Result<UserRecord, RepositoryError>;
+    #[error("user was not found after get-or-create")]
+    UserNotFoundAfterUpsert,
 }
 
 #[derive(Clone)]
@@ -58,42 +23,106 @@ impl SqlxUserRepository {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, FromRow)]
+pub struct AuthUserRecord {
+    pub id: Uuid,
+    pub display_name: String,
+}
+
 #[async_trait]
-impl UserRepository for SqlxUserRepository {
-    async fn get_users(&self) -> Result<Vec<UserRecord>, RepositoryError> {
-        sqlx::query_as::<_, DatabaseUser>("SELECT id, name, email FROM users ORDER BY id")
-            .fetch_all(&self.pool)
-            .await
-            .map_err(RepositoryError::Database)?
-            .into_iter()
-            .map(UserRecord::try_from)
-            .collect::<Result<_, _>>()
-            .map_err(RepositoryError::InvalidUserId)
-    }
+pub trait AuthRepository: Send + Sync {
+    async fn find_user_by_demo_session(
+        &self,
+        session_id: Uuid,
+    ) -> Result<Option<AuthUserRecord>, RepositoryError>;
 
-    async fn create_user(&self, name: &str, email: &str) -> Result<Uuid, RepositoryError> {
-        let user_id = Uuid::new_v4();
-        sqlx::query("INSERT INTO users (id, name, email) VALUES (?, ?, ?)")
-            .bind(user_id.to_string())
-            .bind(name)
-            .bind(email)
-            .execute(&self.pool)
-            .await
-            .map_err(RepositoryError::Database)?;
+    async fn find_user_by_provider_subject(
+        &self,
+        auth_provider: &str,
+        provider_subject: &str,
+    ) -> Result<Option<AuthUserRecord>, RepositoryError>;
 
-        Ok(user_id)
-    }
+    async fn get_or_create_user(
+        &self,
+        auth_provider: &str,
+        provider_subject: &str,
+        display_name: &str,
+    ) -> Result<AuthUserRecord, RepositoryError>;
+}
 
-    async fn get_user(&self, user_id: Uuid) -> Result<UserRecord, RepositoryError> {
-        let user = sqlx::query_as::<_, DatabaseUser>(
-            "SELECT id, name, email FROM users WHERE id = ? LIMIT 1",
+#[async_trait]
+impl AuthRepository for SqlxUserRepository {
+    async fn find_user_by_demo_session(
+        &self,
+        session_id: Uuid,
+    ) -> Result<Option<AuthUserRecord>, RepositoryError> {
+        sqlx::query_as::<_, AuthUserRecord>(
+            r#"
+            SELECT users.id, users.display_name
+            FROM demo_sessions
+            INNER JOIN users ON users.id = demo_sessions.user_id
+            WHERE demo_sessions.id = ?
+              AND users.auth_provider = 'demo'
+            LIMIT 1
+            "#,
         )
-        .bind(user_id.to_string())
+        .bind(session_id)
         .fetch_optional(&self.pool)
         .await
-        .map_err(RepositoryError::Database)?
-        .ok_or(RepositoryError::NotFound)?;
+        .map_err(RepositoryError::Database)
+    }
 
-        UserRecord::try_from(user).map_err(RepositoryError::InvalidUserId)
+    async fn find_user_by_provider_subject(
+        &self,
+        auth_provider: &str,
+        provider_subject: &str,
+    ) -> Result<Option<AuthUserRecord>, RepositoryError> {
+        sqlx::query_as::<_, AuthUserRecord>(
+            r#"
+            SELECT id, display_name
+            FROM users
+            WHERE auth_provider = ?
+              AND provider_subject = ?
+            LIMIT 1
+            "#,
+        )
+        .bind(auth_provider)
+        .bind(provider_subject)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)
+    }
+
+    async fn get_or_create_user(
+        &self,
+        auth_provider: &str,
+        provider_subject: &str,
+        display_name: &str,
+    ) -> Result<AuthUserRecord, RepositoryError> {
+        let user_id = Uuid::new_v4();
+
+        sqlx::query(
+            r#"
+            INSERT INTO users (
+                id,
+                auth_provider,
+                provider_subject,
+                display_name
+            )
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE id = id
+            "#,
+        )
+        .bind(user_id)
+        .bind(auth_provider)
+        .bind(provider_subject)
+        .bind(display_name)
+        .execute(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        self.find_user_by_provider_subject(auth_provider, provider_subject)
+            .await?
+            .ok_or(RepositoryError::UserNotFoundAfterUpsert)
     }
 }

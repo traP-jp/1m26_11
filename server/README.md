@@ -1,14 +1,11 @@
 # Rust backend
 
-Axum、Tokio、SQLx、MariaDB、Serde、Reqwest で実装した API サーバーです。SQLx は MySQL protocol 互換 driver 経由で MariaDB に接続し、TLS を使う依存関係には rustls を利用します。
+Axum、Tokio、SQLx、MariaDB、Serde で実装した API サーバーです。SQLx は MySQL protocol 互換 driver 経由で MariaDB に接続し、TLS を使う依存関係には rustls を利用します。
 
 ## API
 
 - `GET /openapi.yaml` — ビルド時に埋め込んだ共有 OpenAPI 仕様
 - `GET /api/v1/ping` — `text/plain` の `pong`
-- `GET /api/v1/users`
-- `POST /api/v1/users`
-- `GET /api/v1/users/{userID}`
 
 `build.rs` は `../openapi/openapi-v1.yaml` を YAML として読み込み、OpenAPI 3.1.0 と、契約配信用の`getOpenApi`およびP0認証・ゲームAPI 8本に必要な`operationId`を検証します。検証後の仕様は `OUT_DIR` にコピーされ、バイナリへ `include_str!` で埋め込まれます。P0 API handler本体の実装は、この共通契約・fixture作成とは別Issueです。
 
@@ -20,7 +17,7 @@ Axum、Tokio、SQLx、MariaDB、Serde、Reqwest で実装した API サーバー
 use openapi_generated::models::AnswerRequest;
 ```
 
-生成crateは手書きserverのpath dependencyです。通常のbuildとClippyで依存としてコンパイルされ、formatはmise taskから生成crateも明示的に検査されます。親serverの回帰testでは生成された契約型も検査します。生成物へ直接変更を加えず、API契約を変更した場合はリポジトリルートで`mise run openapi-generate-server`を実行してください。handler、service、repositoryなどの実装本体は`src/`へ置きます。
+生成crateは手書きserverのpath dependencyです。通常のbuildとClippyで依存としてコンパイルされ、formatはmise taskから生成crateも明示的に検査されます。親serverの回帰testでは生成された契約型も検査します。生成物へ直接変更を加えず、API契約を変更した場合はリポジトリルートで`mise run openapi-generate-server`を実行してください。handler、repositoryなどの実装本体は`src/`へ置きます。
 
 ## 必要なもの
 
@@ -66,18 +63,7 @@ mise run docker-build
 | `DB_HOST` | `localhost` | MariaDB host |
 | `DB_PORT` | `3306` | MariaDB port |
 | `DB_NAME` | `app` | MariaDB database |
-| `PHOTO_API_URL` | `https://jsonplaceholder.typicode.com/photos` | photo API の base URL |
 | `RUST_LOG` | `server=info,tower_http=info` | tracing filter |
+| `AUTH_MODE` | 既定値なし | `demo`または`neoshowcase`。起動時に必須 |
 
 起動時に `migrations/` の SQLx migration を自動適用します。
-
-## MariaDB 結合テスト
-
-MariaDB を使う user flow は `#[ignore]` です。`TEST_DATABASE_URL` を設定するか、上記の `DB_USER`、`DB_PASS`、`DB_HOST`、`DB_PORT`、`DB_NAME` を設定して実行します。テストは migration を適用し、開始前後に `users` を削除します。
-
-```sh
-TEST_DATABASE_URL=mysql://root:pass@127.0.0.1:3306/app \
-  mise run test-integration
-```
-
-`mysql://` は SQLx が MariaDB との通信に使用する MySQL protocol の scheme です。

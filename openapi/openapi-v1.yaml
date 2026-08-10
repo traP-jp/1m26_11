@@ -32,8 +32,8 @@ paths:
           $ref: "#/components/responses/InternalServerError"
   /api/auth/guest:
     post:
-      summary: ローカル環境で名前を登録する
-      description: AUTH_MODE=localのときだけ有効です。NeoShowcase modeでは404を返します。
+      summary: デモ環境で名前を登録する
+      description: AUTH_MODE=demoのときだけ有効です。NeoShowcase modeでは404を返します。
       operationId: loginGuest
       tags:
         - auth
@@ -52,9 +52,9 @@ paths:
           $ref: "#/components/responses/InternalServerError"
   /api/auth/logout:
     post:
-      summary: ローカル環境からログアウトする
-      description: AUTH_MODE=localのときだけ使用し、ローカルsessionとCookieを無効化します。
-      operationId: logoutLocal
+      summary: デモ環境からログアウトする
+      description: AUTH_MODE=demoのときだけ使用し、デモsessionとCookieを無効化します。
+      operationId: logoutDemo
       tags:
         - auth
       responses:
@@ -62,7 +62,7 @@ paths:
           description: ログアウト完了。response bodyはありません。
           headers:
             Set-Cookie:
-              description: local session Cookieを削除するためのheader。Cookie名と具体的な属性は未確定です。
+              description: demo session Cookieを削除するためのheader。Cookie名と具体的な属性は未確定です。
               schema:
                 type: string
         "500":
@@ -217,7 +217,7 @@ components:
             $ref: "#/components/schemas/GuestLoginRequest"
           examples:
             guest_login:
-              summary: ローカル用の名前登録
+              summary: デモ用の名前登録
               externalValue: ./examples/auth/guest-request.json
     SubmitQuery:
       required: true
@@ -256,17 +256,17 @@ components:
             neoshowcase_unauthenticated:
               summary: NeoShowcaseで未ログイン
               externalValue: ./examples/auth/me-neoshowcase-unauthenticated.json
-            local_authenticated:
-              summary: ローカルでログイン済み
-              externalValue: ./examples/auth/me-local-authenticated.json
-            local_unauthenticated:
-              summary: ローカルで未ログイン
-              externalValue: ./examples/auth/me-local-unauthenticated.json
+            demo_authenticated:
+              summary: デモでログイン済み
+              externalValue: ./examples/auth/me-demo-authenticated.json
+            demo_unauthenticated:
+              summary: デモで未ログイン
+              externalValue: ./examples/auth/me-demo-unauthenticated.json
     GuestLoginSuccess:
-      description: ローカル用ユーザーを取得または作成し、session Cookieを発行した状態
+      description: デモ用ユーザーを取得または作成し、session Cookieを発行した状態
       headers:
         Set-Cookie:
-          description: HttpOnlyなlocal session Cookie。Cookie名と具体的な属性は未確定です。
+          description: HttpOnlyなdemo session Cookie。Cookie名と具体的な属性は未確定です。
           schema:
             type: string
       content:
@@ -275,7 +275,7 @@ components:
             $ref: "#/components/schemas/GuestLoginResponse"
           examples:
             guest_authenticated:
-              summary: ローカル用ログイン成功
+              summary: デモ用ログイン成功
               externalValue: ./examples/auth/guest-response.json
     RunStartOrResumeSuccess:
       description: activeな挑戦状態
@@ -409,8 +409,8 @@ components:
       oneOf:
         - $ref: "#/components/schemas/MeNeoshowcaseAuthenticated"
         - $ref: "#/components/schemas/MeNeoshowcaseUnauthenticated"
-        - $ref: "#/components/schemas/MeLocalAuthenticated"
-        - $ref: "#/components/schemas/MeLocalUnauthenticated"
+        - $ref: "#/components/schemas/MeDemoAuthenticated"
+        - $ref: "#/components/schemas/MeDemoUnauthenticated"
     MeNeoshowcaseAuthenticated:
       type: object
       required:
@@ -453,7 +453,7 @@ components:
           type: string
         logout_url:
           type: "null"
-    MeLocalAuthenticated:
+    MeDemoAuthenticated:
       type: object
       required:
         - authenticated
@@ -467,14 +467,14 @@ components:
           const: true
         auth_mode:
           type: string
-          const: local
+          const: demo
         user:
           $ref: "#/components/schemas/User"
         login_url:
           type: "null"
         logout_url:
           type: "null"
-    MeLocalUnauthenticated:
+    MeDemoUnauthenticated:
       type: object
       required:
         - authenticated
@@ -488,7 +488,7 @@ components:
           const: false
         auth_mode:
           type: string
-          const: local
+          const: demo
         user:
           type: "null"
         login_url:

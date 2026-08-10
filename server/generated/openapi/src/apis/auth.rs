@@ -22,7 +22,7 @@ pub enum GetMeResponse {
 #[must_use]
 #[allow(clippy::large_enum_variant)]
 pub enum LoginGuestResponse {
-    /// ローカル用ユーザーを取得または作成し、session Cookieを発行した状態
+    /// デモ用ユーザーを取得または作成し、session Cookieを発行した状態
     Status200 {
         body: models::GuestLoginResponse,
         set_cookie: Option<String>,
@@ -40,7 +40,7 @@ pub enum LoginGuestResponse {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[must_use]
 #[allow(clippy::large_enum_variant)]
-pub enum LogoutLocalResponse {
+pub enum LogoutDemoResponse {
     /// ログアウト完了。response bodyはありません。
     Status204 { set_cookie: Option<String> },
     /// server内部エラー。具体的なerror.codeは未確定です。
@@ -62,7 +62,7 @@ pub trait Auth<E: std::fmt::Debug + Send + Sync + 'static = ()>: super::ErrorHan
         cookies: &CookieJar,
     ) -> Result<GetMeResponse, E>;
 
-    /// ローカル環境で名前を登録する.
+    /// デモ環境で名前を登録する.
     ///
     /// LoginGuest - POST /api/auth/guest
     async fn login_guest(
@@ -74,14 +74,14 @@ pub trait Auth<E: std::fmt::Debug + Send + Sync + 'static = ()>: super::ErrorHan
         body: &models::GuestLoginRequest,
     ) -> Result<LoginGuestResponse, E>;
 
-    /// ローカル環境からログアウトする.
+    /// デモ環境からログアウトする.
     ///
-    /// LogoutLocal - POST /api/auth/logout
-    async fn logout_local(
+    /// LogoutDemo - POST /api/auth/logout
+    async fn logout_demo(
         &self,
 
         method: &Method,
         host: &Host,
         cookies: &CookieJar,
-    ) -> Result<LogoutLocalResponse, E>;
+    ) -> Result<LogoutDemoResponse, E>;
 }

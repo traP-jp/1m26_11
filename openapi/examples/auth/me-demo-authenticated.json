@@ -1,6 +1,6 @@
 {
   "authenticated": true,
-  "auth_mode": "local",
+  "auth_mode": "demo",
   "user": {
     "id": "55555555-5555-4555-8555-555555555555",
     "display_name": "kaomojikun"
