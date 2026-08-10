@@ -16,6 +16,7 @@ const DEFAULT_DB_NAME: &str = "app";
 pub struct Config {
     pub app_addr: SocketAddr,
     pub photo_api_url: String,
+    pub auth_mode: String,
     database_url: Option<String>,
     db_user: String,
     db_pass: String,
@@ -37,6 +38,7 @@ impl Config {
         Ok(Self {
             app_addr,
             photo_api_url: env_or("PHOTO_API_URL", DEFAULT_PHOTO_API_URL),
+            auth_mode: env_or("AUTH_MODE", ""),
             database_url: env::var("DATABASE_URL")
                 .ok()
                 .filter(|value| !value.trim().is_empty()),
