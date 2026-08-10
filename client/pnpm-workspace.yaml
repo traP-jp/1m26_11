@@ -1,0 +1,10 @@
+allowBuilds:
+  esbuild: true
+
+# Histoire 1.0.0-beta.1 predates Vite 8, while its upstream main branch
+# declares support for both Vite 7 and 8. Keep this compatibility allowance
+# scoped to the pinned beta release until a newer Histoire version is published.
+peerDependencyRules:
+  allowedVersions:
+    '@histoire/shared@1.0.0-beta.1>vite': ^8.0.0
+    'histoire@1.0.0-beta.1>vite': ^8.0.0
