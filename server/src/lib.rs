@@ -18,6 +18,7 @@ pub const OPENAPI_DOCUMENT: &str = include_str!(concat!(env!("OUT_DIR"), "/opena
 #[derive(Clone)]
 pub struct AppState {
     pub(crate) users: Arc<UserService>,
+    pub(crate) auth_mode: String,
 }
 
 impl AppState {
@@ -25,9 +26,11 @@ impl AppState {
     pub fn new(
         repository: Arc<dyn repository::UserRepository>,
         photos: Arc<dyn service::PhotoProvider>,
+        auth_mode: impl Into<String>,
     ) -> Self {
         Self {
             users: Arc::new(UserService::new(repository, photos)),
+            auth_mode: auth_mode.into(),
         }
     }
 }

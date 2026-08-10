@@ -32,6 +32,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let state = AppState::new(
         Arc::new(SqlxUserRepository::new(pool.clone())),
         Arc::new(photos),
+        config.auth_mode,
     );
 
     let listener = TcpListener::bind(config.app_addr).await?;
