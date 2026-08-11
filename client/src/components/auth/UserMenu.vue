@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import UserMenuButton from './UserMenuButton.vue'
+import LogoutMenuButton from './LogoutMenuButton.vue'
 
 defineProps<{
   displayName: string
@@ -16,7 +16,7 @@ const open = ref(false)
 
 <template>
   <div>
-    <UserMenuButton :displayName="displayName" :open="open" @toggle="open = !open" />
+    <LogoutMenuButton :displayName="displayName" :open="open" @toggle="open = !open" />
 
     <div v-if="open">
       <button type="button" :disabled="logoutPending" @click="emit('logout')">ログアウト</button>
