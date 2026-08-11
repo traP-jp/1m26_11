@@ -113,11 +113,11 @@ mod null_value_tests {
     #[test]
     fn required_null_fields_reject_missing_and_non_null_values() {
         const FIXTURE: &str =
-            include_str!("../../../../openapi/examples/auth/me-local-unauthenticated.json");
+            include_str!("../../../../openapi/examples/auth/me-demo-unauthenticated.json");
 
         let expected: serde_json::Value =
             serde_json::from_str(FIXTURE).expect("fixture should be valid JSON");
-        let model: crate::models::MeLocalUnauthenticated =
+        let model: crate::models::MeDemoUnauthenticated =
             serde_json::from_value(expected.clone()).expect("fixture should match generated model");
         assert_eq!(
             serde_json::to_value(model).expect("generated model should serialize"),
@@ -129,10 +129,10 @@ mod null_value_tests {
             .as_object_mut()
             .expect("fixture should be an object")
             .remove("user");
-        assert!(serde_json::from_value::<crate::models::MeLocalUnauthenticated>(missing).is_err());
+        assert!(serde_json::from_value::<crate::models::MeDemoUnauthenticated>(missing).is_err());
 
         let mut non_null = expected;
         non_null["user"] = serde_json::json!({});
-        assert!(serde_json::from_value::<crate::models::MeLocalUnauthenticated>(non_null).is_err());
+        assert!(serde_json::from_value::<crate::models::MeDemoUnauthenticated>(non_null).is_err());
     }
 }

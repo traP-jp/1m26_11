@@ -20,29 +20,29 @@ cases:
           status: 200
           example: neoshowcase_unauthenticated
 
-  - id: me_local_authenticated
+  - id: me_demo_authenticated
     preconditions:
-      auth_mode: local
+      auth_mode: demo
       authenticated: true
     steps:
       - operation_id: getMe
         response:
           status: 200
-          example: local_authenticated
+          example: demo_authenticated
 
-  - id: me_local_unauthenticated
+  - id: me_demo_unauthenticated
     preconditions:
-      auth_mode: local
+      auth_mode: demo
       authenticated: false
     steps:
       - operation_id: getMe
         response:
           status: 200
-          example: local_unauthenticated
+          example: demo_unauthenticated
 
-  - id: local_login_and_logout
+  - id: demo_login_and_logout
     preconditions:
-      auth_mode: local
+      auth_mode: demo
       authenticated: false
     steps:
       - operation_id: loginGuest
@@ -55,8 +55,8 @@ cases:
       - operation_id: getMe
         response:
           status: 200
-          example: local_authenticated
-      - operation_id: logoutLocal
+          example: demo_authenticated
+      - operation_id: logoutDemo
         response:
           status: 204
         state_after:
@@ -64,7 +64,7 @@ cases:
       - operation_id: getMe
         response:
           status: 200
-          example: local_unauthenticated
+          example: demo_unauthenticated
 
   - id: start_new_run
     preconditions:

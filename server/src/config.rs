@@ -3,8 +3,6 @@ use std::{env, net::SocketAddr, num::ParseIntError, str::FromStr};
 use sqlx::mysql::MySqlConnectOptions;
 use thiserror::Error;
 
-use crate::service::DEFAULT_PHOTO_API_URL;
-
 const DEFAULT_APP_ADDR: &str = "0.0.0.0:8080";
 const DEFAULT_DB_USER: &str = "root";
 const DEFAULT_DB_PASS: &str = "pass";
@@ -15,7 +13,7 @@ const DEFAULT_DB_NAME: &str = "app";
 #[derive(Clone)]
 pub struct Config {
     pub app_addr: SocketAddr,
-    pub photo_api_url: String,
+    pub auth_mode: AuthMode,
     database_url: Option<String>,
     db_user: String,
     db_pass: String,
@@ -26,6 +24,17 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> Result<Self, ConfigError> {
+        let auth_mode = match env::var("AUTH_MODE") {
+            Ok(value) => value.parse().map_err(ConfigError::InvalidAuthMode)?,
+            Err(env::VarError::NotPresent) => {
+                return Err(ConfigError::MissingAuthMode);
+            }
+            Err(env::VarError::NotUnicode(_)) => {
+                return Err(ConfigError::InvalidAuthMode(
+                    "<non-Unicode value>".to_owned(),
+                ));
+            }
+        };
         let app_addr = normalize_app_addr(&env_or("APP_ADDR", DEFAULT_APP_ADDR))
             .parse()
             .map_err(ConfigError::InvalidAppAddr)?;
@@ -36,7 +45,7 @@ impl Config {
 
         Ok(Self {
             app_addr,
-            photo_api_url: env_or("PHOTO_API_URL", DEFAULT_PHOTO_API_URL),
+            auth_mode,
             database_url: env::var("DATABASE_URL")
                 .ok()
                 .filter(|value| !value.trim().is_empty()),
@@ -64,6 +73,10 @@ impl Config {
 
 #[derive(Debug, Error)]
 pub enum ConfigError {
+    #[error("AUTH_MODE is not set")]
+    MissingAuthMode,
+    #[error("AUTH_MODE must be `demo` or `neoshowcase`, got `{0}`")]
+    InvalidAuthMode(String),
     #[error("APP_ADDR is not a valid socket address")]
     InvalidAppAddr(#[source] std::net::AddrParseError),
     #[error("DB_PORT is not a valid port number")]
@@ -79,5 +92,43 @@ fn normalize_app_addr(value: &str) -> String {
         format!("0.0.0.0{value}")
     } else {
         value.to_owned()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AuthMode {
+    Demo,
+    NeoShowcase,
+}
+
+impl FromStr for AuthMode {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "demo" => Ok(Self::Demo),
+            "neoshowcase" => Ok(Self::NeoShowcase),
+            other => Err(other.to_owned()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::AuthMode;
+
+    #[test]
+    fn parses_auth_mode() {
+        assert_eq!(AuthMode::from_str("demo"), Ok(AuthMode::Demo));
+        assert_eq!(AuthMode::from_str("neoshowcase"), Ok(AuthMode::NeoShowcase));
+    }
+
+    #[test]
+    fn rejects_invalid_auth_mode() {
+        assert_eq!(AuthMode::from_str("local"), Err("local".to_owned()));
+        assert!(AuthMode::from_str("Demo").is_err());
+        assert!(AuthMode::from_str("").is_err());
     }
 }
