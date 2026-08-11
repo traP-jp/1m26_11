@@ -2243,7 +2243,7 @@ impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<IncorrectQue
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
 #[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
-pub struct MeLocalAuthenticated {
+pub struct MeDemoAuthenticated {
     /// Note: inline enums are not fully supported by openapi-generator
     #[serde(rename = "authenticated")]
     pub authenticated: bool,
@@ -2264,7 +2264,7 @@ pub struct MeLocalAuthenticated {
     pub logout_url: crate::NullValue,
 }
 
-impl MeLocalAuthenticated {
+impl MeDemoAuthenticated {
     #[allow(clippy::new_without_default, clippy::too_many_arguments)]
     pub fn new(
         authenticated: bool,
@@ -2272,8 +2272,8 @@ impl MeLocalAuthenticated {
         user: models::User,
         login_url: crate::NullValue,
         logout_url: crate::NullValue,
-    ) -> MeLocalAuthenticated {
-        MeLocalAuthenticated {
+    ) -> MeDemoAuthenticated {
+        MeDemoAuthenticated {
             authenticated,
             auth_mode,
             user,
@@ -2283,10 +2283,10 @@ impl MeLocalAuthenticated {
     }
 }
 
-/// Converts the MeLocalAuthenticated value to the Query Parameters representation (style=form, explode=false)
+/// Converts the MeDemoAuthenticated value to the Query Parameters representation (style=form, explode=false)
 /// specified in https://swagger.io/docs/specification/serialization/
 /// Should be implemented in a serde serializer
-impl std::fmt::Display for MeLocalAuthenticated {
+impl std::fmt::Display for MeDemoAuthenticated {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let params: Vec<Option<String>> = vec![
             Some("authenticated".to_string()),
@@ -2308,10 +2308,10 @@ impl std::fmt::Display for MeLocalAuthenticated {
     }
 }
 
-/// Converts Query Parameters representation (style=form, explode=false) to a MeLocalAuthenticated value
+/// Converts Query Parameters representation (style=form, explode=false) to a MeDemoAuthenticated value
 /// as specified in https://swagger.io/docs/specification/serialization/
 /// Should be implemented in a serde deserializer
-impl std::str::FromStr for MeLocalAuthenticated {
+impl std::str::FromStr for MeDemoAuthenticated {
     type Err = String;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
@@ -2337,7 +2337,7 @@ impl std::str::FromStr for MeLocalAuthenticated {
                 Some(x) => x,
                 None => {
                     return std::result::Result::Err(
-                        "Missing value while parsing MeLocalAuthenticated".to_string(),
+                        "Missing value while parsing MeDemoAuthenticated".to_string(),
                     );
                 }
             };
@@ -2370,7 +2370,7 @@ impl std::str::FromStr for MeLocalAuthenticated {
                     ),
                     _ => {
                         return std::result::Result::Err(
-                            "Unexpected key while parsing MeLocalAuthenticated".to_string(),
+                            "Unexpected key while parsing MeDemoAuthenticated".to_string(),
                         );
                     }
                 }
@@ -2381,68 +2381,68 @@ impl std::str::FromStr for MeLocalAuthenticated {
         }
 
         // Use the intermediate representation to return the struct
-        std::result::Result::Ok(MeLocalAuthenticated {
+        std::result::Result::Ok(MeDemoAuthenticated {
             authenticated: intermediate_rep
                 .authenticated
                 .into_iter()
                 .next()
-                .ok_or_else(|| "authenticated missing in MeLocalAuthenticated".to_string())?,
+                .ok_or_else(|| "authenticated missing in MeDemoAuthenticated".to_string())?,
             auth_mode: intermediate_rep
                 .auth_mode
                 .into_iter()
                 .next()
-                .ok_or_else(|| "auth_mode missing in MeLocalAuthenticated".to_string())?,
+                .ok_or_else(|| "auth_mode missing in MeDemoAuthenticated".to_string())?,
             user: intermediate_rep
                 .user
                 .into_iter()
                 .next()
-                .ok_or_else(|| "user missing in MeLocalAuthenticated".to_string())?,
+                .ok_or_else(|| "user missing in MeDemoAuthenticated".to_string())?,
             login_url: intermediate_rep
                 .login_url
                 .into_iter()
                 .next()
-                .ok_or_else(|| "login_url missing in MeLocalAuthenticated".to_string())?,
+                .ok_or_else(|| "login_url missing in MeDemoAuthenticated".to_string())?,
             logout_url: intermediate_rep
                 .logout_url
                 .into_iter()
                 .next()
-                .ok_or_else(|| "logout_url missing in MeLocalAuthenticated".to_string())?,
+                .ok_or_else(|| "logout_url missing in MeDemoAuthenticated".to_string())?,
         })
     }
 }
 
-// Methods for converting between header::IntoHeaderValue<MeLocalAuthenticated> and HeaderValue
+// Methods for converting between header::IntoHeaderValue<MeDemoAuthenticated> and HeaderValue
 
 #[cfg(feature = "server")]
-impl std::convert::TryFrom<header::IntoHeaderValue<MeLocalAuthenticated>> for HeaderValue {
+impl std::convert::TryFrom<header::IntoHeaderValue<MeDemoAuthenticated>> for HeaderValue {
     type Error = String;
 
     fn try_from(
-        hdr_value: header::IntoHeaderValue<MeLocalAuthenticated>,
+        hdr_value: header::IntoHeaderValue<MeDemoAuthenticated>,
     ) -> std::result::Result<Self, Self::Error> {
         let hdr_value = hdr_value.to_string();
         match HeaderValue::from_str(&hdr_value) {
             std::result::Result::Ok(value) => std::result::Result::Ok(value),
             std::result::Result::Err(e) => std::result::Result::Err(format!(
-                r#"Invalid header value for MeLocalAuthenticated - value: {hdr_value} is invalid {e}"#
+                r#"Invalid header value for MeDemoAuthenticated - value: {hdr_value} is invalid {e}"#
             )),
         }
     }
 }
 
 #[cfg(feature = "server")]
-impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<MeLocalAuthenticated> {
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<MeDemoAuthenticated> {
     type Error = String;
 
     fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
         match hdr_value.to_str() {
             std::result::Result::Ok(value) => {
-                match <MeLocalAuthenticated as std::str::FromStr>::from_str(value) {
+                match <MeDemoAuthenticated as std::str::FromStr>::from_str(value) {
                     std::result::Result::Ok(value) => {
                         std::result::Result::Ok(header::IntoHeaderValue(value))
                     }
                     std::result::Result::Err(err) => std::result::Result::Err(format!(
-                        r#"Unable to convert header value '{value}' into MeLocalAuthenticated - {err}"#
+                        r#"Unable to convert header value '{value}' into MeDemoAuthenticated - {err}"#
                     )),
                 }
             }
@@ -2455,7 +2455,7 @@ impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<MeLocalAuthe
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
 #[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
-pub struct MeLocalUnauthenticated {
+pub struct MeDemoUnauthenticated {
     /// Note: inline enums are not fully supported by openapi-generator
     #[serde(rename = "authenticated")]
     pub authenticated: bool,
@@ -2475,7 +2475,7 @@ pub struct MeLocalUnauthenticated {
     pub logout_url: crate::NullValue,
 }
 
-impl MeLocalUnauthenticated {
+impl MeDemoUnauthenticated {
     #[allow(clippy::new_without_default, clippy::too_many_arguments)]
     pub fn new(
         authenticated: bool,
@@ -2483,8 +2483,8 @@ impl MeLocalUnauthenticated {
         user: crate::NullValue,
         login_url: crate::NullValue,
         logout_url: crate::NullValue,
-    ) -> MeLocalUnauthenticated {
-        MeLocalUnauthenticated {
+    ) -> MeDemoUnauthenticated {
+        MeDemoUnauthenticated {
             authenticated,
             auth_mode,
             user,
@@ -2494,10 +2494,10 @@ impl MeLocalUnauthenticated {
     }
 }
 
-/// Converts the MeLocalUnauthenticated value to the Query Parameters representation (style=form, explode=false)
+/// Converts the MeDemoUnauthenticated value to the Query Parameters representation (style=form, explode=false)
 /// specified in https://swagger.io/docs/specification/serialization/
 /// Should be implemented in a serde serializer
-impl std::fmt::Display for MeLocalUnauthenticated {
+impl std::fmt::Display for MeDemoUnauthenticated {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let params: Vec<Option<String>> = vec![
             Some("authenticated".to_string()),
@@ -2519,10 +2519,10 @@ impl std::fmt::Display for MeLocalUnauthenticated {
     }
 }
 
-/// Converts Query Parameters representation (style=form, explode=false) to a MeLocalUnauthenticated value
+/// Converts Query Parameters representation (style=form, explode=false) to a MeDemoUnauthenticated value
 /// as specified in https://swagger.io/docs/specification/serialization/
 /// Should be implemented in a serde deserializer
-impl std::str::FromStr for MeLocalUnauthenticated {
+impl std::str::FromStr for MeDemoUnauthenticated {
     type Err = String;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
@@ -2548,7 +2548,7 @@ impl std::str::FromStr for MeLocalUnauthenticated {
                 Some(x) => x,
                 None => {
                     return std::result::Result::Err(
-                        "Missing value while parsing MeLocalUnauthenticated".to_string(),
+                        "Missing value while parsing MeDemoUnauthenticated".to_string(),
                     );
                 }
             };
@@ -2581,7 +2581,7 @@ impl std::str::FromStr for MeLocalUnauthenticated {
                     ),
                     _ => {
                         return std::result::Result::Err(
-                            "Unexpected key while parsing MeLocalUnauthenticated".to_string(),
+                            "Unexpected key while parsing MeDemoUnauthenticated".to_string(),
                         );
                     }
                 }
@@ -2592,68 +2592,68 @@ impl std::str::FromStr for MeLocalUnauthenticated {
         }
 
         // Use the intermediate representation to return the struct
-        std::result::Result::Ok(MeLocalUnauthenticated {
+        std::result::Result::Ok(MeDemoUnauthenticated {
             authenticated: intermediate_rep
                 .authenticated
                 .into_iter()
                 .next()
-                .ok_or_else(|| "authenticated missing in MeLocalUnauthenticated".to_string())?,
+                .ok_or_else(|| "authenticated missing in MeDemoUnauthenticated".to_string())?,
             auth_mode: intermediate_rep
                 .auth_mode
                 .into_iter()
                 .next()
-                .ok_or_else(|| "auth_mode missing in MeLocalUnauthenticated".to_string())?,
+                .ok_or_else(|| "auth_mode missing in MeDemoUnauthenticated".to_string())?,
             user: intermediate_rep
                 .user
                 .into_iter()
                 .next()
-                .ok_or_else(|| "user missing in MeLocalUnauthenticated".to_string())?,
+                .ok_or_else(|| "user missing in MeDemoUnauthenticated".to_string())?,
             login_url: intermediate_rep
                 .login_url
                 .into_iter()
                 .next()
-                .ok_or_else(|| "login_url missing in MeLocalUnauthenticated".to_string())?,
+                .ok_or_else(|| "login_url missing in MeDemoUnauthenticated".to_string())?,
             logout_url: intermediate_rep
                 .logout_url
                 .into_iter()
                 .next()
-                .ok_or_else(|| "logout_url missing in MeLocalUnauthenticated".to_string())?,
+                .ok_or_else(|| "logout_url missing in MeDemoUnauthenticated".to_string())?,
         })
     }
 }
 
-// Methods for converting between header::IntoHeaderValue<MeLocalUnauthenticated> and HeaderValue
+// Methods for converting between header::IntoHeaderValue<MeDemoUnauthenticated> and HeaderValue
 
 #[cfg(feature = "server")]
-impl std::convert::TryFrom<header::IntoHeaderValue<MeLocalUnauthenticated>> for HeaderValue {
+impl std::convert::TryFrom<header::IntoHeaderValue<MeDemoUnauthenticated>> for HeaderValue {
     type Error = String;
 
     fn try_from(
-        hdr_value: header::IntoHeaderValue<MeLocalUnauthenticated>,
+        hdr_value: header::IntoHeaderValue<MeDemoUnauthenticated>,
     ) -> std::result::Result<Self, Self::Error> {
         let hdr_value = hdr_value.to_string();
         match HeaderValue::from_str(&hdr_value) {
             std::result::Result::Ok(value) => std::result::Result::Ok(value),
             std::result::Result::Err(e) => std::result::Result::Err(format!(
-                r#"Invalid header value for MeLocalUnauthenticated - value: {hdr_value} is invalid {e}"#
+                r#"Invalid header value for MeDemoUnauthenticated - value: {hdr_value} is invalid {e}"#
             )),
         }
     }
 }
 
 #[cfg(feature = "server")]
-impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<MeLocalUnauthenticated> {
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<MeDemoUnauthenticated> {
     type Error = String;
 
     fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
         match hdr_value.to_str() {
             std::result::Result::Ok(value) => {
-                match <MeLocalUnauthenticated as std::str::FromStr>::from_str(value) {
+                match <MeDemoUnauthenticated as std::str::FromStr>::from_str(value) {
                     std::result::Result::Ok(value) => {
                         std::result::Result::Ok(header::IntoHeaderValue(value))
                     }
                     std::result::Result::Err(err) => std::result::Result::Err(format!(
-                        r#"Unable to convert header value '{value}' into MeLocalUnauthenticated - {err}"#
+                        r#"Unable to convert header value '{value}' into MeDemoUnauthenticated - {err}"#
                     )),
                 }
             }
@@ -3094,8 +3094,8 @@ impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<MeNeoshowcas
 pub enum MeResponse {
     MeNeoshowcaseAuthenticated(models::MeNeoshowcaseAuthenticated),
     MeNeoshowcaseUnauthenticated(models::MeNeoshowcaseUnauthenticated),
-    MeLocalAuthenticated(models::MeLocalAuthenticated),
-    MeLocalUnauthenticated(models::MeLocalUnauthenticated),
+    MeDemoAuthenticated(models::MeDemoAuthenticated),
+    MeDemoUnauthenticated(models::MeDemoUnauthenticated),
 }
 
 impl validator::Validate for MeResponse {
@@ -3103,8 +3103,8 @@ impl validator::Validate for MeResponse {
         match self {
             Self::MeNeoshowcaseAuthenticated(v) => v.validate(),
             Self::MeNeoshowcaseUnauthenticated(v) => v.validate(),
-            Self::MeLocalAuthenticated(v) => v.validate(),
-            Self::MeLocalUnauthenticated(v) => v.validate(),
+            Self::MeDemoAuthenticated(v) => v.validate(),
+            Self::MeDemoUnauthenticated(v) => v.validate(),
         }
     }
 }
@@ -3130,14 +3130,14 @@ impl From<models::MeNeoshowcaseUnauthenticated> for MeResponse {
         Self::MeNeoshowcaseUnauthenticated(value)
     }
 }
-impl From<models::MeLocalAuthenticated> for MeResponse {
-    fn from(value: models::MeLocalAuthenticated) -> Self {
-        Self::MeLocalAuthenticated(value)
+impl From<models::MeDemoAuthenticated> for MeResponse {
+    fn from(value: models::MeDemoAuthenticated) -> Self {
+        Self::MeDemoAuthenticated(value)
     }
 }
-impl From<models::MeLocalUnauthenticated> for MeResponse {
-    fn from(value: models::MeLocalUnauthenticated) -> Self {
-        Self::MeLocalUnauthenticated(value)
+impl From<models::MeDemoUnauthenticated> for MeResponse {
+    fn from(value: models::MeDemoUnauthenticated) -> Self {
+        Self::MeDemoUnauthenticated(value)
     }
 }
 

@@ -1,10 +1,6 @@
-use std::{error::Error, sync::Arc, time::Duration};
+use std::{error::Error, sync::Arc};
 
-use reqwest::Client;
-use server::{
-    AppState, app, config::Config, migrate, repository::SqlxUserRepository,
-    service::ReqwestPhotoClient,
-};
+use server::{AppState, app, config::Config, migrate, repository::SqlxUserRepository};
 use sqlx::mysql::MySqlPoolOptions;
 use tokio::{net::TcpListener, signal};
 use tracing::{error, info};
@@ -27,13 +23,8 @@ async fn run() -> Result<(), Box<dyn Error>> {
         .await?;
     migrate(&pool).await?;
 
-    let http_client = Client::builder().timeout(Duration::from_secs(10)).build()?;
-    let photos = ReqwestPhotoClient::new(http_client, &config.photo_api_url)?;
-    let state = AppState::new(
-        Arc::new(SqlxUserRepository::new(pool.clone())),
-        Arc::new(photos),
-        config.auth_mode,
-    );
+    let repository = Arc::new(SqlxUserRepository::new(pool.clone()));
+    let state = AppState::new(config.auth_mode, repository);
 
     let listener = TcpListener::bind(config.app_addr).await?;
     info!(address = %config.app_addr, "listening");

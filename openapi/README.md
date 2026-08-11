@@ -54,9 +54,9 @@ Rustの`rust-axum` Generator 7.24.0はOpenAPI 3.1の`type: "null"`を標準で�
 
 | operationId | request example | response status / example |
 |---|---|---|
-| `getMe` | なし | `200`: `neoshowcase_authenticated`, `neoshowcase_unauthenticated`, `local_authenticated`, `local_unauthenticated` |
+| `getMe` | なし | `200`: `neoshowcase_authenticated`, `neoshowcase_unauthenticated`, `demo_authenticated`, `demo_unauthenticated` |
 | `loginGuest` | `guest_login` | `200`: `guest_authenticated` |
-| `logoutLocal` | bodyなし | `204`: bodyなし |
+| `logoutDemo` | bodyなし | `204`: bodyなし |
 | `startOrResumeRun` | bodyなし | `200`: `new_run`, `resumed_run`; `401`: `unauthorized` |
 | `getCurrentRun` | なし | `200`: `current_run`; `401`: `unauthorized`; `404`: `run_not_found` |
 | `getProblem` | なし | `200`: `available_problem`; `401`: `unauthorized`; `409`: `problem_locked` |
@@ -106,7 +106,7 @@ assert_eq!(response.status(), axum::http::StatusCode::OK);
 assert_eq!(body_json::<serde_json::Value>(response).await, expected);
 ```
 
-`204`はstatusに加えてbodyが空であることを確認します。local loginでは`Set-Cookie`がHttpOnlyであること、logoutではsession Cookieを削除する`Set-Cookie`があることも確認します。Cookie名と未確定の属性はまだ固定しません。`401`、`404 RUN_NOT_FOUND`、`409 PROBLEM_LOCKED`は対応するerror fixtureと比較します。response exampleがない未確定errorは、statusとError schemaの形までを確認し、`error.code`確定後にA・B確認のうえfixtureを追加します。
+`204`はstatusに加えてbodyが空であることを確認します。demo loginでは`Set-Cookie`がHttpOnlyであること、logoutではsession Cookieを削除する`Set-Cookie`があることも確認します。Cookie名と未確定の属性はまだ固定しません。`401`、`404 RUN_NOT_FOUND`、`409 PROBLEM_LOCKED`は対応するerror fixtureと比較します。response exampleがない未確定errorは、statusとError schemaの形までを確認し、`error.code`確定後にA・B確認のうえfixtureを追加します。
 
 ## exampleのschema検証
 
@@ -132,7 +132,7 @@ schema適合を確認する際は、OpenAPI 3.1とJSON Schema 2020-12に対応�
 - `response.status`と`response.example`: response statusとexample key
 - `state_after`: operation後に変化する認証・run・問題状態
 
-たとえば`local_login_and_logout`は未ログインからguest login、`GET /api/me`、`204` logout、未ログイン状態への復帰を順に表します。`answer_correct_and_clear_run`は最後の必須問題への正解で`problem_status`と`run_status`がともに`cleared`になる遷移を表します。
+たとえば`demo_login_and_logout`は未ログインからguest login、`GET /api/me`、`204` logout、未ログイン状態への復帰を順に表します。`answer_correct_and_clear_run`は最後の必須問題への正解で`problem_status`と`run_status`がともに`cleared`になる遷移を表します。
 
 ## UUID・時刻などの動的値
 
@@ -154,9 +154,9 @@ APIのpath、method、schema、status、example、scenarioのいずれかを変�
 
 - 開始導線へ設定する最初の`room_id`と`problem_id`
 - 部屋・問題不存在、JSON／UUID不正、入力内容不備、server内部エラーの具体的な`error.code`
-- local表示名の前後空白、大文字小文字、最大長
+- demo表示名の前後空白、大文字小文字、最大長
 - queryの空配列、`count`範囲、未知control、`source`の厳密な許容範囲
-- NeoShowcase modeでlogout APIを呼んだ場合と、local未認証でlogoutした場合の具体的なstatus
-- local session Cookieの名前、有効期限、具体的な属性
+- NeoShowcase modeでlogout APIを呼んだ場合と、demo未認証でlogoutした場合の具体的なstatus
+- demo session Cookieの名前、有効期限、具体的な属性
 
 これらはOpenAPIへ推測で追加せず、確定後に更新します。

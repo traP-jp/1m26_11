@@ -1,6 +1,6 @@
 {
   "authenticated": false,
-  "auth_mode": "local",
+  "auth_mode": "demo",
   "user": null,
   "login_url": null,
   "logout_url": null

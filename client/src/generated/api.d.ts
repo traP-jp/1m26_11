@@ -48,8 +48,8 @@ export interface paths {
     get?: never
     put?: never
     /**
-     * ローカル環境で名前を登録する
-     * @description AUTH_MODE=localのときだけ有効です。NeoShowcase modeでは404を返します。
+     * デモ環境で名前を登録する
+     * @description AUTH_MODE=demoのときだけ有効です。NeoShowcase modeでは404を返します。
      */
     post: operations['loginGuest']
     delete?: never
@@ -68,10 +68,10 @@ export interface paths {
     get?: never
     put?: never
     /**
-     * ローカル環境からログアウトする
-     * @description AUTH_MODE=localのときだけ使用し、ローカルsessionとCookieを無効化します。
+     * デモ環境からログアウトする
+     * @description AUTH_MODE=demoのときだけ使用し、デモsessionとCookieを無効化します。
      */
-    post: operations['logoutLocal']
+    post: operations['logoutDemo']
     delete?: never
     options?: never
     head?: never
@@ -234,8 +234,8 @@ export interface components {
     MeResponse:
       | components['schemas']['MeNeoshowcaseAuthenticated']
       | components['schemas']['MeNeoshowcaseUnauthenticated']
-      | components['schemas']['MeLocalAuthenticated']
-      | components['schemas']['MeLocalUnauthenticated']
+      | components['schemas']['MeDemoAuthenticated']
+      | components['schemas']['MeDemoUnauthenticated']
     MeNeoshowcaseAuthenticated: {
       /** @constant */
       authenticated: true
@@ -254,20 +254,20 @@ export interface components {
       login_url: string
       logout_url: null
     }
-    MeLocalAuthenticated: {
+    MeDemoAuthenticated: {
       /** @constant */
       authenticated: true
       /** @constant */
-      auth_mode: 'local'
+      auth_mode: 'demo'
       user: components['schemas']['User']
       login_url: null
       logout_url: null
     }
-    MeLocalUnauthenticated: {
+    MeDemoUnauthenticated: {
       /** @constant */
       authenticated: false
       /** @constant */
-      auth_mode: 'local'
+      auth_mode: 'demo'
       user: null
       login_url: null
       logout_url: null
@@ -410,10 +410,10 @@ export interface components {
         'application/json': components['schemas']['MeResponse']
       }
     }
-    /** @description ローカル用ユーザーを取得または作成し、session Cookieを発行した状態 */
+    /** @description デモ用ユーザーを取得または作成し、session Cookieを発行した状態 */
     GuestLoginSuccess: {
       headers: {
-        /** @description HttpOnlyなlocal session Cookie。Cookie名と具体的な属性は未確定です。 */
+        /** @description HttpOnlyなdemo session Cookie。Cookie名と具体的な属性は未確定です。 */
         'Set-Cookie'?: string
         [name: string]: unknown
       }
@@ -613,7 +613,7 @@ export interface operations {
       500: components['responses']['InternalServerError']
     }
   }
-  logoutLocal: {
+  logoutDemo: {
     parameters: {
       query?: never
       header?: never
@@ -625,7 +625,7 @@ export interface operations {
       /** @description ログアウト完了。response bodyはありません。 */
       204: {
         headers: {
-          /** @description local session Cookieを削除するためのheader。Cookie名と具体的な属性は未確定です。 */
+          /** @description demo session Cookieを削除するためのheader。Cookie名と具体的な属性は未確定です。 */
           'Set-Cookie'?: string
           [name: string]: unknown
         }

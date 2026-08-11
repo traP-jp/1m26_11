@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, str::FromStr, sync::Arc};
+use std::{env, str::FromStr, sync::Arc};
 
 use async_trait::async_trait;
 use axum::{
@@ -7,73 +7,56 @@ use axum::{
     http::{Request, StatusCode, header},
 };
 use http_body_util::BodyExt;
-use serde_json::{Value, json};
+use openapi_generated::models::ErrorResponse;
+use serde_json::json;
 use server::{
-    AppState,
-    api::{CreateUserResponse, ErrorResponse, User},
-    app, migrate,
-    repository::{RepositoryError, SqlxUserRepository, UserRecord, UserRepository},
-    service::ReqwestPhotoClient,
+    AppState, app,
+    config::AuthMode,
+    migrate,
+    repository::{AuthRepository, AuthUserRecord, RepositoryError, SqlxUserRepository},
 };
 use sqlx::{
     MySqlPool,
     mysql::{MySqlConnectOptions, MySqlPoolOptions},
 };
-use tokio::sync::RwLock;
 use tower::ServiceExt;
 use uuid::Uuid;
-use wiremock::{
-    Mock, MockServer, ResponseTemplate,
-    matchers::{method, path},
-};
 
-const ICON_URL: &str = "https://example.test/thumbnail.png";
-
-#[derive(Default)]
-struct MemoryRepository {
-    users: RwLock<HashMap<Uuid, UserRecord>>,
-}
+struct StubAuthRepository;
 
 #[async_trait]
-impl UserRepository for MemoryRepository {
-    async fn get_users(&self) -> Result<Vec<UserRecord>, RepositoryError> {
-        let mut users = self
-            .users
-            .read()
-            .await
-            .values()
-            .cloned()
-            .collect::<Vec<_>>();
-        users.sort_by_key(|user| user.id);
-        Ok(users)
+impl AuthRepository for StubAuthRepository {
+    async fn find_user_by_demo_session(
+        &self,
+        _session_id: Uuid,
+    ) -> Result<Option<AuthUserRecord>, RepositoryError> {
+        Ok(None)
     }
 
-    async fn create_user(&self, name: &str, email: &str) -> Result<Uuid, RepositoryError> {
-        let id = Uuid::new_v4();
-        self.users.write().await.insert(
-            id,
-            UserRecord {
-                id,
-                name: name.to_owned(),
-                email: email.to_owned(),
-            },
-        );
-        Ok(id)
+    async fn find_user_by_provider_subject(
+        &self,
+        _auth_provider: &str,
+        _provider_subject: &str,
+    ) -> Result<Option<AuthUserRecord>, RepositoryError> {
+        Ok(None)
     }
 
-    async fn get_user(&self, user_id: Uuid) -> Result<UserRecord, RepositoryError> {
-        self.users
-            .read()
-            .await
-            .get(&user_id)
-            .cloned()
-            .ok_or(RepositoryError::NotFound)
+    async fn get_or_create_user(
+        &self,
+        _auth_provider: &str,
+        _provider_subject: &str,
+        display_name: &str,
+    ) -> Result<AuthUserRecord, RepositoryError> {
+        Ok(AuthUserRecord {
+            id: Uuid::new_v4(),
+            display_name: display_name.to_owned(),
+        })
     }
 }
 
 #[tokio::test]
 async fn ping_returns_plain_text_pong() {
-    let app = test_app(Arc::new(MemoryRepository::default()), "http://127.0.0.1");
+    let app = test_app();
     let response = request(
         &app,
         Request::get("/api/v1/ping").body(Body::empty()).unwrap(),
@@ -90,7 +73,7 @@ async fn ping_returns_plain_text_pong() {
 
 #[tokio::test]
 async fn openapi_returns_embedded_shared_document() {
-    let app = test_app(Arc::new(MemoryRepository::default()), "http://127.0.0.1");
+    let app = test_app();
     let response = request(
         &app,
         Request::get("/openapi.yaml").body(Body::empty()).unwrap(),
@@ -106,211 +89,121 @@ async fn openapi_returns_embedded_shared_document() {
 }
 
 #[tokio::test]
-async fn create_user_validates_request() {
-    let app = test_app(Arc::new(MemoryRepository::default()), "http://127.0.0.1");
-    let cases = [
-        (
-            json!({"email": "alice@example.com"}),
-            "invalid request body",
-        ),
-        (
-            json!({"name": "   ", "email": "alice@example.com"}),
-            "name must not be blank",
-        ),
-        (
-            json!({"name": "Alice", "email": "not-an-email"}),
-            "email must be a valid email address",
-        ),
-        (
-            json!({"name": "a".repeat(256), "email": "alice@example.com"}),
-            "name must be at most 255 characters",
-        ),
-        (
-            json!({"name": "Alice", "email": format!("{}@example.com", "a".repeat(244))}),
-            "email must be at most 255 characters",
-        ),
-    ];
-
-    for (payload, expected_message) in cases {
-        let response = post_json(&app, "/api/v1/users", payload).await;
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        let error: ErrorResponse = body_json(response).await;
-        assert!(
-            error.message.contains(expected_message),
-            "unexpected message: {}",
-            error.message
-        );
-    }
-}
-
-#[tokio::test]
-async fn user_flow_uses_photo_thumbnail_as_icon() {
-    let photo_api = MockServer::start().await;
-    mount_photo_mock(&photo_api).await;
-    let app = test_app(Arc::new(MemoryRepository::default()), &photo_api.uri());
-
-    let response = post_json(
-        &app,
-        "/api/v1/users",
-        json!({"name": "Alice", "email": "alice@example.com"}),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let created: CreateUserResponse = body_json(response).await;
-
-    let response = request(
-        &app,
-        Request::get(format!("/api/v1/users/{}", created.id))
-            .body(Body::empty())
-            .unwrap(),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let user: User = body_json(response).await;
-    assert_eq!(user.id, created.id);
-    assert_eq!(user.name, "Alice");
-    assert_eq!(user.email, "alice@example.com");
-    assert_eq!(user.icon_url, ICON_URL);
-
-    let response = request(
-        &app,
-        Request::get("/api/v1/users").body(Body::empty()).unwrap(),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let users: Vec<User> = body_json(response).await;
-    assert_eq!(users, vec![user]);
-}
-
-#[tokio::test]
-async fn missing_user_returns_json_404_without_calling_photo_api() {
-    let app = test_app(Arc::new(MemoryRepository::default()), "http://127.0.0.1:9");
-    let response = request(
-        &app,
-        Request::get(format!("/api/v1/users/{}", Uuid::new_v4()))
-            .body(Body::empty())
-            .unwrap(),
-    )
-    .await;
-
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
-    assert_eq!(
-        body_json::<ErrorResponse>(response).await,
-        ErrorResponse {
-            message: "user not found".to_owned(),
-        }
-    );
-}
-
-#[tokio::test]
-async fn invalid_path_and_unknown_route_return_json_errors() {
-    let app = test_app(Arc::new(MemoryRepository::default()), "http://127.0.0.1");
-
-    let response = request(
-        &app,
-        Request::get("/api/v1/users/not-a-uuid")
-            .body(Body::empty())
-            .unwrap(),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    assert!(
-        body_json::<ErrorResponse>(response)
-            .await
-            .message
-            .starts_with("invalid userID:")
-    );
+async fn unknown_route_returns_json_404() {
+    let app = test_app();
 
     let response = request(&app, Request::get("/missing").body(Body::empty()).unwrap()).await;
+
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
-    assert_eq!(
-        body_json::<ErrorResponse>(response).await.message,
-        "route not found"
-    );
+
+    let error = body_json::<ErrorResponse>(response).await;
+
+    assert_eq!(error.error.code, "NOT_FOUND");
+    assert_eq!(error.error.message, "route not found");
+    assert_eq!(error.error.details.0, json!({}));
 }
 
 #[tokio::test]
-#[ignore = "requires TEST_DATABASE_URL or a MariaDB service configured with DB_* variables"]
-async fn mariadb_user_flow() {
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_auth_repository_flow() {
     let pool = connect_test_database().await;
+
     migrate(&pool).await.expect("migration should succeed");
-    sqlx::query("DELETE FROM users")
+
+    let repository = SqlxUserRepository::new(pool.clone());
+
+    let demo_user_id = Uuid::new_v4();
+    let session_id = Uuid::new_v4();
+    let demo_subject = format!("integration-demo-{demo_user_id}");
+
+    sqlx::query(
+        r#"
+        INSERT INTO users (
+            id,
+            auth_provider,
+            provider_subject,
+            display_name
+        )
+        VALUES (?, 'demo', ?, ?)
+        "#,
+    )
+    .bind(demo_user_id)
+    .bind(&demo_subject)
+    .bind("demo-user")
+    .execute(&pool)
+    .await
+    .expect("demo user insertion should succeed");
+
+    sqlx::query(
+        r#"
+        INSERT INTO demo_sessions (id, user_id)
+        VALUES (?, ?)
+        "#,
+    )
+    .bind(session_id)
+    .bind(demo_user_id)
+    .execute(&pool)
+    .await
+    .expect("demo session insertion should succeed");
+
+    let demo_user = repository
+        .find_user_by_demo_session(session_id)
+        .await
+        .expect("demo session lookup should succeed")
+        .expect("demo session should resolve a user");
+
+    let neo_subject = format!("integration-neoshowcase-{}", Uuid::new_v4());
+
+    let first_neo_user = repository
+        .get_or_create_user("neoshowcase", &neo_subject, "neo-user")
+        .await
+        .expect("first NeoShowcase lookup should succeed");
+
+    let second_neo_user = repository
+        .get_or_create_user("neoshowcase", &neo_subject, "neo-user")
+        .await
+        .expect("second NeoShowcase lookup should succeed");
+
+    sqlx::query("DELETE FROM demo_sessions WHERE id = ?")
+        .bind(session_id)
         .execute(&pool)
         .await
-        .expect("users cleanup should succeed");
+        .expect("demo session cleanup should succeed");
 
-    let photo_api = MockServer::start().await;
-    mount_photo_mock(&photo_api).await;
-    let repository = Arc::new(SqlxUserRepository::new(pool.clone()));
-    let app = test_app(repository.clone(), &photo_api.uri());
-
-    let response = post_json(
-        &app,
-        "/api/v1/users",
-        json!({"name": "Database User", "email": "db@example.com"}),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let created: CreateUserResponse = body_json(response).await;
-    repository
-        .get_user(created.id)
+    sqlx::query("DELETE FROM users WHERE id = ?")
+        .bind(demo_user_id)
+        .execute(&pool)
         .await
-        .expect("created user should be readable from MariaDB");
+        .expect("demo user cleanup should succeed");
 
-    let response = request(
-        &app,
-        Request::get(format!("/api/v1/users/{}", created.id))
-            .body(Body::empty())
-            .unwrap(),
+    sqlx::query(
+        r#"
+        DELETE FROM users
+        WHERE auth_provider = 'neoshowcase'
+          AND provider_subject = ?
+        "#,
     )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
+    .bind(&neo_subject)
+    .execute(&pool)
+    .await
+    .expect("NeoShowcase user cleanup should succeed");
+
+    pool.close().await;
+
     assert_eq!(
-        body_json::<User>(response).await,
-        User {
-            id: created.id,
-            name: "Database User".to_owned(),
-            email: "db@example.com".to_owned(),
-            icon_url: ICON_URL.to_owned(),
+        demo_user,
+        AuthUserRecord {
+            id: demo_user_id,
+            display_name: "demo-user".to_owned(),
         }
     );
 
-    sqlx::query("DELETE FROM users")
-        .execute(&pool)
-        .await
-        .expect("users cleanup should succeed");
-    pool.close().await;
+    assert_eq!(first_neo_user, second_neo_user);
+    assert_eq!(first_neo_user.display_name, "neo-user");
 }
 
-fn test_app(repository: Arc<dyn UserRepository>, photo_api_url: &str) -> Router {
-    let photos = ReqwestPhotoClient::new(reqwest::Client::new(), photo_api_url)
-        .expect("test photo API URL should be valid");
-    app(AppState::new(repository, Arc::new(photos)))
-}
-
-async fn mount_photo_mock(photo_api: &MockServer) {
-    Mock::given(method("GET"))
-        .and(path("/1"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "albumId": 1,
-            "id": 1,
-            "title": "icon",
-            "url": "https://example.test/photo.png",
-            "thumbnailUrl": ICON_URL
-        })))
-        .mount(photo_api)
-        .await;
-}
-
-async fn post_json(app: &Router, uri: &str, payload: Value) -> axum::response::Response {
-    request(
-        app,
-        Request::post(uri)
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(payload.to_string()))
-            .unwrap(),
-    )
-    .await
+fn test_app() -> Router {
+    app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)))
 }
 
 async fn request(app: &Router, request: Request<Body>) -> axum::response::Response {
@@ -332,27 +225,15 @@ async fn body_bytes(response: axum::response::Response) -> Vec<u8> {
 }
 
 async fn connect_test_database() -> MySqlPool {
-    let options = match env::var("TEST_DATABASE_URL") {
-        Ok(url) => MySqlConnectOptions::from_str(&url).expect("TEST_DATABASE_URL should be valid"),
-        Err(_) => MySqlConnectOptions::new()
-            .host(&env_or("DB_HOST", "localhost"))
-            .port(
-                env_or("DB_PORT", "3306")
-                    .parse()
-                    .expect("DB_PORT should be a valid port"),
-            )
-            .username(&env_or("DB_USER", "root"))
-            .password(&env_or("DB_PASS", "pass"))
-            .database(&env_or("DB_NAME", "app")),
-    };
+    let database_url = env::var("TEST_DATABASE_URL")
+        .expect("TEST_DATABASE_URL must point to a disposable test database");
+
+    let options =
+        MySqlConnectOptions::from_str(&database_url).expect("TEST_DATABASE_URL should be valid");
 
     MySqlPoolOptions::new()
         .max_connections(1)
         .connect_with(options)
         .await
         .expect("test database should be reachable")
-}
-
-fn env_or(key: &str, default: &str) -> String {
-    env::var(key).unwrap_or_else(|_| default.to_owned())
 }
