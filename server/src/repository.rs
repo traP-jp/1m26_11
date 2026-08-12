@@ -48,6 +48,14 @@ pub trait AuthRepository: Send + Sync {
         provider_subject: &str,
         display_name: &str,
     ) -> Result<AuthUserRecord, RepositoryError>;
+
+    async fn create_demo_session(
+        &self,
+        _session_id: Uuid,
+        _user_id: Uuid,
+    ) -> Result<(), RepositoryError> {
+        unimplemented!("create_demo_session is not implemented for this repository")
+    }
 }
 
 #[async_trait]
@@ -124,5 +132,25 @@ impl AuthRepository for SqlxUserRepository {
         self.find_user_by_provider_subject(auth_provider, provider_subject)
             .await?
             .ok_or(RepositoryError::UserNotFoundAfterUpsert)
+    }
+
+    async fn create_demo_session(
+        &self,
+        session_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), RepositoryError> {
+        sqlx::query(
+            r#"
+            INSERT INTO demo_sessions (id, user_id)
+            VALUES (?, ?)
+            "#,
+        )
+        .bind(session_id)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        Ok(())
     }
 }

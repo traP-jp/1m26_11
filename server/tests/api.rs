@@ -52,6 +52,14 @@ impl AuthRepository for StubAuthRepository {
             display_name: display_name.to_owned(),
         })
     }
+
+    async fn create_demo_session(
+        &self,
+        _session_id: Uuid,
+        _user_id: Uuid,
+    ) -> Result<(), RepositoryError> {
+        Ok(())
+    }
 }
 
 #[tokio::test]
@@ -237,3 +245,57 @@ async fn connect_test_database() -> MySqlPool {
         .await
         .expect("test database should be reachable")
 }
+
+#[tokio::test]
+async fn guest_login_succeeds_in_demo_mode() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let request_payload = json!({
+        "display_name": "hoge"
+    });
+
+    let req = Request::post("/api/auth/guest")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(serde_json::to_vec(&request_payload).unwrap()))
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    let headers = response.headers().clone();
+    let status = response.status();
+    assert_eq!(status, StatusCode::OK);
+
+    // Verify response body matches:
+    // { "authenticated": true, "user": { "id": "uuid", "display_name": "hoge" } }
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["authenticated"], true);
+    assert_eq!(body["user"]["display_name"], "hoge");
+    assert!(Uuid::parse_str(body["user"]["id"].as_str().unwrap()).is_ok());
+
+    // Verify cookie:
+    // It should have a Set-Cookie header with demo_session=<uuid>
+    let cookie_header = headers.get(header::SET_COOKIE).expect("Set-Cookie header should be present");
+    let cookie_str = cookie_header.to_str().unwrap();
+    assert!(cookie_str.contains("demo_session="));
+    assert!(cookie_str.contains("HttpOnly"));
+    assert!(cookie_str.contains("Path=/"));
+}
+
+#[tokio::test]
+async fn guest_login_returns_404_in_neoshowcase_mode() {
+    let app = app(AppState::new(AuthMode::NeoShowcase, Arc::new(StubAuthRepository)));
+
+    let request_payload = json!({
+        "display_name": "hoge"
+    });
+
+    let req = Request::post("/api/auth/guest")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(serde_json::to_vec(&request_payload).unwrap()))
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
