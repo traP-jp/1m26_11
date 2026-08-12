@@ -69,3 +69,26 @@ pub(crate) async fn login_guest(
 
     Ok((jar, Json(response)))
 }
+
+pub(crate) async fn logout_demo(
+    State(state): State<AppState>,
+    mut jar: CookieJar,
+) -> Result<(CookieJar, StatusCode), AppError> {
+    if state.auth_mode != AuthMode::Demo {
+        return Err(AppError::not_found("route not found"));
+    }
+
+    if let Some(session_cookie) = jar.get("demo_session") {
+        if let Ok(session_id) = Uuid::parse_str(session_cookie.value()) {
+            state.auth_repository.delete_demo_session(session_id).await?;
+        }
+    }
+
+    let cookie = Cookie::build("demo_session")
+        .path("/")
+        .build();
+    jar = jar.remove(cookie);
+
+    Ok((jar, StatusCode::NO_CONTENT))
+}
+

@@ -56,6 +56,13 @@ pub trait AuthRepository: Send + Sync {
     ) -> Result<(), RepositoryError> {
         unimplemented!("create_demo_session is not implemented for this repository")
     }
+
+    async fn delete_demo_session(
+        &self,
+        _session_id: Uuid,
+    ) -> Result<(), RepositoryError> {
+        unimplemented!("delete_demo_session is not implemented for this repository")
+    }
 }
 
 #[async_trait]
@@ -147,6 +154,24 @@ impl AuthRepository for SqlxUserRepository {
         )
         .bind(session_id)
         .bind(user_id)
+        .execute(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        Ok(())
+    }
+
+    async fn delete_demo_session(
+        &self,
+        session_id: Uuid,
+    ) -> Result<(), RepositoryError> {
+        sqlx::query(
+            r#"
+            DELETE FROM demo_sessions
+            WHERE id = ?
+            "#,
+        )
+        .bind(session_id)
         .execute(&self.pool)
         .await
         .map_err(RepositoryError::Database)?;

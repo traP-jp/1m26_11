@@ -51,6 +51,10 @@ pub fn app(state: AppState) -> Router {
             "/api/auth/guest",
             post(handler::login_guest).fallback(handler::method_not_allowed),
         )
+        .route(
+            "/api/auth/logout",
+            post(handler::logout_demo).fallback(handler::method_not_allowed),
+        )
         .fallback(handler::not_found)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
