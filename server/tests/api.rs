@@ -22,6 +22,10 @@ use sqlx::{
 use tower::ServiceExt;
 use uuid::Uuid;
 
+const MOCK_SESSION_ID: &str = "55555555-5555-4555-8555-555555555555";
+const MOCK_RESUME_ROOM_ID: &str = "11111111-1111-4111-8111-111111111111";
+const MOCK_NEW_ROOM_ID: &str = "33333333-3333-4333-8333-333333333333";
+
 struct StubAuthRepository;
 
 #[async_trait]
@@ -30,7 +34,10 @@ impl AuthRepository for StubAuthRepository {
         &self,
         _session_id: Uuid,
     ) -> Result<Option<AuthUserRecord>, RepositoryError> {
-        Ok(None)
+        Ok(Some(AuthUserRecord {
+            id: Uuid::from_str(MOCK_SESSION_ID).unwrap(),
+            display_name: "test-user".to_owned(),
+        }))
     }
 
     async fn find_user_by_provider_subject(
@@ -313,10 +320,7 @@ async fn guest_logout_succeeds_in_demo_mode() {
     let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
 
     let req = Request::post("/api/auth/logout")
-        .header(
-            header::COOKIE,
-            "demo_session=55555555-5555-4555-8555-555555555555",
-        )
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
         .body(Body::empty())
         .unwrap();
 
@@ -344,10 +348,7 @@ async fn guest_logout_returns_404_in_neoshowcase_mode() {
     ));
 
     let req = Request::post("/api/auth/logout")
-        .header(
-            header::COOKIE,
-            "demo_session=55555555-5555-4555-8555-555555555555",
-        )
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
         .body(Body::empty())
         .unwrap();
 
