@@ -8,7 +8,7 @@ use axum_extra::extract::cookie::{Cookie, CookieJar};
 use openapi_generated::models::{GuestLoginRequest, GuestLoginResponse, User};
 use uuid::Uuid;
 
-use crate::{OPENAPI_DOCUMENT, AppState, config::AuthMode, error::AppError};
+use crate::{AppState, OPENAPI_DOCUMENT, config::AuthMode, error::AppError};
 
 pub(crate) async fn ping() -> Response {
     (
@@ -62,10 +62,8 @@ pub(crate) async fn login_guest(
         .build();
     jar = jar.add(cookie);
 
-    let response = GuestLoginResponse::new(
-        true,
-        User::new(user_record.id, user_record.display_name),
-    );
+    let response =
+        GuestLoginResponse::new(true, User::new(user_record.id, user_record.display_name));
 
     Ok((jar, Json(response)))
 }
@@ -80,15 +78,15 @@ pub(crate) async fn logout_demo(
 
     if let Some(session_cookie) = jar.get("demo_session") {
         if let Ok(session_id) = Uuid::parse_str(session_cookie.value()) {
-            state.auth_repository.delete_demo_session(session_id).await?;
+            state
+                .auth_repository
+                .delete_demo_session(session_id)
+                .await?;
         }
     }
 
-    let cookie = Cookie::build("demo_session")
-        .path("/")
-        .build();
+    let cookie = Cookie::build("demo_session").path("/").build();
     jar = jar.remove(cookie);
 
     Ok((jar, StatusCode::NO_CONTENT))
 }
-
