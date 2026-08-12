@@ -17,13 +17,15 @@ backend、MariaDB、Adminer と Vite dev server をまとめて起動します�
 mise run dev
 ```
 
-Vite のみ起動する場合は次を実行します。
+Vite のみ起動する場合は次を実行します。developmentではMSWが既定で有効になり、backendなしでAPIを利用できます。
 
 ```sh
 mise run client-dev
 ```
 
-Vite は `/api` と `/openapi.yaml` を既定で `http://127.0.0.1:8080` に proxy します。転送先を変更する場合は `.env.example` を参考に `client/.env.local` を作成し、`API_PROXY_TARGET` を設定してください。
+mock responseは`../openapi/openapi-v1.yaml`、`../openapi/examples/`、`../openapi/scenarios/p0-cases.yaml`を直接読みます。response payloadをclient内に複製していないため、OpenAPIのexampleとscenarioがmockの正本です。
+
+実backendへ接続する場合は`.env.example`を参考に`client/.env.local`を作成し、`VITE_ENABLE_MSW=false`を設定してください。その場合、Viteは`/api`と`/openapi.yaml`を`API_PROXY_TARGET`（既定は`http://127.0.0.1:8080`）へproxyします。特定の状態からmockを開始する場合は、`VITE_MSW_SCENARIO`へscenarioのcase id（例: `demo_login_and_logout`、`query_correct`）を指定します。production buildではMSWは常に無効です。
 
 ## Component preview (Histoire)
 
