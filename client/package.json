@@ -46,7 +46,9 @@
     "histoire": "1.0.0-beta.1",
     "jiti": "^2.7.0",
     "jsdom": "^29.1.1",
+    "msw": "^2.15.0",
     "npm-run-all2": "^9.0.2",
+    "openapi-msw": "^2.0.0",
     "oxlint": "~1.77.0",
     "prettier": "3.9.5",
     "tailwindcss": "^4.3.3",
@@ -55,9 +57,15 @@
     "vite-plugin-vue-devtools": "^8.1.5",
     "vitest": "^4.1.10",
     "vue-eslint-parser": "^10.4.1",
-    "vue-tsc": "^3.3.7"
+    "vue-tsc": "^3.3.7",
+    "yaml": "^2.9.0"
   },
   "engines": {
     "node": "^22.18.0 || >=24.12.0"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }

@@ -1,5 +1,6 @@
 allowBuilds:
   esbuild: true
+  msw: false
 
 # Histoire 1.0.0-beta.1 predates Vite 8, while its upstream main branch
 # declares support for both Vite 7 and 8. Keep this compatibility allowance
