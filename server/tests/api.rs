@@ -6,6 +6,7 @@ use axum::{
     body::Body,
     http::{Request, StatusCode, header},
 };
+use chrono::{DateTime, Utc};
 use http_body_util::BodyExt;
 use openapi_generated::models::ErrorResponse;
 use serde_json::json;
@@ -13,7 +14,9 @@ use server::{
     AppState, app,
     config::AuthMode,
     migrate,
-    repository::{AuthRepository, AuthUserRecord, RepositoryError, SqlxUserRepository},
+    repository::{
+        AuthRepository, AuthUserRecord, RepositoryError, RoomRecord, RunRecord, SqlxUserRepository,
+    },
 };
 use sqlx::{
     MySqlPool,
@@ -70,6 +73,59 @@ impl AuthRepository for StubAuthRepository {
 
     async fn delete_demo_session(&self, _session_id: Uuid) -> Result<(), RepositoryError> {
         Ok(())
+    }
+
+    async fn find_room_by_id(&self, room_id: Uuid) -> Result<Option<RoomRecord>, RepositoryError> {
+        if room_id == Uuid::nil() {
+            Ok(None)
+        } else {
+            Ok(Some(RoomRecord {
+                id: room_id,
+                number: 1,
+                name: "Test Room".to_owned(),
+                genre: "Test".to_owned(),
+                description: "Test description".to_owned(),
+                is_published: true,
+                created_at: Utc::now(),
+            }))
+        }
+    }
+
+    async fn find_active_run(
+        &self,
+        _user_id: Uuid,
+        _room_id: Uuid,
+    ) -> Result<Option<RunRecord>, RepositoryError> {
+        let resume_room_id = Uuid::from_str(MOCK_RESUME_ROOM_ID).unwrap();
+        if _room_id == resume_room_id {
+            Ok(Some(RunRecord {
+                id: Uuid::new_v4(),
+                user_id: _user_id,
+                room_id: _room_id,
+                status: "active".to_owned(),
+                started_at: Utc::now() - chrono::Duration::seconds(65),
+                cleared_at: None,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn create_run(
+        &self,
+        id: Uuid,
+        user_id: Uuid,
+        room_id: Uuid,
+        started_at: DateTime<Utc>,
+    ) -> Result<RunRecord, RepositoryError> {
+        Ok(RunRecord {
+            id,
+            user_id,
+            room_id,
+            status: "active".to_owned(),
+            started_at,
+            cleared_at: None,
+        })
     }
 }
 
@@ -355,4 +411,84 @@ async fn guest_logout_returns_404_in_neoshowcase_mode() {
     let response = request(&app, req).await;
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn start_new_run_succeeds() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::post(format!("/api/rooms/{MOCK_NEW_ROOM_ID}/runs"))
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["status"], "active");
+    assert_eq!(body["elapsed_ms"], 0);
+    assert_eq!(body["query_count"], 0);
+    assert!(body["cleared_problem_ids"].as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn resume_active_run_succeeds() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::post(format!("/api/rooms/{MOCK_RESUME_ROOM_ID}/runs"))
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["status"], "active");
+    let elapsed = body["elapsed_ms"].as_i64().unwrap();
+    assert!(elapsed >= 65000);
+}
+
+#[tokio::test]
+async fn start_run_unauthorized() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::post(format!("/api/rooms/{MOCK_NEW_ROOM_ID}/runs"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn start_run_room_not_found() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::post(format!("/api/rooms/{}/runs", Uuid::nil()))
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn start_run_invalid_room_id_format() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::post("/api/rooms/not-a-uuid/runs")
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
