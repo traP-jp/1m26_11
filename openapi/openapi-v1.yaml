@@ -530,6 +530,8 @@ components:
           format: date-time
         elapsed_ms:
           type: integer
+          format: int64
+          minimum: 0
         cleared_problem_ids:
           type: array
           items:
@@ -537,6 +539,8 @@ components:
             format: uuid
         query_count:
           type: integer
+          format: int64
+          minimum: 0
     ProblemResponse:
       type: object
       required:

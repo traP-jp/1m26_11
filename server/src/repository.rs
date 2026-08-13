@@ -104,6 +104,14 @@ pub trait AuthRepository: Send + Sync {
     ) -> Result<RunRecord, RepositoryError> {
         unimplemented!("create_run is not implemented for this repository")
     }
+
+    async fn find_cleared_run(
+        &self,
+        _user_id: Uuid,
+        _room_id: Uuid,
+    ) -> Result<Option<RunRecord>, RepositoryError> {
+        unimplemented!("find_cleared_run is not implemented for this repository")
+    }
 }
 
 #[async_trait]
@@ -281,5 +289,25 @@ impl AuthRepository for SqlxUserRepository {
             started_at,
             cleared_at: None,
         })
+    }
+
+    async fn find_cleared_run(
+        &self,
+        user_id: Uuid,
+        room_id: Uuid,
+    ) -> Result<Option<RunRecord>, RepositoryError> {
+        sqlx::query_as::<_, RunRecord>(
+            r#"
+            SELECT id, user_id, room_id, status, started_at, cleared_at
+            FROM runs
+            WHERE user_id = ? AND room_id = ? AND status = 'cleared'
+            LIMIT 1
+            "#,
+        )
+        .bind(user_id)
+        .bind(room_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)
     }
 }

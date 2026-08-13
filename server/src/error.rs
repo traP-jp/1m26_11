@@ -27,6 +27,8 @@ pub(crate) enum AppError {
     )]
     #[error("unauthorized")]
     Unauthorized,
+    #[error("bad request: {0}")]
+    BadRequest(String),
     #[error("{0}")]
     NotFound(String),
     #[error("method not allowed")]
@@ -39,6 +41,10 @@ pub(crate) enum AppError {
 }
 
 impl AppError {
+    pub(crate) fn bad_request(message: impl Into<String>) -> Self {
+        Self::BadRequest(message.into())
+    }
+
     pub(crate) fn not_found(message: impl Into<String>) -> Self {
         Self::NotFound(message.into())
     }
@@ -64,6 +70,7 @@ impl IntoResponse for AppError {
                 "UNAUTHORIZED",
                 "ログインが必要です".to_owned(),
             ),
+            Self::BadRequest(message) => (StatusCode::BAD_REQUEST, "BAD_REQUEST", message.clone()),
             Self::NotFound(message) => (StatusCode::NOT_FOUND, "NOT_FOUND", message.clone()),
             Self::MethodNotAllowed => (
                 StatusCode::METHOD_NOT_ALLOWED,

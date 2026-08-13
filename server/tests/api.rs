@@ -32,6 +32,7 @@ use uuid::Uuid;
 const MOCK_SESSION_ID: &str = "55555555-5555-4555-8555-555555555555";
 const MOCK_RESUME_ROOM_ID: &str = "11111111-1111-4111-8111-111111111111";
 const MOCK_NEW_ROOM_ID: &str = "33333333-3333-4333-8333-333333333333";
+const MOCK_CLEARED_ROOM_ID: &str = "44444444-4444-4444-8444-444444444444";
 
 struct StubAuthRepository;
 
@@ -130,6 +131,26 @@ impl AuthRepository for StubAuthRepository {
             started_at,
             cleared_at: None,
         })
+    }
+
+    async fn find_cleared_run(
+        &self,
+        user_id: Uuid,
+        room_id: Uuid,
+    ) -> Result<Option<RunRecord>, RepositoryError> {
+        let cleared_room_id = Uuid::from_str(MOCK_CLEARED_ROOM_ID).unwrap();
+        if room_id == cleared_room_id {
+            Ok(Some(RunRecord {
+                id: Uuid::new_v4(),
+                user_id,
+                room_id,
+                status: "cleared".to_owned(),
+                started_at: Utc::now() - chrono::Duration::seconds(100),
+                cleared_at: Some(Utc::now()),
+            }))
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -633,4 +654,22 @@ async fn start_run_invalid_room_id_format() {
     let response = request(&app, req).await;
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn start_run_already_cleared_returns_400() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::post(format!("/api/rooms/{MOCK_CLEARED_ROOM_ID}/runs"))
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["error"]["code"], "BAD_REQUEST");
+    assert_eq!(body["error"]["message"], "room already cleared");
 }

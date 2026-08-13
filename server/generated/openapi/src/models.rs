@@ -131,13 +131,15 @@ pub struct ActiveRunResponse {
     pub started_at: chrono::DateTime<chrono::Utc>,
 
     #[serde(rename = "elapsed_ms")]
-    pub elapsed_ms: i32,
+    #[validate(range(min = 0u64))]
+    pub elapsed_ms: u64,
 
     #[serde(rename = "cleared_problem_ids")]
     pub cleared_problem_ids: Vec<uuid::Uuid>,
 
     #[serde(rename = "query_count")]
-    pub query_count: i32,
+    #[validate(range(min = 0u64))]
+    pub query_count: u64,
 }
 
 impl ActiveRunResponse {
@@ -145,9 +147,9 @@ impl ActiveRunResponse {
     pub fn new(
         status: String,
         started_at: chrono::DateTime<chrono::Utc>,
-        elapsed_ms: i32,
+        elapsed_ms: u64,
         cleared_problem_ids: Vec<uuid::Uuid>,
-        query_count: i32,
+        query_count: u64,
     ) -> ActiveRunResponse {
         ActiveRunResponse {
             status,
@@ -196,9 +198,9 @@ impl std::str::FromStr for ActiveRunResponse {
         struct IntermediateRep {
             pub status: Vec<String>,
             pub started_at: Vec<chrono::DateTime<chrono::Utc>>,
-            pub elapsed_ms: Vec<i32>,
+            pub elapsed_ms: Vec<u64>,
             pub cleared_problem_ids: Vec<Vec<uuid::Uuid>>,
-            pub query_count: Vec<i32>,
+            pub query_count: Vec<u64>,
         }
 
         let mut intermediate_rep = IntermediateRep::default();
@@ -231,7 +233,7 @@ impl std::str::FromStr for ActiveRunResponse {
                     ),
                     #[allow(clippy::redundant_clone)]
                     "elapsed_ms" => intermediate_rep.elapsed_ms.push(
-                        <i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                        <u64 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
                     ),
                     "cleared_problem_ids" => return std::result::Result::Err(
                         "Parsing a container in this style is not supported in ActiveRunResponse"
@@ -239,7 +241,7 @@ impl std::str::FromStr for ActiveRunResponse {
                     ),
                     #[allow(clippy::redundant_clone)]
                     "query_count" => intermediate_rep.query_count.push(
-                        <i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                        <u64 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
                     ),
                     _ => {
                         return std::result::Result::Err(

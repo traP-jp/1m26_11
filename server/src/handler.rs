@@ -112,6 +112,14 @@ pub(crate) async fn start_or_resume_run(
     let run_record = match run {
         Some(active_run) => active_run,
         None => {
+            let cleared_run = state
+                .auth_repository
+                .find_cleared_run(user.id, room_id)
+                .await?;
+            if cleared_run.is_some() {
+                return Err(AppError::bad_request("room already cleared"));
+            }
+
             let new_run_id = Uuid::new_v4();
             let started_at = Utc::now();
             state
@@ -121,16 +129,16 @@ pub(crate) async fn start_or_resume_run(
         }
     };
 
-    let elapsed_ms = (Utc::now() - run_record.started_at)
-        .num_milliseconds()
-        .max(0) as i32;
+    let elapsed: chrono::Duration = Utc::now() - run_record.started_at;
+    let elapsed_ms = elapsed.num_milliseconds().max(0) as u64;
+    let query_count: u64 = 0;
 
     let response = ActiveRunResponse::new(
         "active".to_owned(),
         run_record.started_at,
         elapsed_ms,
         vec![],
-        0,
+        query_count,
     );
 
     Ok(Json(response))
