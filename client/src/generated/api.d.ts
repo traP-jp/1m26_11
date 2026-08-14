@@ -285,9 +285,9 @@ export interface components {
       status: 'active'
       /** Format: date-time */
       started_at: string
+      /** Format: int64 */
       elapsed_ms: number
       cleared_problem_ids: string[]
-      query_count: number
     }
     ProblemResponse: {
       /** Format: uuid */

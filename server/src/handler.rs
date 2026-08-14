@@ -4,15 +4,18 @@ pub(crate) use me::get_me;
 
 use axum::{
     Json,
-    extract::State,
+    extract::{Path, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar};
-use openapi_generated::models::{GuestLoginRequest, GuestLoginResponse, User};
+use chrono::Utc;
+use openapi_generated::models::{ActiveRunResponse, GuestLoginRequest, GuestLoginResponse, User};
 use uuid::Uuid;
 
-use crate::{AppState, OPENAPI_DOCUMENT, config::AuthMode, error::AppError};
+use crate::{
+    AppState, OPENAPI_DOCUMENT, auth::current_user::CurrentUser, config::AuthMode, error::AppError,
+};
 
 pub(crate) async fn ping() -> Response {
     (
@@ -93,4 +96,60 @@ pub(crate) async fn logout_demo(
     jar = jar.remove(cookie);
 
     Ok((jar, StatusCode::NO_CONTENT))
+}
+
+pub(crate) async fn start_or_resume_run(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(room_id): Path<String>,
+) -> Result<Json<ActiveRunResponse>, AppError> {
+    let room_id =
+        Uuid::parse_str(&room_id).map_err(|_| AppError::bad_request("invalid room_id"))?;
+
+    let room = state.auth_repository.find_room_by_id(room_id).await?;
+    if room.is_none() {
+        return Err(AppError::not_found("room not found"));
+    }
+
+    let run = state
+        .auth_repository
+        .find_active_run(user.id, room_id)
+        .await?;
+
+    let run_record = match run {
+        Some(active_run) => active_run,
+        None => {
+            let cleared_run = state
+                .auth_repository
+                .find_cleared_run(user.id, room_id)
+                .await?;
+            if cleared_run.is_some() {
+                return Err(AppError::conflict("room already cleared"));
+            }
+
+            let new_run_id = Uuid::new_v4();
+            let started_at = Utc::now();
+            state
+                .auth_repository
+                .create_run(new_run_id, user.id, room_id, started_at)
+                .await?
+        }
+    };
+
+    let cleared_problem_ids = state
+        .auth_repository
+        .find_cleared_problem_ids(run_record.id)
+        .await?;
+
+    let elapsed: chrono::Duration = Utc::now() - run_record.started_at;
+    let elapsed_ms = elapsed.num_milliseconds().max(0) as u64;
+
+    let response = ActiveRunResponse::new(
+        "active".to_owned(),
+        run_record.started_at,
+        elapsed_ms,
+        cleared_problem_ids,
+    );
+
+    Ok(Json(response))
 }

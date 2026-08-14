@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use sqlx::{FromRow, MySqlPool};
 use thiserror::Error;
 use uuid::Uuid;
@@ -27,6 +28,53 @@ impl SqlxUserRepository {
 pub struct AuthUserRecord {
     pub id: Uuid,
     pub display_name: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, FromRow)]
+pub struct RoomRecord {
+    pub id: Uuid,
+    pub number: i32,
+    pub name: String,
+    pub genre: String,
+    pub description: String,
+    pub is_published: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, FromRow)]
+pub struct RunRecord {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub room_id: Uuid,
+    pub status: String,
+    pub started_at: DateTime<Utc>,
+    pub cleared_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Clone, Debug, PartialEq, FromRow)]
+pub struct ProblemRecord {
+    pub id: Uuid,
+    pub room_id: Uuid,
+    pub number: i32,
+    pub problem_type: String,
+    pub title: String,
+    pub body_markdown: String,
+    pub submission_type: String,
+    pub assets: sqlx::types::Json<serde_json::Value>,
+    pub input_schema: sqlx::types::Json<serde_json::Value>,
+    pub hints: sqlx::types::Json<serde_json::Value>,
+    pub judge_config: sqlx::types::Json<serde_json::Value>,
+    pub depends_on_problem_id: Option<Uuid>,
+    pub is_required: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, FromRow)]
+pub struct ProblemProgressRecord {
+    pub run_id: Uuid,
+    pub problem_id: Uuid,
+    pub status: String,
+    pub answer_attempt_count: i32,
+    pub cleared_at: Option<DateTime<Utc>>,
 }
 
 #[async_trait]
@@ -59,6 +107,47 @@ pub trait AuthRepository: Send + Sync {
 
     async fn delete_demo_session(&self, _session_id: Uuid) -> Result<(), RepositoryError> {
         unimplemented!("delete_demo_session is not implemented for this repository")
+    }
+
+    async fn find_room_by_id(&self, _room_id: Uuid) -> Result<Option<RoomRecord>, RepositoryError> {
+        unimplemented!("find_room_by_id is not implemented for this repository")
+    }
+
+    async fn find_active_run(
+        &self,
+        _user_id: Uuid,
+        _room_id: Uuid,
+    ) -> Result<Option<RunRecord>, RepositoryError> {
+        unimplemented!("find_active_run is not implemented for this repository")
+    }
+
+    async fn create_run(
+        &self,
+        _id: Uuid,
+        _user_id: Uuid,
+        _room_id: Uuid,
+        _started_at: DateTime<Utc>,
+    ) -> Result<RunRecord, RepositoryError> {
+        unimplemented!("create_run is not implemented for this repository")
+    }
+
+    async fn find_cleared_run(
+        &self,
+        _user_id: Uuid,
+        _room_id: Uuid,
+    ) -> Result<Option<RunRecord>, RepositoryError> {
+        unimplemented!("find_cleared_run is not implemented for this repository")
+    }
+
+    async fn find_problems_by_room_id(
+        &self,
+        _room_id: Uuid,
+    ) -> Result<Vec<ProblemRecord>, RepositoryError> {
+        unimplemented!("find_problems_by_room_id is not implemented for this repository")
+    }
+
+    async fn find_cleared_problem_ids(&self, _run_id: Uuid) -> Result<Vec<Uuid>, RepositoryError> {
+        unimplemented!("find_cleared_problem_ids is not implemented for this repository")
     }
 }
 
@@ -171,5 +260,173 @@ impl AuthRepository for SqlxUserRepository {
         .map_err(RepositoryError::Database)?;
 
         Ok(())
+    }
+
+    async fn find_room_by_id(&self, room_id: Uuid) -> Result<Option<RoomRecord>, RepositoryError> {
+        sqlx::query_as::<_, RoomRecord>(
+            r#"
+            SELECT id, number, name, genre, description, is_published, created_at
+            FROM rooms
+            WHERE id = ?
+            LIMIT 1
+            "#,
+        )
+        .bind(room_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)
+    }
+
+    async fn find_active_run(
+        &self,
+        user_id: Uuid,
+        room_id: Uuid,
+    ) -> Result<Option<RunRecord>, RepositoryError> {
+        sqlx::query_as::<_, RunRecord>(
+            r#"
+            SELECT id, user_id, room_id, status, started_at, cleared_at
+            FROM runs
+            WHERE user_id = ? AND room_id = ? AND status = 'active'
+            LIMIT 1
+            "#,
+        )
+        .bind(user_id)
+        .bind(room_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)
+    }
+
+    async fn create_run(
+        &self,
+        id: Uuid,
+        user_id: Uuid,
+        room_id: Uuid,
+        started_at: DateTime<Utc>,
+    ) -> Result<RunRecord, RepositoryError> {
+        let mut tx = self.pool.begin().await.map_err(RepositoryError::Database)?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO runs (id, user_id, room_id, status, started_at, cleared_at)
+            VALUES (?, ?, ?, 'active', ?, NULL)
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .bind(room_id)
+        .bind(started_at)
+        .execute(&mut *tx)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        let problems = sqlx::query_as::<_, ProblemRecord>(
+            r#"
+            SELECT id, room_id, number, problem_type, title, body_markdown, submission_type,
+                   assets, input_schema, hints, judge_config, depends_on_problem_id, is_required
+            FROM problems
+            WHERE room_id = ?
+            ORDER BY number ASC
+            "#,
+        )
+        .bind(room_id)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        for problem in &problems {
+            let initial_status = if problem.depends_on_problem_id.is_none() {
+                "available"
+            } else {
+                "locked"
+            };
+
+            sqlx::query(
+                r#"
+                INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count, cleared_at)
+                VALUES (?, ?, ?, 0, NULL)
+                "#,
+            )
+            .bind(id)
+            .bind(problem.id)
+            .bind(initial_status)
+            .execute(&mut *tx)
+            .await
+            .map_err(RepositoryError::Database)?;
+        }
+
+        tx.commit().await.map_err(RepositoryError::Database)?;
+
+        Ok(RunRecord {
+            id,
+            user_id,
+            room_id,
+            status: "active".to_owned(),
+            started_at,
+            cleared_at: None,
+        })
+    }
+
+    async fn find_cleared_run(
+        &self,
+        user_id: Uuid,
+        room_id: Uuid,
+    ) -> Result<Option<RunRecord>, RepositoryError> {
+        sqlx::query_as::<_, RunRecord>(
+            r#"
+            SELECT id, user_id, room_id, status, started_at, cleared_at
+            FROM runs
+            WHERE user_id = ? AND room_id = ? AND status = 'cleared'
+            LIMIT 1
+            "#,
+        )
+        .bind(user_id)
+        .bind(room_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)
+    }
+
+    async fn find_problems_by_room_id(
+        &self,
+        room_id: Uuid,
+    ) -> Result<Vec<ProblemRecord>, RepositoryError> {
+        let problems = sqlx::query_as::<_, ProblemRecord>(
+            r#"
+            SELECT id, room_id, number, problem_type, title, body_markdown, submission_type,
+                   assets, input_schema, hints, judge_config, depends_on_problem_id, is_required
+            FROM problems
+            WHERE room_id = ?
+            ORDER BY number ASC
+            "#,
+        )
+        .bind(room_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        Ok(problems)
+    }
+
+    async fn find_cleared_problem_ids(&self, run_id: Uuid) -> Result<Vec<Uuid>, RepositoryError> {
+        #[derive(FromRow)]
+        struct ProblemIdRow {
+            problem_id: Uuid,
+        }
+
+        let rows = sqlx::query_as::<_, ProblemIdRow>(
+            r#"
+            SELECT problem_id
+            FROM problem_progress
+            WHERE run_id = ? AND status = 'cleared'
+            ORDER BY problem_id ASC
+            "#,
+        )
+        .bind(run_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        Ok(rows.into_iter().map(|r| r.problem_id).collect())
     }
 }
