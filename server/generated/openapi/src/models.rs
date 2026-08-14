@@ -131,13 +131,11 @@ pub struct ActiveRunResponse {
     pub started_at: chrono::DateTime<chrono::Utc>,
 
     #[serde(rename = "elapsed_ms")]
-    pub elapsed_ms: i32,
+    #[validate(range(min = 0u64))]
+    pub elapsed_ms: u64,
 
     #[serde(rename = "cleared_problem_ids")]
     pub cleared_problem_ids: Vec<uuid::Uuid>,
-
-    #[serde(rename = "query_count")]
-    pub query_count: i32,
 }
 
 impl ActiveRunResponse {
@@ -145,16 +143,14 @@ impl ActiveRunResponse {
     pub fn new(
         status: String,
         started_at: chrono::DateTime<chrono::Utc>,
-        elapsed_ms: i32,
+        elapsed_ms: u64,
         cleared_problem_ids: Vec<uuid::Uuid>,
-        query_count: i32,
     ) -> ActiveRunResponse {
         ActiveRunResponse {
             status,
             started_at,
             elapsed_ms,
             cleared_problem_ids,
-            query_count,
         }
     }
 }
@@ -171,8 +167,6 @@ impl std::fmt::Display for ActiveRunResponse {
             Some("elapsed_ms".to_string()),
             Some(self.elapsed_ms.to_string()),
             // Skipping cleared_problem_ids in query parameter serialization
-            Some("query_count".to_string()),
-            Some(self.query_count.to_string()),
         ];
 
         write!(
@@ -196,9 +190,8 @@ impl std::str::FromStr for ActiveRunResponse {
         struct IntermediateRep {
             pub status: Vec<String>,
             pub started_at: Vec<chrono::DateTime<chrono::Utc>>,
-            pub elapsed_ms: Vec<i32>,
+            pub elapsed_ms: Vec<u64>,
             pub cleared_problem_ids: Vec<Vec<uuid::Uuid>>,
-            pub query_count: Vec<i32>,
         }
 
         let mut intermediate_rep = IntermediateRep::default();
@@ -231,15 +224,11 @@ impl std::str::FromStr for ActiveRunResponse {
                     ),
                     #[allow(clippy::redundant_clone)]
                     "elapsed_ms" => intermediate_rep.elapsed_ms.push(
-                        <i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                        <u64 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
                     ),
                     "cleared_problem_ids" => return std::result::Result::Err(
                         "Parsing a container in this style is not supported in ActiveRunResponse"
                             .to_string(),
-                    ),
-                    #[allow(clippy::redundant_clone)]
-                    "query_count" => intermediate_rep.query_count.push(
-                        <i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
                     ),
                     _ => {
                         return std::result::Result::Err(
@@ -275,11 +264,6 @@ impl std::str::FromStr for ActiveRunResponse {
                 .into_iter()
                 .next()
                 .ok_or_else(|| "cleared_problem_ids missing in ActiveRunResponse".to_string())?,
-            query_count: intermediate_rep
-                .query_count
-                .into_iter()
-                .next()
-                .ok_or_else(|| "query_count missing in ActiveRunResponse".to_string())?,
         })
     }
 }

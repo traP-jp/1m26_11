@@ -62,6 +62,10 @@ pub fn app(state: AppState) -> Router {
             "/api/auth/logout",
             post(handler::logout_demo).fallback(handler::method_not_allowed),
         )
+        .route(
+            "/api/rooms/{room_id}/runs",
+            post(handler::start_or_resume_run).fallback(handler::method_not_allowed),
+        )
         .fallback(handler::not_found)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
