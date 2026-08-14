@@ -28,7 +28,7 @@ fn build_me_response(auth_mode: AuthMode, user: Option<CurrentUser>) -> MeRespon
         (AuthMode::Demo, Some(user)) => MeDemoAuthenticated::new(
             true,
             "demo".to_owned(),
-            User::new(user.id, user.display_name),
+            User::new(user.user_id, user.display_name),
             NullValue,
             NullValue,
         )
@@ -42,7 +42,7 @@ fn build_me_response(auth_mode: AuthMode, user: Option<CurrentUser>) -> MeRespon
         (AuthMode::NeoShowcase, Some(user)) => MeNeoshowcaseAuthenticated::new(
             true,
             "neoshowcase".to_owned(),
-            User::new(user.id, user.display_name),
+            User::new(user.user_id, user.display_name),
             NullValue,
             LOGOUT_URL.to_owned(),
         )

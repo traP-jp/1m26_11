@@ -72,7 +72,7 @@ mod tests {
             assert_eq!(display_name, "alice");
 
             Ok(AuthUserRecord {
-                id: self.user_id,
+                user_id: self.user_id,
                 display_name: display_name.to_owned(),
             })
         }
@@ -104,7 +104,7 @@ mod tests {
             .expect("repository should not fail")
             .expect("user should be authenticated");
 
-        assert_eq!(user.id, user_id);
+        assert_eq!(user.user_id, user_id);
         assert_eq!(user.display_name, "alice");
     }
 }

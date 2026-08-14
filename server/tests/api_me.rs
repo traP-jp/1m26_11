@@ -93,7 +93,7 @@ async fn demo_authenticated_response_matches_fixture() {
         StubAuthRepository {
             expected_demo_session_id: Some(session_id),
             user: Some(AuthUserRecord {
-                id: user_id,
+                user_id,
                 display_name: "kaomojikun".to_owned(),
             }),
         },
@@ -134,7 +134,7 @@ async fn neoshowcase_authenticated_response_matches_fixture() {
         StubAuthRepository {
             expected_demo_session_id: None,
             user: Some(AuthUserRecord {
-                id: user_id,
+                user_id,
                 display_name: "kaomojikun".to_owned(),
             }),
         },

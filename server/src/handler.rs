@@ -60,7 +60,7 @@ pub(crate) async fn login_guest(
     let session_id = Uuid::new_v4();
     state
         .auth_repository
-        .create_demo_session(session_id, user_record.id)
+        .create_demo_session(session_id, user_record.user_id)
         .await?;
 
     let cookie = Cookie::build(("demo_session", session_id.to_string()))
@@ -69,8 +69,10 @@ pub(crate) async fn login_guest(
         .build();
     jar = jar.add(cookie);
 
-    let response =
-        GuestLoginResponse::new(true, User::new(user_record.id, user_record.display_name));
+    let response = GuestLoginResponse::new(
+        true,
+        User::new(user_record.user_id, user_record.display_name),
+    );
 
     Ok((jar, Json(response)))
 }
@@ -113,7 +115,7 @@ pub(crate) async fn start_or_resume_run(
 
     let run = state
         .auth_repository
-        .find_active_run(user.id, room_id)
+        .find_active_run(user.user_id, room_id)
         .await?;
 
     let run_record = match run {
@@ -121,7 +123,7 @@ pub(crate) async fn start_or_resume_run(
         None => {
             let cleared_run = state
                 .auth_repository
-                .find_cleared_run(user.id, room_id)
+                .find_cleared_run(user.user_id, room_id)
                 .await?;
             if cleared_run.is_some() {
                 return Err(AppError::conflict("room already cleared"));
@@ -131,7 +133,7 @@ pub(crate) async fn start_or_resume_run(
             let started_at = Utc::now();
             state
                 .auth_repository
-                .create_run(new_run_id, user.id, room_id, started_at)
+                .create_run(new_run_id, user.user_id, room_id, started_at)
                 .await?
         }
     };
