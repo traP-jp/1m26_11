@@ -51,18 +51,21 @@ pub struct RunRecord {
     pub cleared_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, FromRow)]
+#[derive(Clone, Debug, PartialEq, FromRow)]
 pub struct ProblemRecord {
     pub id: Uuid,
     pub room_id: Uuid,
     pub number: i32,
-    pub r#type: String,
+    pub problem_type: String,
     pub title: String,
-    pub description: String,
-    pub initial_status: String,
-    pub requires_previous: bool,
-    pub answer_length_limit: i32,
-    pub created_at: DateTime<Utc>,
+    pub body_markdown: String,
+    pub submission_type: String,
+    pub assets: sqlx::types::Json<serde_json::Value>,
+    pub input_schema: sqlx::types::Json<serde_json::Value>,
+    pub hints: sqlx::types::Json<serde_json::Value>,
+    pub judge_config: sqlx::types::Json<serde_json::Value>,
+    pub depends_on_problem_id: Option<Uuid>,
+    pub is_required: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, FromRow)]
@@ -319,7 +322,8 @@ impl AuthRepository for SqlxUserRepository {
 
         let problems = sqlx::query_as::<_, ProblemRecord>(
             r#"
-            SELECT id, room_id, number, type, title, description, initial_status, requires_previous, answer_length_limit, created_at
+            SELECT id, room_id, number, problem_type, title, body_markdown, submission_type,
+                   assets, input_schema, hints, judge_config, depends_on_problem_id, is_required
             FROM problems
             WHERE room_id = ?
             ORDER BY number ASC
@@ -331,6 +335,12 @@ impl AuthRepository for SqlxUserRepository {
         .map_err(RepositoryError::Database)?;
 
         for problem in &problems {
+            let initial_status = if problem.depends_on_problem_id.is_none() {
+                "available"
+            } else {
+                "locked"
+            };
+
             sqlx::query(
                 r#"
                 INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count, cleared_at)
@@ -339,7 +349,7 @@ impl AuthRepository for SqlxUserRepository {
             )
             .bind(id)
             .bind(problem.id)
-            .bind(&problem.initial_status)
+            .bind(initial_status)
             .execute(&mut *tx)
             .await
             .map_err(RepositoryError::Database)?;
@@ -381,9 +391,10 @@ impl AuthRepository for SqlxUserRepository {
         &self,
         room_id: Uuid,
     ) -> Result<Vec<ProblemRecord>, RepositoryError> {
-        sqlx::query_as::<_, ProblemRecord>(
+        let problems = sqlx::query_as::<_, ProblemRecord>(
             r#"
-            SELECT id, room_id, number, type, title, description, initial_status, requires_previous, answer_length_limit, created_at
+            SELECT id, room_id, number, problem_type, title, body_markdown, submission_type,
+                   assets, input_schema, hints, judge_config, depends_on_problem_id, is_required
             FROM problems
             WHERE room_id = ?
             ORDER BY number ASC
@@ -392,7 +403,9 @@ impl AuthRepository for SqlxUserRepository {
         .bind(room_id)
         .fetch_all(&self.pool)
         .await
-        .map_err(RepositoryError::Database)
+        .map_err(RepositoryError::Database)?;
+
+        Ok(problems)
     }
 
     async fn find_cleared_problem_ids(&self, run_id: Uuid) -> Result<Vec<Uuid>, RepositoryError> {
