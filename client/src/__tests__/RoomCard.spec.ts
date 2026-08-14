@@ -16,17 +16,17 @@ describe('RoomCard', () => {
     const wrapper = mount(RoomCard, { props: { room } })
 
     expect(wrapper.get('article').classes()).toContain('room-card')
-    expect(wrapper.get('button').text()).toContain('Room 01')
+    expect(wrapper.get('.room-card__header').text()).toContain('Room 01')
     expect(wrapper.find('.room-card__body').exists()).toBe(false)
   })
 
   it('opens and closes its content from the header button', async () => {
     const wrapper = mount(RoomCard, { props: { room } })
 
-    await wrapper.get('button').trigger('click')
+    await wrapper.get('.room-card__header').trigger('click')
     expect(wrapper.get('.room-card__description').text()).toBe(room.description)
 
-    await wrapper.get('button').trigger('click')
+    await wrapper.get('.room-card__header').trigger('click')
     expect(wrapper.find('.room-card__body').exists()).toBe(false)
   })
 

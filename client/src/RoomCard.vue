@@ -28,7 +28,7 @@ const emit = defineEmits<{
 
 <template>
   <Disclosure v-slot="{ open }" as="article" class="room-card" :default-open="defaultOpen">
-    <DisclosureButton class="room-card__header">
+    <DisclosureButton class="room-card__header" type="button">
       <span class="room-card__number" aria-hidden="true">{{ room.number }}</span>
       <span class="room-card__heading">
         <span class="room-card__genre">{{ room.genre }}</span>
@@ -39,7 +39,10 @@ const emit = defineEmits<{
         aria-hidden="true"
         :data-open="open"
       >
-        keyboard_arrow_down
+        <img
+          src="@/assets/icon/keyboard_arrow_down_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg"
+          alt="Toggle"
+        />
       </span>
     </DisclosureButton>
 
