@@ -138,7 +138,7 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
     }),
 
     http.post('/api/auth/logout', ({ response }) => {
-      const step = state.applyStep('demo_login_and_logout', 'logoutDemo')
+      const step = state.applyStep('demo_login_and_logout', 'logoutGuest')
       return response.untyped(
         new HttpResponse(null, {
           status: step.response.status,

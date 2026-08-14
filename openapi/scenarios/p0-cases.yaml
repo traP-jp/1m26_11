@@ -56,7 +56,7 @@ cases:
         response:
           status: 200
           example: demo_authenticated
-      - operation_id: logoutDemo
+      - operation_id: logoutGuest
         response:
           status: 204
         state_after:

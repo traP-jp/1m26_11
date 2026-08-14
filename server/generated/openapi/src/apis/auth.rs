@@ -40,7 +40,7 @@ pub enum LoginGuestResponse {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[must_use]
 #[allow(clippy::large_enum_variant)]
-pub enum LogoutDemoResponse {
+pub enum LogoutGuestResponse {
     /// ログアウト完了。response bodyはありません。
     Status204 { set_cookie: Option<String> },
     /// server内部エラー。具体的なerror.codeは未確定です。
@@ -76,12 +76,12 @@ pub trait Auth<E: std::fmt::Debug + Send + Sync + 'static = ()>: super::ErrorHan
 
     /// デモ環境からログアウトする.
     ///
-    /// LogoutDemo - POST /api/auth/logout
-    async fn logout_demo(
+    /// LogoutGuest - POST /api/auth/logout
+    async fn logout_guest(
         &self,
 
         method: &Method,
         host: &Host,
         cookies: &CookieJar,
-    ) -> Result<LogoutDemoResponse, E>;
+    ) -> Result<LogoutGuestResponse, E>;
 }

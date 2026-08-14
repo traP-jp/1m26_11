@@ -54,7 +54,7 @@ paths:
     post:
       summary: デモ環境からログアウトする
       description: AUTH_MODE=demoのときだけ使用し、デモsessionとCookieを無効化します。
-      operationId: logoutDemo
+      operationId: logoutGuest
       tags:
         - auth
       responses:

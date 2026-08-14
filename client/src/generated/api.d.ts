@@ -71,7 +71,7 @@ export interface paths {
      * デモ環境からログアウトする
      * @description AUTH_MODE=demoのときだけ使用し、デモsessionとCookieを無効化します。
      */
-    post: operations['logoutDemo']
+    post: operations['logoutGuest']
     delete?: never
     options?: never
     head?: never
@@ -96,8 +96,10 @@ export interface paths {
     /**
      * 挑戦を開始または再開する
      * @description 認証済みユーザーとroom_idからactiveなrunを検索します。
-     *     activeなrunがあれば再開し、なければserver時刻で新規作成します。
      *     request bodyは使用しません。
+     *     activeなrunがあれば再開します。
+     *     未挑戦なら新規runをserver時刻で作成します。
+     *     クリア済みの場合は再挑戦を開始せず409を返します。
      */
     post: operations['startOrResumeRun']
     delete?: never
@@ -613,7 +615,7 @@ export interface operations {
       500: components['responses']['InternalServerError']
     }
   }
-  logoutDemo: {
+  logoutGuest: {
     parameters: {
       query?: never
       header?: never
@@ -653,6 +655,15 @@ export interface operations {
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthorized']
       404: components['responses']['NotFound']
+      /** @description この部屋をクリア済みのため再挑戦できません */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorResponse']
+        }
+      }
       500: components['responses']['InternalServerError']
     }
   }

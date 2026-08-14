@@ -77,7 +77,7 @@ pub(crate) async fn login_guest(
     Ok((jar, Json(response)))
 }
 
-pub(crate) async fn logout_demo(
+pub(crate) async fn logout_guest(
     State(state): State<AppState>,
     mut jar: CookieJar,
 ) -> Result<(CookieJar, StatusCode), AppError> {

@@ -38,7 +38,7 @@ where
     // build our application with a route
     Router::new()
         .route("/api/auth/guest", post(login_guest::<I, A, E>))
-        .route("/api/auth/logout", post(logout_demo::<I, A, E>))
+        .route("/api/auth/logout", post(logout_guest::<I, A, E>))
         .route("/api/me", get(get_me::<I, A, E>))
         .route(
             "/api/rooms/{room_id}/problems/{problem_id}",
@@ -531,12 +531,12 @@ where
 }
 
 #[tracing::instrument(skip_all)]
-fn logout_demo_validation() -> std::result::Result<(), ValidationErrors> {
+fn logout_guest_validation() -> std::result::Result<(), ValidationErrors> {
     Ok(())
 }
-/// LogoutDemo - POST /api/auth/logout
+/// LogoutGuest - POST /api/auth/logout
 #[tracing::instrument(skip_all)]
-async fn logout_demo<I, A, E>(
+async fn logout_guest<I, A, E>(
     method: Method,
     TypedHeader(host): TypedHeader<Host>,
     cookies: CookieJar,
@@ -548,7 +548,7 @@ where
     E: std::fmt::Debug + Send + Sync + 'static,
 {
     #[allow(clippy::redundant_closure)]
-    let validation = tokio::task::spawn_blocking(move || logout_demo_validation())
+    let validation = tokio::task::spawn_blocking(move || logout_guest_validation())
         .await
         .unwrap();
 
@@ -561,12 +561,12 @@ where
 
     let result = api_impl
         .as_ref()
-        .logout_demo(&method, &host, &cookies)
+        .logout_guest(&method, &host, &cookies)
         .await;
 
     let resp = match result {
         Ok(rsp) => match rsp {
-            apis::auth::LogoutDemoResponse::Status204 { set_cookie } => {
+            apis::auth::LogoutGuestResponse::Status204 { set_cookie } => {
                 let mut response = Response::builder();
                 if let Some(set_cookie) = set_cookie {
                     let set_cookie = match header::IntoHeaderValue(set_cookie).try_into() {
@@ -584,7 +584,7 @@ where
                 let mut response = response.status(204);
                 response.body(Body::empty())
             }
-            apis::auth::LogoutDemoResponse::Status500_Server(body) => {
+            apis::auth::LogoutGuestResponse::Status500_Server(body) => {
                 let mut response = Response::builder();
                 let mut response = response.status(500);
                 {
@@ -1250,6 +1250,25 @@ where
             apis::runs::StartOrResumeRunResponse::Status404(body) => {
                 let mut response = Response::builder();
                 let mut response = response.status(404);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::runs::StartOrResumeRunResponse::Status409(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(409);
                 {
                     let mut response_headers = response.headers_mut().unwrap();
                     response_headers

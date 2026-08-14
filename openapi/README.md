@@ -56,7 +56,7 @@ Rustの`rust-axum` Generator 7.24.0はOpenAPI 3.1の`type: "null"`を標準で�
 |---|---|---|
 | `getMe` | なし | `200`: `neoshowcase_authenticated`, `neoshowcase_unauthenticated`, `demo_authenticated`, `demo_unauthenticated` |
 | `loginGuest` | `guest_login` | `200`: `guest_authenticated` |
-| `logoutDemo` | bodyなし | `204`: bodyなし |
+| `logoutGuest` | bodyなし | `204`: bodyなし |
 | `startOrResumeRun` | bodyなし | `200`: `new_run`, `resumed_run`; `401`: `unauthorized` |
 | `getCurrentRun` | なし | `200`: `current_run`; `401`: `unauthorized`; `404`: `run_not_found` |
 | `getProblem` | なし | `200`: `available_problem`; `401`: `unauthorized`; `409`: `problem_locked` |

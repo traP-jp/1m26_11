@@ -12,7 +12,7 @@ const REQUIRED_OPERATIONS: [(&str, &str, &str); 9] = [
     ("/openapi.yaml", "get", "getOpenApi"),
     ("/api/me", "get", "getMe"),
     ("/api/auth/guest", "post", "loginGuest"),
-    ("/api/auth/logout", "post", "logoutDemo"),
+    ("/api/auth/logout", "post", "logoutGuest"),
     ("/api/rooms/{room_id}/runs", "post", "startOrResumeRun"),
     ("/api/rooms/{room_id}/runs/current", "get", "getCurrentRun"),
     (

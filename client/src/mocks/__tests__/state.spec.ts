@@ -34,7 +34,7 @@ describe('mock backend state', () => {
     state.applyStep('demo_login_and_logout', 'loginGuest')
     expect(state.get('authenticated')).toBe(true)
 
-    state.applyStep('demo_login_and_logout', 'logoutDemo')
+    state.applyStep('demo_login_and_logout', 'logoutGuest')
     expect(state.get('authenticated')).toBe(false)
   })
 })

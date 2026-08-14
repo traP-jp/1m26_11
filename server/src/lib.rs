@@ -60,7 +60,7 @@ pub fn app(state: AppState) -> Router {
         )
         .route(
             "/api/auth/logout",
-            post(handler::logout_demo).fallback(handler::method_not_allowed),
+            post(handler::logout_guest).fallback(handler::method_not_allowed),
         )
         .route(
             "/api/rooms/{room_id}/runs",
