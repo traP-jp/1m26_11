@@ -1,3 +1,7 @@
+mod me;
+
+pub(crate) use me::get_me;
+
 use axum::{
     Json,
     extract::{Path, State},

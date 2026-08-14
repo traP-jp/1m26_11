@@ -51,6 +51,10 @@ pub fn app(state: AppState) -> Router {
             get(handler::openapi).fallback(handler::method_not_allowed),
         )
         .route(
+            "/api/me",
+            get(handler::get_me).fallback(handler::method_not_allowed),
+        )
+        .route(
             "/api/auth/guest",
             post(handler::login_guest).fallback(handler::method_not_allowed),
         )
