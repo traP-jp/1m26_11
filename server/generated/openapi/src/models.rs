@@ -136,10 +136,6 @@ pub struct ActiveRunResponse {
 
     #[serde(rename = "cleared_problem_ids")]
     pub cleared_problem_ids: Vec<uuid::Uuid>,
-
-    #[serde(rename = "query_count")]
-    #[validate(range(min = 0u64))]
-    pub query_count: u64,
 }
 
 impl ActiveRunResponse {
@@ -149,14 +145,12 @@ impl ActiveRunResponse {
         started_at: chrono::DateTime<chrono::Utc>,
         elapsed_ms: u64,
         cleared_problem_ids: Vec<uuid::Uuid>,
-        query_count: u64,
     ) -> ActiveRunResponse {
         ActiveRunResponse {
             status,
             started_at,
             elapsed_ms,
             cleared_problem_ids,
-            query_count,
         }
     }
 }
@@ -173,8 +167,6 @@ impl std::fmt::Display for ActiveRunResponse {
             Some("elapsed_ms".to_string()),
             Some(self.elapsed_ms.to_string()),
             // Skipping cleared_problem_ids in query parameter serialization
-            Some("query_count".to_string()),
-            Some(self.query_count.to_string()),
         ];
 
         write!(
@@ -200,7 +192,6 @@ impl std::str::FromStr for ActiveRunResponse {
             pub started_at: Vec<chrono::DateTime<chrono::Utc>>,
             pub elapsed_ms: Vec<u64>,
             pub cleared_problem_ids: Vec<Vec<uuid::Uuid>>,
-            pub query_count: Vec<u64>,
         }
 
         let mut intermediate_rep = IntermediateRep::default();
@@ -239,10 +230,6 @@ impl std::str::FromStr for ActiveRunResponse {
                         "Parsing a container in this style is not supported in ActiveRunResponse"
                             .to_string(),
                     ),
-                    #[allow(clippy::redundant_clone)]
-                    "query_count" => intermediate_rep.query_count.push(
-                        <u64 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
-                    ),
                     _ => {
                         return std::result::Result::Err(
                             "Unexpected key while parsing ActiveRunResponse".to_string(),
@@ -277,11 +264,6 @@ impl std::str::FromStr for ActiveRunResponse {
                 .into_iter()
                 .next()
                 .ok_or_else(|| "cleared_problem_ids missing in ActiveRunResponse".to_string())?,
-            query_count: intermediate_rep
-                .query_count
-                .into_iter()
-                .next()
-                .ok_or_else(|| "query_count missing in ActiveRunResponse".to_string())?,
         })
     }
 }

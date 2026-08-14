@@ -33,6 +33,7 @@ const MOCK_SESSION_ID: &str = "55555555-5555-4555-8555-555555555555";
 const MOCK_RESUME_ROOM_ID: &str = "11111111-1111-4111-8111-111111111111";
 const MOCK_NEW_ROOM_ID: &str = "33333333-3333-4333-8333-333333333333";
 const MOCK_CLEARED_ROOM_ID: &str = "44444444-4444-4444-8444-444444444444";
+const MOCK_CLEARED_PROBLEM_ID: &str = "22222222-2222-4222-8222-222222222221";
 
 struct StubAuthRepository;
 
@@ -104,7 +105,7 @@ impl AuthRepository for StubAuthRepository {
         let resume_room_id = Uuid::from_str(MOCK_RESUME_ROOM_ID).unwrap();
         if _room_id == resume_room_id {
             Ok(Some(RunRecord {
-                id: Uuid::new_v4(),
+                id: resume_room_id,
                 user_id: _user_id,
                 room_id: _room_id,
                 status: "active".to_owned(),
@@ -150,6 +151,15 @@ impl AuthRepository for StubAuthRepository {
             }))
         } else {
             Ok(None)
+        }
+    }
+
+    async fn find_cleared_problem_ids(&self, run_id: Uuid) -> Result<Vec<Uuid>, RepositoryError> {
+        let resume_room_id = Uuid::from_str(MOCK_RESUME_ROOM_ID).unwrap();
+        if run_id == resume_room_id {
+            Ok(vec![Uuid::from_str(MOCK_CLEARED_PROBLEM_ID).unwrap()])
+        } else {
+            Ok(vec![])
         }
     }
 }
@@ -592,7 +602,6 @@ async fn start_new_run_succeeds() {
     let body: serde_json::Value = body_json(response).await;
     assert_eq!(body["status"], "active");
     assert_eq!(body["elapsed_ms"], 0);
-    assert_eq!(body["query_count"], 0);
     assert!(body["cleared_problem_ids"].as_array().unwrap().is_empty());
 }
 
@@ -613,6 +622,13 @@ async fn resume_active_run_succeeds() {
     assert_eq!(body["status"], "active");
     let elapsed = body["elapsed_ms"].as_i64().unwrap();
     assert!(elapsed >= 65000);
+    let cleared_ids: Vec<String> = body["cleared_problem_ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(cleared_ids, vec![MOCK_CLEARED_PROBLEM_ID.to_string()]);
 }
 
 #[tokio::test]
@@ -654,10 +670,14 @@ async fn start_run_invalid_room_id_format() {
     let response = request(&app, req).await;
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["error"]["code"], "BAD_REQUEST");
+    assert_eq!(body["error"]["message"], "invalid room_id");
 }
 
 #[tokio::test]
-async fn start_run_already_cleared_returns_400() {
+async fn start_run_already_cleared_returns_409() {
     let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
 
     let req = Request::post(format!("/api/rooms/{MOCK_CLEARED_ROOM_ID}/runs"))
@@ -667,9 +687,9 @@ async fn start_run_already_cleared_returns_400() {
 
     let response = request(&app, req).await;
 
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::CONFLICT);
 
     let body: serde_json::Value = body_json(response).await;
-    assert_eq!(body["error"]["code"], "BAD_REQUEST");
+    assert_eq!(body["error"]["code"], "CONFLICT");
     assert_eq!(body["error"]["message"], "room already cleared");
 }

@@ -97,8 +97,11 @@ pub(crate) async fn logout_demo(
 pub(crate) async fn start_or_resume_run(
     State(state): State<AppState>,
     user: CurrentUser,
-    Path(room_id): Path<Uuid>,
+    Path(room_id): Path<String>,
 ) -> Result<Json<ActiveRunResponse>, AppError> {
+    let room_id =
+        Uuid::parse_str(&room_id).map_err(|_| AppError::bad_request("invalid room_id"))?;
+
     let room = state.auth_repository.find_room_by_id(room_id).await?;
     if room.is_none() {
         return Err(AppError::not_found("room not found"));
@@ -117,7 +120,7 @@ pub(crate) async fn start_or_resume_run(
                 .find_cleared_run(user.id, room_id)
                 .await?;
             if cleared_run.is_some() {
-                return Err(AppError::bad_request("room already cleared"));
+                return Err(AppError::conflict("room already cleared"));
             }
 
             let new_run_id = Uuid::new_v4();
@@ -129,16 +132,19 @@ pub(crate) async fn start_or_resume_run(
         }
     };
 
+    let cleared_problem_ids = state
+        .auth_repository
+        .find_cleared_problem_ids(run_record.id)
+        .await?;
+
     let elapsed: chrono::Duration = Utc::now() - run_record.started_at;
     let elapsed_ms = elapsed.num_milliseconds().max(0) as u64;
-    let query_count: u64 = 0;
 
     let response = ActiveRunResponse::new(
         "active".to_owned(),
         run_record.started_at,
         elapsed_ms,
-        vec![],
-        query_count,
+        cleared_problem_ids,
     );
 
     Ok(Json(response))

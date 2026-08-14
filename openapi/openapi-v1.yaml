@@ -520,7 +520,6 @@ components:
         - started_at
         - elapsed_ms
         - cleared_problem_ids
-        - query_count
       properties:
         status:
           type: string
@@ -537,10 +536,6 @@ components:
           items:
             type: string
             format: uuid
-        query_count:
-          type: integer
-          format: int64
-          minimum: 0
     ProblemResponse:
       type: object
       required:
