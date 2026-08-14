@@ -26,7 +26,7 @@ impl SqlxUserRepository {
 
 #[derive(Clone, Debug, Eq, PartialEq, FromRow)]
 pub struct AuthUserRecord {
-    pub id: Uuid,
+    pub user_id: Uuid,
     pub display_name: String,
 }
 
@@ -159,7 +159,7 @@ impl AuthRepository for SqlxUserRepository {
     ) -> Result<Option<AuthUserRecord>, RepositoryError> {
         sqlx::query_as::<_, AuthUserRecord>(
             r#"
-            SELECT users.id, users.display_name
+            SELECT users.id AS user_id, users.display_name
             FROM demo_sessions
             INNER JOIN users ON users.id = demo_sessions.user_id
             WHERE demo_sessions.id = ?
@@ -180,7 +180,7 @@ impl AuthRepository for SqlxUserRepository {
     ) -> Result<Option<AuthUserRecord>, RepositoryError> {
         sqlx::query_as::<_, AuthUserRecord>(
             r#"
-            SELECT id, display_name
+            SELECT id AS user_id, display_name
             FROM users
             WHERE auth_provider = ?
               AND provider_subject = ?

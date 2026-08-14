@@ -7,14 +7,14 @@ use super::{demo, neoshowcase};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct CurrentUser {
-    pub(crate) id: Uuid,
+    pub(crate) user_id: Uuid,
     pub(crate) display_name: String,
 }
 
 impl From<AuthUserRecord> for CurrentUser {
     fn from(user: AuthUserRecord) -> Self {
         Self {
-            id: user.id,
+            user_id: user.user_id,
             display_name: user.display_name,
         }
     }
@@ -148,7 +148,7 @@ mod tests {
     async fn optional_user_uses_demo_cookie_in_demo_mode() {
         let session_id = Uuid::new_v4();
         let auth_user = AuthUserRecord {
-            id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
             display_name: "demo-user".to_owned(),
         };
         let state = AppState::new(
@@ -177,7 +177,7 @@ mod tests {
     #[tokio::test]
     async fn optional_user_uses_forwarded_header_in_neoshowcase_mode() {
         let auth_user = AuthUserRecord {
-            id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
             display_name: "alice".to_owned(),
         };
         let state = AppState::new(

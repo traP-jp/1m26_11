@@ -44,7 +44,7 @@ impl AuthRepository for StubAuthRepository {
         _session_id: Uuid,
     ) -> Result<Option<AuthUserRecord>, RepositoryError> {
         Ok(Some(AuthUserRecord {
-            id: Uuid::from_str(MOCK_SESSION_ID).unwrap(),
+            user_id: Uuid::from_str(MOCK_SESSION_ID).unwrap(),
             display_name: "test-user".to_owned(),
         }))
     }
@@ -64,7 +64,7 @@ impl AuthRepository for StubAuthRepository {
         display_name: &str,
     ) -> Result<AuthUserRecord, RepositoryError> {
         Ok(AuthUserRecord {
-            id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
             display_name: display_name.to_owned(),
         })
     }
@@ -208,7 +208,7 @@ impl AuthRepository for RecordingAuthRepository {
         display_name: &str,
     ) -> Result<AuthUserRecord, RepositoryError> {
         Ok(AuthUserRecord {
-            id: self.user_id,
+            user_id: self.user_id,
             display_name: display_name.to_owned(),
         })
     }
@@ -377,7 +377,7 @@ async fn mariadb_auth_repository_flow() {
     assert_eq!(
         demo_user,
         AuthUserRecord {
-            id: demo_user_id,
+            user_id: demo_user_id,
             display_name: "demo-user".to_owned(),
         }
     );
