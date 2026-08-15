@@ -3,8 +3,6 @@ defineProps<{
   displayName: string
   open: boolean
 }>()
-
-
 </script>
 
 <template>

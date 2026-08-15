@@ -18,7 +18,9 @@ const emit = defineEmits<{
       <LogoutMenuButton :displayName="displayName" :open="open" />
     </MenuButton>
 
-    <MenuItems class="absolute right-0 mt-2 w-auto bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5">
+    <MenuItems
+      class="absolute right-0 mt-2 w-auto bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5"
+    >
       <MenuItem v-slot="{ active }">
         <button
           type="button"
@@ -26,7 +28,7 @@ const emit = defineEmits<{
           @click="emit('logout')"
           :class="[
             active ? 'bg-blue-500 text-white' : 'text-gray-900',
-            'block w-full text-left px-4 py-2 text-sm'
+            'block w-full text-left px-4 py-2 text-sm',
           ]"
         >
           ログアウト
