@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use axum::{Router, routing::get};
+use axum::{
+    Router,
+    routing::{get, post},
+};
 use config::AuthMode;
 use repository::AuthRepository;
 use sqlx::MySqlPool;
@@ -23,22 +26,7 @@ pub const OPENAPI_DOCUMENT: &str = include_str!(concat!(env!("OUT_DIR"), "/opena
 
 #[derive(Clone)]
 pub struct AppState {
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "read by authentication extractors used by future game API handlers"
-        )
-    )]
     pub(crate) auth_mode: AuthMode,
-
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "read by authentication extractors used by future game API handlers"
-        )
-    )]
     pub(crate) auth_repository: Arc<dyn AuthRepository>,
 }
 
@@ -61,6 +49,22 @@ pub fn app(state: AppState) -> Router {
         .route(
             "/openapi.yaml",
             get(handler::openapi).fallback(handler::method_not_allowed),
+        )
+        .route(
+            "/api/me",
+            get(handler::get_me).fallback(handler::method_not_allowed),
+        )
+        .route(
+            "/api/auth/guest",
+            post(handler::login_guest).fallback(handler::method_not_allowed),
+        )
+        .route(
+            "/api/auth/logout",
+            post(handler::logout_demo).fallback(handler::method_not_allowed),
+        )
+        .route(
+            "/api/rooms/{room_id}/runs",
+            post(handler::start_or_resume_run).fallback(handler::method_not_allowed),
         )
         .fallback(handler::not_found)
         .layer(TraceLayer::new_for_http())

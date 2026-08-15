@@ -128,7 +128,7 @@ mod tests {
         let repository = StubAuthRepository {
             expected_session_id: Some(session_id),
             user: Some(AuthUserRecord {
-                id: user_id,
+                user_id,
                 display_name: "alice".to_owned(),
             }),
         };
@@ -139,7 +139,7 @@ mod tests {
             .expect("repository should not fail")
             .expect("user should be authenticated");
 
-        assert_eq!(user.id, user_id);
+        assert_eq!(user.user_id, user_id);
         assert_eq!(user.display_name, "alice");
     }
 

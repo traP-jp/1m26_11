@@ -74,8 +74,10 @@ paths:
       summary: 挑戦を開始または再開する
       description: |
         認証済みユーザーとroom_idからactiveなrunを検索します。
-        activeなrunがあれば再開し、なければserver時刻で新規作成します。
         request bodyは使用しません。
+        activeなrunがあれば再開します。
+        未挑戦なら新規runをserver時刻で作成します。
+        クリア済みの場合は再挑戦を開始せず409を返します。
       operationId: startOrResumeRun
       tags:
         - runs
@@ -88,6 +90,12 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          description: この部屋をクリア済みのため再挑戦できません
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerError"
   /api/rooms/{room_id}/runs/current:
@@ -520,7 +528,6 @@ components:
         - started_at
         - elapsed_ms
         - cleared_problem_ids
-        - query_count
       properties:
         status:
           type: string
@@ -530,13 +537,13 @@ components:
           format: date-time
         elapsed_ms:
           type: integer
+          format: int64
+          minimum: 0
         cleared_problem_ids:
           type: array
           items:
             type: string
             format: uuid
-        query_count:
-          type: integer
     ProblemResponse:
       type: object
       required:
