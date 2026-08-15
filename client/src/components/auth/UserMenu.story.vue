@@ -5,11 +5,13 @@ import UserMenu from './UserMenu.vue'
 <template>
   <Story title="UserMenu">
     <Variant title="Default">
+      <div class="h-48 p-4">
       <UserMenu
         displayName="Shimeji"
         :logoutPending="false"
         @logout="console.log('Logout clicked')"
       />
+      </div>
     </Variant>
   </Story>
 </template>
