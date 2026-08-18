@@ -15,7 +15,7 @@ const emit = defineEmits<{
 
 <template>
   <header
-    class="relative flex min-h-18 w-full items-center justify-between overflow-visible border-b border-[#e5eaf2] bg-white px-8 py-3 text-[#121a2a] max-[34rem]:min-h-16 max-[34rem]:px-4"
+    class="relative flex h-18 w-full items-center justify-between overflow-visible border-b border-[#e5eaf2] bg-white px-8 py-3 text-[#121a2a] max-[34rem]:h-16 max-[34rem]:px-4"
   >
     <a
       class="inline-flex shrink-0 flex-col leading-none text-inherit no-underline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[#3997ea]"
