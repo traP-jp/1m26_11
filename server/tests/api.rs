@@ -10,6 +10,7 @@ use axum::{
     body::Body,
     http::{Request, StatusCode, header},
 };
+use chrono::{DateTime, Utc};
 use http_body_util::BodyExt;
 use openapi_generated::models::ErrorResponse;
 use serde_json::json;
@@ -17,7 +18,9 @@ use server::{
     AppState, app,
     config::AuthMode,
     migrate,
-    repository::{AuthRepository, AuthUserRecord, RepositoryError, SqlxUserRepository},
+    repository::{
+        AuthRepository, AuthUserRecord, RepositoryError, RoomRecord, RunRecord, SqlxUserRepository,
+    },
 };
 use sqlx::{
     MySqlPool,
@@ -25,6 +28,12 @@ use sqlx::{
 };
 use tower::ServiceExt;
 use uuid::Uuid;
+
+const MOCK_SESSION_ID: &str = "55555555-5555-4555-8555-555555555555";
+const MOCK_RESUME_ROOM_ID: &str = "11111111-1111-4111-8111-111111111111";
+const MOCK_NEW_ROOM_ID: &str = "33333333-3333-4333-8333-333333333333";
+const MOCK_CLEARED_ROOM_ID: &str = "44444444-4444-4444-8444-444444444444";
+const MOCK_CLEARED_PROBLEM_ID: &str = "22222222-2222-4222-8222-222222222221";
 
 struct StubAuthRepository;
 
@@ -34,7 +43,10 @@ impl AuthRepository for StubAuthRepository {
         &self,
         _session_id: Uuid,
     ) -> Result<Option<AuthUserRecord>, RepositoryError> {
-        Ok(None)
+        Ok(Some(AuthUserRecord {
+            user_id: Uuid::from_str(MOCK_SESSION_ID).unwrap(),
+            display_name: "test-user".to_owned(),
+        }))
     }
 
     async fn find_user_by_provider_subject(
@@ -52,7 +64,7 @@ impl AuthRepository for StubAuthRepository {
         display_name: &str,
     ) -> Result<AuthUserRecord, RepositoryError> {
         Ok(AuthUserRecord {
-            id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
             display_name: display_name.to_owned(),
         })
     }
@@ -67,6 +79,88 @@ impl AuthRepository for StubAuthRepository {
 
     async fn delete_demo_session(&self, _session_id: Uuid) -> Result<(), RepositoryError> {
         Ok(())
+    }
+
+    async fn find_room_by_id(&self, room_id: Uuid) -> Result<Option<RoomRecord>, RepositoryError> {
+        if room_id == Uuid::nil() {
+            Ok(None)
+        } else {
+            Ok(Some(RoomRecord {
+                id: room_id,
+                number: 1,
+                name: "Test Room".to_owned(),
+                genre: "Test".to_owned(),
+                description: "Test description".to_owned(),
+                is_published: true,
+                created_at: Utc::now(),
+            }))
+        }
+    }
+
+    async fn find_active_run(
+        &self,
+        _user_id: Uuid,
+        _room_id: Uuid,
+    ) -> Result<Option<RunRecord>, RepositoryError> {
+        let resume_room_id = Uuid::from_str(MOCK_RESUME_ROOM_ID).unwrap();
+        if _room_id == resume_room_id {
+            Ok(Some(RunRecord {
+                id: resume_room_id,
+                user_id: _user_id,
+                room_id: _room_id,
+                status: "active".to_owned(),
+                started_at: Utc::now() - chrono::Duration::seconds(65),
+                cleared_at: None,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn create_run(
+        &self,
+        id: Uuid,
+        user_id: Uuid,
+        room_id: Uuid,
+        started_at: DateTime<Utc>,
+    ) -> Result<RunRecord, RepositoryError> {
+        Ok(RunRecord {
+            id,
+            user_id,
+            room_id,
+            status: "active".to_owned(),
+            started_at,
+            cleared_at: None,
+        })
+    }
+
+    async fn find_cleared_run(
+        &self,
+        user_id: Uuid,
+        room_id: Uuid,
+    ) -> Result<Option<RunRecord>, RepositoryError> {
+        let cleared_room_id = Uuid::from_str(MOCK_CLEARED_ROOM_ID).unwrap();
+        if room_id == cleared_room_id {
+            Ok(Some(RunRecord {
+                id: Uuid::new_v4(),
+                user_id,
+                room_id,
+                status: "cleared".to_owned(),
+                started_at: Utc::now() - chrono::Duration::seconds(100),
+                cleared_at: Some(Utc::now()),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn find_cleared_problem_ids(&self, run_id: Uuid) -> Result<Vec<Uuid>, RepositoryError> {
+        let resume_room_id = Uuid::from_str(MOCK_RESUME_ROOM_ID).unwrap();
+        if run_id == resume_room_id {
+            Ok(vec![Uuid::from_str(MOCK_CLEARED_PROBLEM_ID).unwrap()])
+        } else {
+            Ok(vec![])
+        }
     }
 }
 
@@ -114,7 +208,7 @@ impl AuthRepository for RecordingAuthRepository {
         display_name: &str,
     ) -> Result<AuthUserRecord, RepositoryError> {
         Ok(AuthUserRecord {
-            id: self.user_id,
+            user_id: self.user_id,
             display_name: display_name.to_owned(),
         })
     }
@@ -283,7 +377,7 @@ async fn mariadb_auth_repository_flow() {
     assert_eq!(
         demo_user,
         AuthUserRecord {
-            id: demo_user_id,
+            user_id: demo_user_id,
             display_name: "demo-user".to_owned(),
         }
     );
@@ -391,10 +485,7 @@ async fn guest_logout_succeeds_in_demo_mode() {
     let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
 
     let req = Request::post("/api/auth/logout")
-        .header(
-            header::COOKIE,
-            "demo_session=55555555-5555-4555-8555-555555555555",
-        )
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
         .body(Body::empty())
         .unwrap();
 
@@ -422,10 +513,7 @@ async fn guest_logout_returns_404_in_neoshowcase_mode() {
     ));
 
     let req = Request::post("/api/auth/logout")
-        .header(
-            header::COOKIE,
-            "demo_session=55555555-5555-4555-8555-555555555555",
-        )
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
         .body(Body::empty())
         .unwrap();
 
@@ -496,4 +584,112 @@ async fn guest_logout_records_deleted_demo_session_and_returns_empty_body() {
         assert_eq!(calls.deleted.as_slice(), &[session_id]);
     }
     assert!(body_bytes(response).await.is_empty());
+}
+
+#[tokio::test]
+async fn start_new_run_succeeds() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::post(format!("/api/rooms/{MOCK_NEW_ROOM_ID}/runs"))
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["status"], "active");
+    assert_eq!(body["elapsed_ms"], 0);
+    assert!(body["cleared_problem_ids"].as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn resume_active_run_succeeds() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::post(format!("/api/rooms/{MOCK_RESUME_ROOM_ID}/runs"))
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["status"], "active");
+    let elapsed = body["elapsed_ms"].as_i64().unwrap();
+    assert!(elapsed >= 65000);
+    let cleared_ids: Vec<String> = body["cleared_problem_ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(cleared_ids, vec![MOCK_CLEARED_PROBLEM_ID.to_string()]);
+}
+
+#[tokio::test]
+async fn start_run_unauthorized() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::post(format!("/api/rooms/{MOCK_NEW_ROOM_ID}/runs"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn start_run_room_not_found() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::post(format!("/api/rooms/{}/runs", Uuid::nil()))
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn start_run_invalid_room_id_format() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::post("/api/rooms/not-a-uuid/runs")
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["error"]["code"], "BAD_REQUEST");
+    assert_eq!(body["error"]["message"], "invalid room_id");
+}
+
+#[tokio::test]
+async fn start_run_already_cleared_returns_409() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::post(format!("/api/rooms/{MOCK_CLEARED_ROOM_ID}/runs"))
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["error"]["code"], "CONFLICT");
+    assert_eq!(body["error"]["message"], "room already cleared");
 }
