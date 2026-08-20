@@ -159,10 +159,10 @@ impl AuthRepository for SqlxUserRepository {
     ) -> Result<Option<AuthUserRecord>, RepositoryError> {
         sqlx::query_as::<_, AuthUserRecord>(
             r#"
-            SELECT users.id AS user_id, users.display_name
+            SELECT users.user_id, users.display_name
             FROM demo_sessions
-            INNER JOIN users ON users.id = demo_sessions.user_id
-            WHERE demo_sessions.id = ?
+            INNER JOIN users ON users.user_id = demo_sessions.user_id
+            WHERE demo_sessions.session_id = ?
               AND users.auth_provider = 'demo'
             LIMIT 1
             "#,
@@ -180,7 +180,7 @@ impl AuthRepository for SqlxUserRepository {
     ) -> Result<Option<AuthUserRecord>, RepositoryError> {
         sqlx::query_as::<_, AuthUserRecord>(
             r#"
-            SELECT id AS user_id, display_name
+            SELECT user_id, display_name
             FROM users
             WHERE auth_provider = ?
               AND provider_subject = ?
@@ -205,13 +205,13 @@ impl AuthRepository for SqlxUserRepository {
         sqlx::query(
             r#"
             INSERT INTO users (
-                id,
+                user_id,
                 auth_provider,
                 provider_subject,
                 display_name
             )
             VALUES (?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE id = id
+            ON DUPLICATE KEY UPDATE user_id = user_id
             "#,
         )
         .bind(user_id)
@@ -234,7 +234,7 @@ impl AuthRepository for SqlxUserRepository {
     ) -> Result<(), RepositoryError> {
         sqlx::query(
             r#"
-            INSERT INTO demo_sessions (id, user_id)
+            INSERT INTO demo_sessions (session_id, user_id)
             VALUES (?, ?)
             "#,
         )
@@ -251,7 +251,7 @@ impl AuthRepository for SqlxUserRepository {
         sqlx::query(
             r#"
             DELETE FROM demo_sessions
-            WHERE id = ?
+            WHERE session_id = ?
             "#,
         )
         .bind(session_id)
@@ -265,9 +265,9 @@ impl AuthRepository for SqlxUserRepository {
     async fn find_room_by_id(&self, room_id: Uuid) -> Result<Option<RoomRecord>, RepositoryError> {
         sqlx::query_as::<_, RoomRecord>(
             r#"
-            SELECT id, number, name, genre, description, is_published, created_at
+            SELECT room_id AS id, number, name, genre, description, is_published, created_at
             FROM rooms
-            WHERE id = ?
+            WHERE room_id = ?
             LIMIT 1
             "#,
         )
@@ -284,7 +284,7 @@ impl AuthRepository for SqlxUserRepository {
     ) -> Result<Option<RunRecord>, RepositoryError> {
         sqlx::query_as::<_, RunRecord>(
             r#"
-            SELECT id, user_id, room_id, status, started_at, cleared_at
+            SELECT run_id AS id, user_id, room_id, status, started_at, cleared_at
             FROM runs
             WHERE user_id = ? AND room_id = ? AND status = 'active'
             LIMIT 1
@@ -308,7 +308,7 @@ impl AuthRepository for SqlxUserRepository {
 
         sqlx::query(
             r#"
-            INSERT INTO runs (id, user_id, room_id, status, started_at, cleared_at)
+            INSERT INTO runs (run_id, user_id, room_id, status, started_at, cleared_at)
             VALUES (?, ?, ?, 'active', ?, NULL)
             "#,
         )
@@ -322,7 +322,7 @@ impl AuthRepository for SqlxUserRepository {
 
         let problems = sqlx::query_as::<_, ProblemRecord>(
             r#"
-            SELECT id, room_id, number, problem_type, title, body_markdown, submission_type,
+            SELECT problem_id AS id, room_id, number, problem_type, title, body_markdown, submission_type,
                    assets, input_schema, hints, judge_config, depends_on_problem_id, is_required
             FROM problems
             WHERE room_id = ?
@@ -374,7 +374,7 @@ impl AuthRepository for SqlxUserRepository {
     ) -> Result<Option<RunRecord>, RepositoryError> {
         sqlx::query_as::<_, RunRecord>(
             r#"
-            SELECT id, user_id, room_id, status, started_at, cleared_at
+            SELECT run_id AS id, user_id, room_id, status, started_at, cleared_at
             FROM runs
             WHERE user_id = ? AND room_id = ? AND status = 'cleared'
             LIMIT 1
@@ -393,7 +393,7 @@ impl AuthRepository for SqlxUserRepository {
     ) -> Result<Vec<ProblemRecord>, RepositoryError> {
         let problems = sqlx::query_as::<_, ProblemRecord>(
             r#"
-            SELECT id, room_id, number, problem_type, title, body_markdown, submission_type,
+            SELECT problem_id AS id, room_id, number, problem_type, title, body_markdown, submission_type,
                    assets, input_schema, hints, judge_config, depends_on_problem_id, is_required
             FROM problems
             WHERE room_id = ?
