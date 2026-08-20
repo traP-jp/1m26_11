@@ -19,7 +19,7 @@ const emit = defineEmits<{
     </MenuButton>
 
     <MenuItems
-      class="absolute right-0 mt-2 w-auto bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5"
+      class="absolute right-0 mt-2 w-auto bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 overflow-hidden"
     >
       <MenuItem v-slot="{ active }">
         <button
