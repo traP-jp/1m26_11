@@ -303,7 +303,7 @@ async fn mariadb_auth_repository_flow() {
     sqlx::query(
         r#"
         INSERT INTO users (
-            id,
+            user_id,
             auth_provider,
             provider_subject,
             display_name
@@ -320,7 +320,7 @@ async fn mariadb_auth_repository_flow() {
 
     sqlx::query(
         r#"
-        INSERT INTO demo_sessions (id, user_id)
+        INSERT INTO demo_sessions (session_id, user_id)
         VALUES (?, ?)
         "#,
     )
@@ -348,13 +348,13 @@ async fn mariadb_auth_repository_flow() {
         .await
         .expect("second NeoShowcase lookup should succeed");
 
-    sqlx::query("DELETE FROM demo_sessions WHERE id = ?")
+    sqlx::query("DELETE FROM demo_sessions WHERE session_id = ?")
         .bind(session_id)
         .execute(&pool)
         .await
         .expect("demo session cleanup should succeed");
 
-    sqlx::query("DELETE FROM users WHERE id = ?")
+    sqlx::query("DELETE FROM users WHERE user_id = ?")
         .bind(demo_user_id)
         .execute(&pool)
         .await
@@ -384,6 +384,502 @@ async fn mariadb_auth_repository_flow() {
 
     assert_eq!(first_neo_user, second_neo_user);
     assert_eq!(first_neo_user.display_name, "neo-user");
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to an empty disposable MariaDB database"]
+async fn mariadb_game_schema_matches_contract() {
+    let pool = connect_test_database().await;
+
+    migrate(&pool)
+        .await
+        .expect("first migration run should succeed");
+
+    migrate(&pool)
+        .await
+        .expect("second migration run should not reapply migrations");
+
+    let mut tables = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = DATABASE()
+          AND table_type = 'BASE TABLE'
+          AND table_name <> '_sqlx_migrations'
+        ORDER BY table_name
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("table names should be readable");
+
+    tables.sort();
+
+    assert_eq!(
+        tables,
+        vec![
+            "demo_sessions".to_owned(),
+            "problem_progress".to_owned(),
+            "problems".to_owned(),
+            "queries".to_owned(),
+            "rooms".to_owned(),
+            "runs".to_owned(),
+            "users".to_owned(),
+        ]
+    );
+
+    let primary_keys: &[(&str, &[&str])] = &[
+        ("users", &["user_id"]),
+        ("demo_sessions", &["session_id"]),
+        ("rooms", &["room_id"]),
+        ("problems", &["problem_id"]),
+        ("runs", &["run_id"]),
+        ("problem_progress", &["run_id", "problem_id"]),
+        ("queries", &["query_id"]),
+    ];
+
+    for (table_name, expected_columns) in primary_keys {
+        let actual_columns = primary_key_columns(&pool, table_name).await;
+        let expected_columns = expected_columns
+            .iter()
+            .map(|column| (*column).to_owned())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            actual_columns, expected_columns,
+            "unexpected primary key for {table_name}"
+        );
+    }
+
+    let indexes: &[(&str, &str, &[&str])] = &[
+        ("demo_sessions", "idx_demo_sessions_user_id", &["user_id"]),
+        ("rooms", "uq_rooms_number", &["number"]),
+        (
+            "problems",
+            "uq_problems_room_number",
+            &["room_id", "number"],
+        ),
+        (
+            "runs",
+            "uq_runs_user_room_active",
+            &["user_id", "room_id", "active_marker"],
+        ),
+        (
+            "runs",
+            "idx_runs_ranking",
+            &["room_id", "status", "user_id", "cleared_at", "started_at"],
+        ),
+        (
+            "problem_progress",
+            "idx_problem_progress_run_status",
+            &["run_id", "status"],
+        ),
+        (
+            "queries",
+            "idx_queries_run_problem_created_at",
+            &["run_id", "problem_id", "created_at"],
+        ),
+    ];
+
+    for (table_name, index_name, expected_columns) in indexes {
+        let actual_columns = index_columns(&pool, table_name, index_name).await;
+        let expected_columns = expected_columns
+            .iter()
+            .map(|column| (*column).to_owned())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            actual_columns, expected_columns,
+            "unexpected index {index_name} on {table_name}"
+        );
+    }
+
+    let foreign_keys = [
+        ("fk_demo_sessions_user_id", "CASCADE"),
+        ("fk_problems_room_id", "RESTRICT"),
+        ("fk_problems_depends_on", "RESTRICT"),
+        ("fk_runs_user_id", "RESTRICT"),
+        ("fk_runs_room_id", "RESTRICT"),
+        ("fk_problem_progress_run_id", "CASCADE"),
+        ("fk_problem_progress_problem_id", "CASCADE"),
+        ("fk_queries_problem_progress", "CASCADE"),
+    ];
+
+    for (constraint_name, expected_delete_rule) in foreign_keys {
+        let actual_delete_rule = foreign_key_delete_rule(&pool, constraint_name).await;
+
+        assert_eq!(
+            actual_delete_rule, expected_delete_rule,
+            "unexpected delete rule for {constraint_name}"
+        );
+    }
+
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_game_schema_enforces_constraints() {
+    let pool = connect_test_database().await;
+
+    migrate(&pool).await.expect("migration should succeed");
+
+    let user_id = Uuid::new_v4();
+    let session_id = Uuid::new_v4();
+    let room_id = Uuid::new_v4();
+    let problem_id = Uuid::new_v4();
+    let run_id = Uuid::new_v4();
+    let query_id = Uuid::new_v4();
+    let room_number = (user_id.as_u128() % 2_000_000_000) as i32 + 1;
+    let provider_subject = format!("schema-test-{user_id}");
+
+    sqlx::query(
+        r#"
+        INSERT INTO users (
+            user_id,
+            auth_provider,
+            provider_subject,
+            display_name
+        )
+        VALUES (?, 'demo', ?, 'schema-test-user')
+        "#,
+    )
+    .bind(user_id)
+    .bind(&provider_subject)
+    .execute(&pool)
+    .await
+    .expect("user insertion should succeed");
+
+    sqlx::query(
+        r#"
+        INSERT INTO demo_sessions (session_id, user_id)
+        VALUES (?, ?)
+        "#,
+    )
+    .bind(session_id)
+    .bind(user_id)
+    .execute(&pool)
+    .await
+    .expect("demo session insertion should succeed");
+
+    sqlx::query(
+        r#"
+        INSERT INTO rooms (
+            room_id,
+            number,
+            name,
+            genre,
+            description,
+            is_published
+        )
+        VALUES (?, ?, 'schema-test-room', 'test', 'test room', 1)
+        "#,
+    )
+    .bind(room_id)
+    .bind(room_number)
+    .execute(&pool)
+    .await
+    .expect("room insertion should succeed");
+
+    sqlx::query(
+        r#"
+        INSERT INTO problems (
+            problem_id,
+            room_id,
+            number,
+            problem_type,
+            title,
+            body_markdown,
+            submission_type,
+            assets,
+            input_schema,
+            hints,
+            judge_config,
+            depends_on_problem_id,
+            is_required
+        )
+        VALUES (
+            ?, ?, 1, 'small', 'test problem', 'test body', 'string',
+            JSON_ARRAY(), JSON_OBJECT(), JSON_ARRAY(), JSON_OBJECT(),
+            NULL, 1
+        )
+        "#,
+    )
+    .bind(problem_id)
+    .bind(room_id)
+    .execute(&pool)
+    .await
+    .expect("problem insertion should succeed");
+
+    sqlx::query(
+        r#"
+        INSERT INTO runs (
+            run_id,
+            user_id,
+            room_id,
+            status,
+            started_at,
+            cleared_at
+        )
+        VALUES (?, ?, ?, 'active', CURRENT_TIMESTAMP(3), NULL)
+        "#,
+    )
+    .bind(run_id)
+    .bind(user_id)
+    .bind(room_id)
+    .execute(&pool)
+    .await
+    .expect("run insertion should succeed");
+
+    sqlx::query(
+        r#"
+        INSERT INTO problem_progress (
+            run_id,
+            problem_id,
+            status,
+            answer_attempt_count,
+            cleared_at
+        )
+        VALUES (?, ?, 'available', 0, NULL)
+        "#,
+    )
+    .bind(run_id)
+    .bind(problem_id)
+    .execute(&pool)
+    .await
+    .expect("problem progress insertion should succeed");
+
+    sqlx::query(
+        r#"
+        INSERT INTO queries (
+            query_id,
+            run_id,
+            problem_id,
+            source,
+            operations,
+            normalized_operations,
+            remaining_pattern_count,
+            is_correct
+        )
+        VALUES (
+            ?, ?, ?, 'keyboard',
+            JSON_ARRAY(), JSON_ARRAY(), 1, 0
+        )
+        "#,
+    )
+    .bind(query_id)
+    .bind(run_id)
+    .bind(problem_id)
+    .execute(&pool)
+    .await
+    .expect("query insertion should succeed");
+
+    let invalid_boolean = sqlx::query(
+        r#"
+        INSERT INTO rooms (
+            room_id,
+            number,
+            name,
+            genre,
+            description,
+            is_published
+        )
+        VALUES (?, ?, 'invalid room', 'test', 'invalid boolean', 2)
+        "#,
+    )
+    .bind(Uuid::new_v4())
+    .bind(room_number + 1)
+    .execute(&pool)
+    .await;
+
+    assert!(
+        invalid_boolean.is_err(),
+        "is_published CHECK should reject 2"
+    );
+
+    let duplicate_room_number = sqlx::query(
+        r#"
+        INSERT INTO rooms (
+            room_id,
+            number,
+            name,
+            genre,
+            description,
+            is_published
+        )
+        VALUES (?, ?, 'duplicate room', 'test', 'duplicate number', 1)
+        "#,
+    )
+    .bind(Uuid::new_v4())
+    .bind(room_number)
+    .execute(&pool)
+    .await;
+
+    assert!(
+        duplicate_room_number.is_err(),
+        "room number UNIQUE constraint should reject duplicates"
+    );
+
+    let duplicate_active_run = sqlx::query(
+        r#"
+        INSERT INTO runs (
+            run_id,
+            user_id,
+            room_id,
+            status,
+            started_at,
+            cleared_at
+        )
+        VALUES (?, ?, ?, 'active', CURRENT_TIMESTAMP(3), NULL)
+        "#,
+    )
+    .bind(Uuid::new_v4())
+    .bind(user_id)
+    .bind(room_id)
+    .execute(&pool)
+    .await;
+
+    assert!(
+        duplicate_active_run.is_err(),
+        "only one active run should be allowed per user and room"
+    );
+
+    let invalid_query_source = sqlx::query(
+        r#"
+        INSERT INTO queries (
+            query_id,
+            run_id,
+            problem_id,
+            source,
+            operations,
+            normalized_operations,
+            remaining_pattern_count,
+            is_correct
+        )
+        VALUES (
+            ?, ?, ?, 'invalid',
+            JSON_ARRAY(), JSON_ARRAY(), 1, 0
+        )
+        "#,
+    )
+    .bind(Uuid::new_v4())
+    .bind(run_id)
+    .bind(problem_id)
+    .execute(&pool)
+    .await;
+
+    assert!(
+        invalid_query_source.is_err(),
+        "query source CHECK should reject unknown sources"
+    );
+
+    let restricted_user_delete = sqlx::query(
+        r#"
+        DELETE FROM users
+        WHERE user_id = ?
+        "#,
+    )
+    .bind(user_id)
+    .execute(&pool)
+    .await;
+
+    assert!(
+        restricted_user_delete.is_err(),
+        "user deletion should be restricted while a run exists"
+    );
+
+    let restricted_room_delete = sqlx::query(
+        r#"
+        DELETE FROM rooms
+        WHERE room_id = ?
+        "#,
+    )
+    .bind(room_id)
+    .execute(&pool)
+    .await;
+
+    assert!(
+        restricted_room_delete.is_err(),
+        "room deletion should be restricted while referenced"
+    );
+
+    sqlx::query(
+        r#"
+        DELETE FROM runs
+        WHERE run_id = ?
+        "#,
+    )
+    .bind(run_id)
+    .execute(&pool)
+    .await
+    .expect("run deletion should succeed");
+
+    let progress_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM problem_progress
+        WHERE run_id = ?
+        "#,
+    )
+    .bind(run_id)
+    .fetch_one(&pool)
+    .await
+    .expect("problem progress count should be readable");
+
+    let query_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM queries
+        WHERE run_id = ?
+        "#,
+    )
+    .bind(run_id)
+    .fetch_one(&pool)
+    .await
+    .expect("query count should be readable");
+
+    assert_eq!(progress_count, 0, "run deletion should cascade to progress");
+    assert_eq!(
+        query_count, 0,
+        "progress deletion should cascade to queries"
+    );
+
+    sqlx::query("DELETE FROM problems WHERE problem_id = ?")
+        .bind(problem_id)
+        .execute(&pool)
+        .await
+        .expect("problem cleanup should succeed");
+
+    sqlx::query("DELETE FROM rooms WHERE room_id = ?")
+        .bind(room_id)
+        .execute(&pool)
+        .await
+        .expect("room cleanup should succeed");
+
+    sqlx::query("DELETE FROM users WHERE user_id = ?")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("user deletion should succeed after run deletion");
+
+    let session_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM demo_sessions
+        WHERE session_id = ?
+        "#,
+    )
+    .bind(session_id)
+    .fetch_one(&pool)
+    .await
+    .expect("demo session count should be readable");
+
+    assert_eq!(
+        session_count, 0,
+        "user deletion should cascade to demo sessions"
+    );
+
+    pool.close().await;
 }
 
 fn test_app() -> Router {
@@ -420,6 +916,56 @@ async fn connect_test_database() -> MySqlPool {
         .connect_with(options)
         .await
         .expect("test database should be reachable")
+}
+
+async fn primary_key_columns(pool: &MySqlPool, table_name: &str) -> Vec<String> {
+    sqlx::query_scalar(
+        r#"
+        SELECT column_name
+        FROM information_schema.key_column_usage
+        WHERE table_schema = DATABASE()
+          AND table_name = ?
+          AND constraint_name = 'PRIMARY'
+        ORDER BY ordinal_position
+        "#,
+    )
+    .bind(table_name)
+    .fetch_all(pool)
+    .await
+    .expect("primary key columns should be readable")
+}
+
+async fn index_columns(pool: &MySqlPool, table_name: &str, index_name: &str) -> Vec<String> {
+    sqlx::query_scalar(
+        r#"
+        SELECT column_name
+        FROM information_schema.statistics
+        WHERE table_schema = DATABASE()
+          AND table_name = ?
+          AND index_name = ?
+        ORDER BY seq_in_index
+        "#,
+    )
+    .bind(table_name)
+    .bind(index_name)
+    .fetch_all(pool)
+    .await
+    .expect("index columns should be readable")
+}
+
+async fn foreign_key_delete_rule(pool: &MySqlPool, constraint_name: &str) -> String {
+    sqlx::query_scalar(
+        r#"
+        SELECT delete_rule
+        FROM information_schema.referential_constraints
+        WHERE constraint_schema = DATABASE()
+          AND constraint_name = ?
+        "#,
+    )
+    .bind(constraint_name)
+    .fetch_one(pool)
+    .await
+    .expect("foreign key delete rule should be readable")
 }
 
 #[tokio::test]
