@@ -4,6 +4,6 @@ import RoomContext from './RoomContext.vue'
 
 <template>
   <Story title="RoomContext">
-    <RoomContext roomId="01" roomName="最初の部屋" />
+    <RoomContext roomNumber="01" roomName="最初の部屋" />
   </Story>
 </template>
