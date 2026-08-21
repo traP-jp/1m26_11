@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 const props = defineProps<{
   submitPending: boolean
@@ -11,9 +11,13 @@ const emit = defineEmits<{
 
 const displayName = ref('')
 
+const isSubmitDisabled = computed(() => {
+  return props.submitPending || displayName.value.trim() === ''
+})
+
 const onSubmit = () => {
-  if (props.submitPending) return
-  emit('submit', displayName.value)
+  if (isSubmitDisabled.value) return
+  emit('submit', displayName.value.trim())
 }
 </script>
 
@@ -41,7 +45,7 @@ const onSubmit = () => {
 
       <button
         type="submit"
-        :disabled="submitPending"
+        :disabled="isSubmitDisabled"
         class="mt-4 w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-blue-300 disabled:cursor-not-allowed"
       >
         この名前ではじめる
