@@ -28,7 +28,7 @@ pub(super) struct ProblemInput {
     pub title: String,
     pub body_markdown: String,
     pub submission_type: SubmissionType,
-    pub assets: Vec<serde_json::Value>,
+    pub assets: Vec<Asset>,
     pub input_schema: InputSchema,
     pub hints: Vec<Hint>,
     pub judge_config: JudgeConfigInput,
@@ -81,7 +81,7 @@ pub enum JudgeConfig {
 pub struct Asset {
     #[serde(rename = "type")]
     pub asset_type: String,
-    pub url: String,
+    pub object_key: String,
     pub alt: String,
 }
 

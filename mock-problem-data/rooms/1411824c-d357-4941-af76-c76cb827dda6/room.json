@@ -15,7 +15,13 @@
       "title": "生年月日",
       "body_markdown": "問題文です",
       "submission_type": "operation_sequence",
-      "assets": [],
+      "assets": [
+        {
+          "type": "image",
+          "object_key": "problems/1411824c-d357-4941-af76-c76cb827dda6/birthday.png",
+          "alt": "生年月日の問題用画像"
+        }
+      ],
       "input_schema": {
         "query": {
           "type": "operation_sequence",

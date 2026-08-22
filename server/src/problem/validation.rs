@@ -7,12 +7,14 @@ use uuid::Uuid;
 
 use super::{
     ProblemDataError,
-    judge::{normalize_answer, normalize_operations},
     model::{
         Candidate, JudgeConfig, JudgeConfigInput, Operation, Problem, ProblemCatalog, ProblemInput,
         ProblemType, Room, RoomFileInput, StringNormalization, SubmissionType,
+        UnicodeNormalization,
     },
 };
+
+use unicode_normalization::UnicodeNormalization as _;
 
 pub(super) fn validate_room_file(
     input: RoomFileInput,
@@ -258,6 +260,62 @@ fn require_non_empty(value: &str, field: impl Into<String>) -> Result<(), Proble
     Ok(())
 }
 
+fn normalize_operations(operations: &[Operation]) -> Vec<Operation> {
+    let mut normalized: Vec<Operation> = Vec::new();
+
+    for operation in operations {
+        if let Some(previous) = normalized.last_mut()
+            && previous.control == operation.control
+        {
+            previous.count += operation.count;
+        } else {
+            normalized.push(operation.clone());
+        }
+    }
+
+    normalized
+}
+
+fn normalize_answer(value: &str, normalization: &StringNormalization) -> String {
+    let mut normalized = match normalization.unicode {
+        UnicodeNormalization::Nfkc => value.nfkc().collect::<String>(),
+    };
+
+    if normalization.trim_outer_whitespace {
+        normalized = normalized.trim().to_owned();
+    }
+
+    if normalization.collapse_internal_whitespace {
+        normalized = collapse_whitespace(&normalized);
+    }
+
+    if !normalization.case_sensitive {
+        normalized = normalized.chars().flat_map(char::to_lowercase).collect();
+    }
+
+    normalized
+}
+
+fn collapse_whitespace(value: &str) -> String {
+    let mut result = String::new();
+    let mut previous_was_whitespace = false;
+
+    for character in value.chars() {
+        if character.is_whitespace() {
+            if !previous_was_whitespace {
+                result.push(' ');
+            }
+
+            previous_was_whitespace = true;
+        } else {
+            result.push(character);
+            previous_was_whitespace = false;
+        }
+    }
+
+    result
+}
+
 fn validate_operations(
     operations: Vec<Operation>,
     allowed_controls: &[String],
@@ -498,11 +556,21 @@ fn validate_problem(
         }
     }
 
-    if !input.assets.is_empty() {
-        return Err(validation_error(
-            format!("{field_prefix}.assets"),
-            "assets are deferred to a separate issue and must be empty",
-        ));
+    for (asset_index, asset) in input.assets.iter().enumerate() {
+        require_non_empty(
+            &asset.asset_type,
+            format!("{field_prefix}.assets[{asset_index}].type"),
+        )?;
+
+        require_non_empty(
+            &asset.object_key,
+            format!("{field_prefix}.assets[{asset_index}].object_key"),
+        )?;
+
+        require_non_empty(
+            &asset.alt,
+            format!("{field_prefix}.assets[{asset_index}].alt"),
+        )?;
     }
 
     for (hint_index, hint) in input.hints.iter().enumerate() {
@@ -562,7 +630,7 @@ fn validate_problem(
         title: input.title,
         body_markdown: input.body_markdown,
         submission_type: input.submission_type,
-        assets: Vec::new(),
+        assets: input.assets,
         input_schema: input.input_schema,
         hints: input.hints,
         judge_config,
@@ -578,11 +646,12 @@ mod tests {
     use uuid::Uuid;
 
     use super::{
-        Candidate, JudgeConfig, Operation, ProblemDataError, StringNormalization, validate_catalog,
-        validate_operation_judge_config, validate_operations, validate_string_judge_config,
+        Candidate, JudgeConfig, Operation, ProblemDataError, StringNormalization, normalize_answer,
+        validate_catalog, validate_operation_judge_config, validate_operations,
+        validate_string_judge_config,
     };
 
-    use super::super::{judge::normalize_answer, model::UnicodeNormalization};
+    use super::super::model::UnicodeNormalization;
 
     use crate::problem::{ProblemCatalog, load_problem_data};
 

@@ -1,8 +1,7 @@
 # Mock問題データ仕様
 
 この文書は、Issue #45で使用するmock問題データの形式、判定設定、およびvalidation規則を説明します。
-`mock-problem-data/`内の1部屋4問は、ローカルで読込・validation・判定処理を確認するためのdummy dataであり、
-正式な問題内容ではありません。
+`mock-problem-data/`内の1部屋4問は、ローカルで読込・validation・MariaDBへの投入を確認するためのdummy dataであり、正式な問題内容ではありません。
 HTTP APIの契約は`openapi/openapi-v1.yaml`、DB schemaは`server/migrations/0001_schema.sql`を正本とし、
 この文書ではそれらを変更せずに入力データから型付きの内部modelへ変換する方法を定めます。
 
@@ -12,9 +11,10 @@ HTTP APIの契約は`openapi/openapi-v1.yaml`、DB schemaは`server/migrations/0
 - 小なぞ3問と大なぞ1問を型付きmodelへ変換する
 - problem間の依存関係、入力定義、判定設定をvalidationする
 - validation済みmodelに`rooms`と`problems`へ保存するための情報を保持する
-- 公開可能なproblem dataをallow-list方式で組み立てる
+- validation済みmodelをDatabase SeederでMariaDBの`rooms`と`problems`へ投入する
 
-このIssueではSQL、seed、API route、assetの保存・配信・validationを実装しません。
+このIssueではJSONの読込・validation・MariaDBへのseedを実装します。
+回答判定、API route、asset binaryの保存・配信、object keyからURLへの変換は別Issueで実装します。
 
 ## ディレクトリ構成
 
@@ -33,7 +33,8 @@ mock-problem-data/
 - JSONはUTF-8、トップレベルはobjectとする
 - JSON内の未知fieldは入力ミスとして拒否する
 - 画像などのbinary fileはmock問題データへ含めない
-- このIssueでは各problemの`assets`を空配列`[]`にする
+- asset binaryは含めず、`assets`にはobject storage上の識別子である`object_key`だけを記録する
+- 環境別URLはJSONへ保存せず、後続のAPI実装で`object_key`から組み立てる
 
 ## トップレベル
 
@@ -78,14 +79,22 @@ DBの`rooms.is_published`は入稿時には`false`とし、公開作業で別途
 | `title` | string | 前後空白を除いて空でない |
 | `body_markdown` | string | 前後空白を除いて空でない |
 | `submission_type` | string | `operation_sequence`または`string` |
-| `assets` | array | 必須。このIssueでは空配列`[]`だけを許可する |
+| `assets` | array | asset参照の配列。空配列可。binaryや環境別URLは含めない |
 | `input_schema` | object | 公開可能な入力制限 |
 | `hints` | array | `Hint`の配列。空配列可 |
 | `judge_config` | object | 非公開の判定設定 |
 | `depends_on_problem_id` | stringまたはnull | 同じroom内の別problemを参照する |
 | `is_required` | boolean | 現在の必須4問では`true` |
 
-内部modelでは`problem_id`の名前を維持します。公開用modelへ変換するときだけOpenAPIの`id`へ写します。
+`assets`の各要素は次のfieldを持ちます。
+
+| field | JSON型 | 規則 |
+| --- | --- | --- |
+| `type` | string | asset種別。mock dataでは`image` |
+| `object_key` | string | object storage上の識別子。空文字不可 |
+| `alt` | string | 内容を説明する代替文。空文字不可 |
+
+validation済み内部modelでも`problem_id`の名前を維持します。
 
 ## 入力schema
 
@@ -255,13 +264,14 @@ validationでは次を確認します。
 
 ## Asset
 
-assetの保存・配信・validationは別Issue／別PRで扱います。
+問題データには画像などのbinaryや環境別URLを含めず、object storage上の識別子である`object_key`を保存します。
 
-このmock dataでは`assets` fieldを必須の空配列`[]`とします。非空のassetはvalidationで拒否します。
-
-後続のasset対応では、問題データに画像binaryや環境別URLを含めず、object keyだけを保存します。
-API返却時にobject keyから環境別URLを組み立てる方針です。object storageへのupload、MIME、size、
-cache、404の規則はasset用PRで決定します。動画対応は今回の対象外です。
+```json
+{
+  "type": "image",
+  "object_key": "problems/11111111-1111-4111-8111-111111111111/birthday.png",
+  "alt": "生年月日の問題用画像"
+}
 
 ## Hint
 
@@ -275,7 +285,6 @@ hintは配列順を表示順として扱います。
 
 - `body_markdown`は前後空白を除いて空でない
 - hint本文は非公開dataとする
-- 公開用problem modelには本文ではなく`hints.len()`から求めた`hint_count`だけを含める
 
 ## 問題セット全体のvalidation
 
@@ -298,33 +307,12 @@ hintは配列順を表示順として扱います。
 この構成では大なぞを先に正解しても、必須小なぞが残っている間はrunをclearにできません。実際のrun clear処理は
 後続Issueで実装します。
 
-## 公開dataと非公開data
+## 非公開dataの扱い
 
-公開用modelはvalidation済みmodelから次のfieldだけを明示的にcopyします。
+`judge_config`、正解操作列、正解文字列、candidate一覧、hint本文はMariaDBへ保存しますが、非公開dataとして扱います。
 
-- `id`：内部の`problem_id`
-- `number`
-- `type`：内部の`problem_type`
-- `title`
-- `body_markdown`
-- `submission_type`
-- `assets`
-- `input_schema`
-- `hint_count`：`hints.len()`
-
-`status`はこのIssueでは作らず、後続の問題取得APIが`problem_progress`から付与します。
-
-次のfieldは公開用modelへ含めません。
-
-- `room_id`
-- `judge_config`
-- 正解操作列、正解文字列
-- candidate一覧
-- hint本文
-- `depends_on_problem_id`
-- `is_required`
-
-公開modelは内部modelのserialize結果からfieldを削除して作らず、許可fieldを1つずつcopyして組み立てます。
+このIssueではAPI responseを構築しません。後続のAPI実装では、これらのfieldをresponseやlogへ含めないようにします。
+validation errorにも正解値そのものを含めず、問題のあるfield pathだけを記録します。
 
 ## validation errorとlog
 
@@ -367,7 +355,13 @@ errorには次の安全な識別情報を含めます。
       "title": "生年月日",
       "body_markdown": "問題文です",
       "submission_type": "operation_sequence",
-      "assets": [],
+      "assets": [
+        {
+          "type": "image",
+          "object_key": "problems/11111111-1111-4111-8111-111111111111/birthday.png",
+          "alt": "生年月日の問題用画像"
+        }
+      ],
       "input_schema": {
         "query": {
           "type": "operation_sequence",
@@ -524,11 +518,10 @@ errorには次の安全な識別情報を含めます。
 
 ## Rust modelとの境界
 
-実装では次の3段階を分けます。
+実装では次の2段階を分けます。
 
-1. JSONのfieldをそのまま受けるvalidation前の入力型
+1. JSONのfieldを受けるvalidation前の入力型
 2. UUID、enum、参照、正規化済み判定設定を持つvalidation済み内部型
-3. 許可fieldだけを持つ公開用problem model
 
 JSON parse errorや必須field不足を1段階目で検出し、複数problemにまたがる重複・参照・循環を2段階目への
 変換時に検出します。DB row型やOpenAPI生成型を入稿JSONのdeserialize型として直接使用しません。
@@ -543,15 +536,9 @@ validation済みmodelを正本とし、利用側に応じて次のprojectionを�
 - roomの`number`、`name`、`genre`、`description`を同名列へ渡す
 - `rooms.is_published`は`false`とする
 - problemの各fieldを`problems`の同名列へ渡す
-- `assets`はJSONの空配列`[]`として扱う
+- `assets`はobject keyを持つ配列としてJSONへserializeする
 - `input_schema`、`hints`、`judge_config`は型付きmodelからJSONへserializeする
 - `created_at`はDB既定値を使用する
 
-validation済みmodelにはこの変換に必要な値をすべて保持しますが、このIssueではSQL文、seed、汎用repository
-methodを作りません。
-
-### frontend fixture用
-
-frontendへは入稿JSON全体を渡さず、公開用problem modelだけをJSONへserializeします。動的な`status`が必要な
-API fixtureでは、後続処理が`problem_progress`に相当する状態を付与します。正解、candidate、hint本文をfixtureへ
-copyしません。
+Database Seederはvalidation済みmodelを受け取り、transaction内で`rooms`を先に、`problems`を依存順に投入します。
+SQLや実行方法の詳細はSeeder実装後にこの節へ追記します。

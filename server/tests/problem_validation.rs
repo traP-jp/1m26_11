@@ -1,11 +1,10 @@
 use std::{
-    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
 };
 
 use server::problem::{
-    JudgeConfig, ProblemDataError, ProblemType, PublicProblem, SubmissionType, load_problem_data,
+    JudgeConfig, ProblemDataError, ProblemType, SubmissionType, load_problem_data,
 };
 
 use uuid::Uuid;
@@ -218,31 +217,37 @@ fn submission_type_and_judge_config_must_match() {
 }
 
 #[test]
-fn non_empty_assets_are_rejected_while_support_is_deferred() {
+fn object_key_asset_is_loaded() {
+    let catalog =
+        load_problem_data(mock_problem_data_root()).expect("problem data should be valid");
+
+    let asset = &catalog.rooms[0].problems[0].assets[0];
+
+    assert_eq!(asset.asset_type, "image");
+    assert_eq!(
+        asset.object_key,
+        "problems/1411824c-d357-4941-af76-c76cb827dda6/birthday.png"
+    );
+    assert_eq!(asset.alt, "生年月日の問題用画像");
+}
+
+#[test]
+fn empty_asset_object_key_is_rejected() {
     let test_data = TestProblemData::new();
     let mut value = source_room_json();
     let room_id = source_room_id(&value).to_owned();
 
-    value["problems"][0]["assets"] = serde_json::json!([
-        {
-            "type": "image",
-            "object_key": "problems/example.png",
-            "alt": "問題資料"
-        }
-    ]);
+    value["problems"][0]["assets"][0]["object_key"] = serde_json::json!("");
 
     test_data.write_room_json(&room_id, &value);
 
     let error =
-        load_problem_data(test_data.root()).expect_err("non-empty assets should be rejected");
+        load_problem_data(test_data.root()).expect_err("empty object key should be rejected");
 
     match error {
         ProblemDataError::Validation { field, message } => {
-            assert_eq!(field, "problems[0].assets");
-            assert_eq!(
-                message,
-                "assets are deferred to a separate issue and must be empty"
-            );
+            assert_eq!(field, "problems[0].assets[0].object_key");
+            assert_eq!(message, "must not be empty");
         }
         other => panic!("unexpected error: {other}"),
     }
@@ -261,75 +266,6 @@ fn empty_problem_catalog_is_rejected() {
             assert_eq!(message, "at least one room is required");
         }
         other => panic!("unexpected error: {other}"),
-    }
-}
-
-#[test]
-fn public_problem_excludes_private_fields() {
-    let catalog =
-        load_problem_data(mock_problem_data_root()).expect("problem data should be valid");
-
-    let public_problems = catalog.rooms[0]
-        .problems
-        .iter()
-        .map(PublicProblem::from)
-        .collect::<Vec<_>>();
-
-    let values = public_problems
-        .iter()
-        .map(|problem| {
-            serde_json::to_value(problem).expect("public problem should be serializable")
-        })
-        .collect::<Vec<_>>();
-
-    let expected_keys = BTreeSet::from([
-        "assets",
-        "body_markdown",
-        "hint_count",
-        "id",
-        "input_schema",
-        "number",
-        "submission_type",
-        "title",
-        "type",
-    ]);
-
-    for value in &values {
-        let object = value
-            .as_object()
-            .expect("public problem should be a JSON object");
-
-        let actual_keys = object.keys().map(String::as_str).collect::<BTreeSet<_>>();
-
-        assert_eq!(actual_keys, expected_keys);
-    }
-
-    let serialized =
-        serde_json::to_string(&values).expect("public problems should be serializable");
-
-    for private_field in [
-        "\"room_id\"",
-        "\"judge_config\"",
-        "\"correct_operations\"",
-        "\"accepted_answers\"",
-        "\"candidates\"",
-        "\"hints\"",
-        "\"depends_on_problem_id\"",
-        "\"is_required\"",
-    ] {
-        assert!(
-            !serialized.contains(private_field),
-            "private field leaked: {private_field}"
-        );
-    }
-
-    for private_value in [
-        "ワンマンソン",
-        "pattern-a",
-        "最初の操作に注目してください",
-        "3つの小なぞを振り返ってください",
-    ] {
-        assert!(!serialized.contains(private_value), "private value leaked");
     }
 }
 
