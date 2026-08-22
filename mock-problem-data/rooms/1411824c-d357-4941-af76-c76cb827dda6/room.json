@@ -1,0 +1,176 @@
+{
+  "room": {
+    "room_id": "1411824c-d357-4941-af76-c76cb827dda6",
+    "number": 1,
+    "name": "最初の部屋",
+    "genre": "logic",
+    "description": "動作確認用の問題セットです"
+  },
+  "problems": [
+    {
+      "problem_id": "52ed5a58-bc88-4e0f-97a4-0f64a112acd4",
+      "room_id": "1411824c-d357-4941-af76-c76cb827dda6",
+      "number": 1,
+      "problem_type": "small",
+      "title": "生年月日",
+      "body_markdown": "問題文です",
+      "submission_type": "operation_sequence",
+      "assets": [
+        {
+          "type": "image",
+          "object_key": "problems/1411824c-d357-4941-af76-c76cb827dda6/birthday.png",
+          "alt": "生年月日の問題用画像"
+        }
+      ],
+      "input_schema": {
+        "query": {
+          "type": "operation_sequence",
+          "allowed_controls": ["down", "right", "up", "left"],
+          "max_operations": 100
+        },
+        "answer": {
+          "type": "string",
+          "max_length": 50
+        }
+      },
+      "hints": [
+        { "body_markdown": "最初の操作に注目してください" }
+      ],
+      "judge_config": {
+        "type": "operation_sequence",
+        "correct_operations": [
+          { "control": "down", "count": 1 },
+          { "control": "right", "count": 2 }
+        ],
+        "candidates": [
+          {
+            "candidate_id": "pattern-a",
+            "operations": [
+              { "control": "down", "count": 1 },
+              { "control": "right", "count": 2 }
+            ]
+          },
+          {
+            "candidate_id": "pattern-b",
+            "operations": [
+              { "control": "down", "count": 1 },
+              { "control": "up", "count": 1 }
+            ]
+          }
+        ]
+      },
+      "depends_on_problem_id": null,
+      "is_required": true
+    },
+    {
+      "problem_id": "9ebaa649-9c28-4bed-9dc1-fd7b9fedaa9b",
+      "room_id": "1411824c-d357-4941-af76-c76cb827dda6",
+      "number": 2,
+      "problem_type": "small",
+      "title": "合言葉",
+      "body_markdown": "問題文です",
+      "submission_type": "string",
+      "assets": [],
+      "input_schema": {
+        "query": {
+          "type": "operation_sequence",
+          "allowed_controls": ["down", "right", "up", "left"],
+          "max_operations": 100
+        },
+        "answer": {
+          "type": "string",
+          "max_length": 50
+        }
+      },
+      "hints": [],
+      "judge_config": {
+        "type": "string",
+        "accepted_answers": ["かおもじくん", "顔文字くん"],
+        "normalization": {
+          "unicode": "nfkc",
+          "trim_outer_whitespace": true,
+          "collapse_internal_whitespace": false,
+          "case_sensitive": false
+        }
+      },
+      "depends_on_problem_id": "52ed5a58-bc88-4e0f-97a4-0f64a112acd4",
+      "is_required": true
+    },
+    {
+      "problem_id": "6853a228-0462-4413-91f4-6b8ef672cefc",
+      "room_id": "1411824c-d357-4941-af76-c76cb827dda6",
+      "number": 3,
+      "problem_type": "small",
+      "title": "最後の小なぞ",
+      "body_markdown": "問題文です",
+      "submission_type": "operation_sequence",
+      "assets": [],
+      "input_schema": {
+        "query": {
+          "type": "operation_sequence",
+          "allowed_controls": ["down", "right", "up", "left"],
+          "max_operations": 100
+        },
+        "answer": {
+          "type": "string",
+          "max_length": 50
+        }
+      },
+      "hints": [],
+      "judge_config": {
+        "type": "operation_sequence",
+        "correct_operations": [
+          { "control": "left", "count": 1 },
+          { "control": "up", "count": 1 }
+        ],
+        "candidates": [
+          {
+            "candidate_id": "pattern-c",
+            "operations": [
+              { "control": "left", "count": 1 },
+              { "control": "up", "count": 1 }
+            ]
+          }
+        ]
+      },
+      "depends_on_problem_id": "9ebaa649-9c28-4bed-9dc1-fd7b9fedaa9b",
+      "is_required": true
+    },
+    {
+      "problem_id": "9ca65619-6ad2-4e74-bf4a-4f146b238067",
+      "room_id": "1411824c-d357-4941-af76-c76cb827dda6",
+      "number": 4,
+      "problem_type": "final",
+      "title": "大なぞ",
+      "body_markdown": "問題文です",
+      "submission_type": "string",
+      "assets": [],
+      "input_schema": {
+        "query": {
+          "type": "operation_sequence",
+          "allowed_controls": ["down", "right", "up", "left"],
+          "max_operations": 100
+        },
+        "answer": {
+          "type": "string",
+          "max_length": 50
+        }
+      },
+      "hints": [
+        { "body_markdown": "3つの小なぞを振り返ってください" }
+      ],
+      "judge_config": {
+        "type": "string",
+        "accepted_answers": ["ワンマンソン"],
+        "normalization": {
+          "unicode": "nfkc",
+          "trim_outer_whitespace": true,
+          "collapse_internal_whitespace": false,
+          "case_sensitive": false
+        }
+      },
+      "depends_on_problem_id": null,
+      "is_required": true
+    }
+  ]
+}
