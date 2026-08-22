@@ -1,6 +1,5 @@
 use std::{
     collections::{HashMap, HashSet},
-    fs,
     path::Path,
 };
 
@@ -10,8 +9,8 @@ use super::{
     ProblemDataError,
     judge::{normalize_answer, normalize_operations},
     model::{
-        Asset, Candidate, JudgeConfig, JudgeConfigInput, Operation, Problem, ProblemCatalog,
-        ProblemInput, ProblemType, Room, RoomFileInput, StringNormalization, SubmissionType,
+        Candidate, JudgeConfig, JudgeConfigInput, Operation, Problem, ProblemCatalog, ProblemInput,
+        ProblemType, Room, RoomFileInput, StringNormalization, SubmissionType,
     },
 };
 
@@ -48,7 +47,7 @@ pub(super) fn validate_room_file(
         .problems
         .into_iter()
         .enumerate()
-        .map(|(index, problem)| validate_problem(problem, room_id, index, room_directory))
+        .map(|(index, problem)| validate_problem(problem, room_id, index))
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(Room {
@@ -430,129 +429,10 @@ fn validate_string_judge_config(
     })
 }
 
-const MAX_ASSET_SIZE: u64 = 5 * 1024 * 1024;
-
-fn validate_asset(
-    asset: &Asset,
-    room_id: Uuid,
-    room_directory: &Path,
-    field: &str,
-) -> Result<(), ProblemDataError> {
-    let url_prefix = format!("/assets/problems/{room_id}/");
-
-    let file_name = asset.url.strip_prefix(&url_prefix).ok_or_else(|| {
-        validation_error(
-            format!("{field}.url"),
-            "asset URL must contain its parent room ID",
-        )
-    })?;
-
-    let mut characters = file_name.chars();
-
-    let valid_first_character = characters
-        .next()
-        .is_some_and(|character| character.is_ascii_lowercase() || character.is_ascii_digit());
-
-    let valid_remaining_characters = characters.all(|character| {
-        character.is_ascii_lowercase()
-            || character.is_ascii_digit()
-            || matches!(character, '.' | '_' | '-')
-    });
-
-    if !valid_first_character
-        || !valid_remaining_characters
-        || file_name.contains("..")
-        || file_name.contains('/')
-        || file_name.contains('\\')
-    {
-        return Err(validation_error(
-            format!("{field}.url"),
-            "asset file name has an invalid format",
-        ));
-    }
-
-    let expected_format = match Path::new(file_name)
-        .extension()
-        .and_then(|extension| extension.to_str())
-    {
-        Some("png") => "png",
-        Some("jpg" | "jpeg") => "jpeg",
-        Some("webp") => "webp",
-        _ => {
-            return Err(validation_error(
-                format!("{field}.url"),
-                "asset extension must be png, jpg, jpeg, or webp",
-            ));
-        }
-    };
-
-    let asset_path = room_directory.join("assets").join(file_name);
-
-    if !asset_path.exists() {
-        return Err(validation_error(
-            format!("{field}.url"),
-            "asset file must exist",
-        ));
-    }
-
-    let metadata = fs::metadata(&asset_path).map_err(|source| ProblemDataError::Io {
-        path: asset_path.clone(),
-        source,
-    })?;
-
-    if !metadata.is_file() {
-        return Err(validation_error(
-            format!("{field}.url"),
-            "asset path must point to a regular file",
-        ));
-    }
-
-    if metadata.len() > MAX_ASSET_SIZE {
-        return Err(validation_error(
-            format!("{field}.url"),
-            "asset file must not exceed 5 MiB",
-        ));
-    }
-
-    let data = fs::read(&asset_path).map_err(|source| ProblemDataError::Io {
-        path: asset_path,
-        source,
-    })?;
-
-    let actual_format = detect_image_format(&data).ok_or_else(|| {
-        validation_error(
-            format!("{field}.url"),
-            "asset file must be PNG, JPEG, or WebP",
-        )
-    })?;
-
-    if actual_format != expected_format {
-        return Err(validation_error(
-            format!("{field}.url"),
-            "asset extension must match its file content",
-        ));
-    }
-
-    Ok(())
-}
-
-fn detect_image_format(data: &[u8]) -> Option<&'static str> {
-    if data.starts_with(b"\x89PNG\r\n\x1a\n") {
-        Some("png")
-    } else if data.starts_with(&[0xff, 0xd8, 0xff]) {
-        Some("jpeg")
-    } else if data.len() >= 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
-        Some("webp")
-    } else {
-        None
-    }
-}
-
 fn validate_problem(
     input: ProblemInput,
     expected_room_id: Uuid,
     index: usize,
-    room_directory: &Path,
 ) -> Result<Problem, ProblemDataError> {
     let field_prefix = format!("problems[{index}]");
 
@@ -618,30 +498,11 @@ fn validate_problem(
         }
     }
 
-    for (asset_index, asset) in input.assets.iter().enumerate() {
-        if asset.asset_type != "image" {
-            return Err(validation_error(
-                format!("{field_prefix}.assets[{asset_index}].type"),
-                "asset type must be image",
-            ));
-        }
-
-        require_non_empty(
-            &asset.url,
-            format!("{field_prefix}.assets[{asset_index}].url"),
-        )?;
-
-        require_non_empty(
-            &asset.alt,
-            format!("{field_prefix}.assets[{asset_index}].alt"),
-        )?;
-
-        validate_asset(
-            asset,
-            expected_room_id,
-            room_directory,
-            &format!("{field_prefix}.assets[{asset_index}]"),
-        )?;
+    if !input.assets.is_empty() {
+        return Err(validation_error(
+            format!("{field_prefix}.assets"),
+            "assets are deferred to a separate issue and must be empty",
+        ));
     }
 
     for (hint_index, hint) in input.hints.iter().enumerate() {
@@ -701,7 +562,7 @@ fn validate_problem(
         title: input.title,
         body_markdown: input.body_markdown,
         submission_type: input.submission_type,
-        assets: input.assets,
+        assets: Vec::new(),
         input_schema: input.input_schema,
         hints: input.hints,
         judge_config,
@@ -712,17 +573,13 @@ fn validate_problem(
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs,
-        path::{Path, PathBuf},
-    };
+    use std::path::PathBuf;
 
     use uuid::Uuid;
 
     use super::{
-        Asset, Candidate, JudgeConfig, MAX_ASSET_SIZE, Operation, ProblemDataError,
-        StringNormalization, validate_asset, validate_catalog, validate_operation_judge_config,
-        validate_operations, validate_string_judge_config,
+        Candidate, JudgeConfig, Operation, ProblemDataError, StringNormalization, validate_catalog,
+        validate_operation_judge_config, validate_operations, validate_string_judge_config,
     };
 
     use super::super::{judge::normalize_answer, model::UnicodeNormalization};
@@ -730,7 +587,7 @@ mod tests {
     use crate::problem::{ProblemCatalog, load_problem_data};
 
     fn valid_catalog() -> ProblemCatalog {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../problem-data");
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../mock-problem-data");
 
         load_problem_data(root).expect("test problem data should be valid")
     }
@@ -780,39 +637,6 @@ mod tests {
         let error = validate_catalog(catalog).expect_err("validation should fail");
 
         assert_problem_data_error(error, expected_field, expected_message);
-    }
-
-    struct TestRoomDirectory {
-        path: PathBuf,
-    }
-
-    impl TestRoomDirectory {
-        fn new() -> Self {
-            let path = std::env::temp_dir().join(format!("problem-validation-{}", Uuid::new_v4()));
-
-            fs::create_dir_all(path.join("assets"))
-                .expect("test asset directory should be created");
-
-            Self { path }
-        }
-
-        fn path(&self) -> &Path {
-            &self.path
-        }
-    }
-
-    impl Drop for TestRoomDirectory {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.path);
-        }
-    }
-
-    fn image_asset(room_id: Uuid, file_name: &str) -> Asset {
-        Asset {
-            asset_type: "image".to_owned(),
-            url: format!("/assets/problems/{room_id}/{file_name}"),
-            alt: "問題資料".to_owned(),
-        }
     }
 
     #[test]
@@ -1180,117 +1004,6 @@ mod tests {
             error,
             "judge_config.accepted_answers[1]",
             "normalized accepted answers must not be duplicated",
-        );
-    }
-
-    #[test]
-    fn valid_png_asset_is_accepted() {
-        let room_id = Uuid::new_v4();
-        let directory = TestRoomDirectory::new();
-        let asset = image_asset(room_id, "image.png");
-
-        fs::write(
-            directory.path().join("assets/image.png"),
-            b"\x89PNG\r\n\x1a\n",
-        )
-        .expect("test PNG should be written");
-
-        validate_asset(&asset, room_id, directory.path(), "problems[0].assets[0]")
-            .expect("valid PNG should be accepted");
-    }
-
-    #[test]
-    fn asset_url_with_wrong_room_id_is_rejected() {
-        let room_id = Uuid::new_v4();
-        let asset = image_asset(Uuid::new_v4(), "image.png");
-        let directory = TestRoomDirectory::new();
-
-        let error = validate_asset(&asset, room_id, directory.path(), "problems[0].assets[0]")
-            .expect_err("wrong room ID should be rejected");
-
-        assert_problem_data_error(
-            error,
-            "problems[0].assets[0].url",
-            "asset URL must contain its parent room ID",
-        );
-    }
-
-    #[test]
-    fn asset_path_traversal_is_rejected() {
-        let room_id = Uuid::new_v4();
-        let asset = image_asset(room_id, "../image.png");
-        let directory = TestRoomDirectory::new();
-
-        let error = validate_asset(&asset, room_id, directory.path(), "problems[0].assets[0]")
-            .expect_err("path traversal should be rejected");
-
-        assert_problem_data_error(
-            error,
-            "problems[0].assets[0].url",
-            "asset file name has an invalid format",
-        );
-    }
-
-    #[test]
-    fn missing_asset_file_is_rejected() {
-        let room_id = Uuid::new_v4();
-        let asset = image_asset(room_id, "missing.png");
-        let directory = TestRoomDirectory::new();
-
-        let error = validate_asset(&asset, room_id, directory.path(), "problems[0].assets[0]")
-            .expect_err("missing file should be rejected");
-
-        assert_problem_data_error(error, "problems[0].assets[0].url", "asset file must exist");
-    }
-
-    #[test]
-    fn asset_extension_must_match_file_signature() {
-        let room_id = Uuid::new_v4();
-        let directory = TestRoomDirectory::new();
-        let asset = image_asset(room_id, "image.png");
-
-        fs::write(
-            directory.path().join("assets/image.png"),
-            [0xff, 0xd8, 0xff],
-        )
-        .expect("test JPEG should be written");
-
-        let error = validate_asset(&asset, room_id, directory.path(), "problems[0].assets[0]")
-            .expect_err("signature mismatch should be rejected");
-
-        assert_problem_data_error(
-            error,
-            "problems[0].assets[0].url",
-            "asset extension must match its file content",
-        );
-    }
-
-    #[test]
-    fn asset_size_limit_is_enforced() {
-        let room_id = Uuid::new_v4();
-        let directory = TestRoomDirectory::new();
-        let asset = image_asset(room_id, "image.png");
-        let asset_path = directory.path().join("assets/image.png");
-
-        let mut maximum_size_data = vec![0; MAX_ASSET_SIZE as usize];
-        maximum_size_data[..8].copy_from_slice(b"\x89PNG\r\n\x1a\n");
-
-        fs::write(&asset_path, &maximum_size_data).expect("maximum-size PNG should be written");
-
-        validate_asset(&asset, room_id, directory.path(), "problems[0].assets[0]")
-            .expect("asset at exactly 5 MiB should be accepted");
-
-        maximum_size_data.push(0);
-
-        fs::write(&asset_path, maximum_size_data).expect("oversized PNG should be written");
-
-        let error = validate_asset(&asset, room_id, directory.path(), "problems[0].assets[0]")
-            .expect_err("asset over 5 MiB should be rejected");
-
-        assert_problem_data_error(
-            error,
-            "problems[0].assets[0].url",
-            "asset file must not exceed 5 MiB",
         );
     }
 }

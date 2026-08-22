@@ -196,7 +196,7 @@ mod tests {
     use crate::problem::{Operation, Problem, load_problem_data};
 
     fn problem(title: &str) -> Problem {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../problem-data");
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../mock-problem-data");
 
         load_problem_data(root)
             .expect("problem data should be valid")

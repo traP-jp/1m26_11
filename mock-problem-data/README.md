@@ -1,6 +1,8 @@
-# 問題入稿データ仕様
+# Mock問題データ仕様
 
-この文書は、Issue #45で扱う問題入稿データ、判定設定、problem asset、およびvalidation規則の正本です。
+この文書は、Issue #45で使用するmock問題データの形式、判定設定、およびvalidation規則を説明します。
+`mock-problem-data/`内の1部屋4問は、ローカルで読込・validation・判定処理を確認するためのdummy dataであり、
+正式な問題内容ではありません。
 HTTP APIの契約は`openapi/openapi-v1.yaml`、DB schemaは`server/migrations/0001_schema.sql`を正本とし、
 この文書ではそれらを変更せずに入力データから型付きの内部modelへ変換する方法を定めます。
 
@@ -8,31 +10,30 @@ HTTP APIの契約は`openapi/openapi-v1.yaml`、DB schemaは`server/migrations/0
 
 - 1部屋につき1つのJSONファイルを読み込む
 - 小なぞ3問と大なぞ1問を型付きmodelへ変換する
-- problem間の依存関係、入力定義、判定設定、assetをvalidationする
+- problem間の依存関係、入力定義、判定設定をvalidationする
 - validation済みmodelに`rooms`と`problems`へ保存するための情報を保持する
 - 公開可能なproblem dataをallow-list方式で組み立てる
 
-この仕様ではSQL、seed、API route、問題の判定処理、asset配信serverを実装しません。
+このIssueではSQL、seed、API route、assetの保存・配信・validationを実装しません。
 
 ## ディレクトリ構成
 
-問題データはリポジトリルートの`problem-data/rooms/`へ、部屋ごとに分けて格納します。
+問題データはリポジトリルートの`mock-problem-data/rooms/`へ、部屋ごとに分けて格納します。
 
 ```text
-problem-data/
+mock-problem-data/
 ├── README.md
 └── rooms/
     └── <room_id>/
         ├── room.json
-        └── assets/
-            └── <asset file>
 ```
 
 - `<room_id>`は小文字のハイフン付きUUID文字列とする
 - ディレクトリ名のUUIDと`room.json`の`room.room_id`は一致させる
 - JSONはUTF-8、トップレベルはobjectとする
 - JSON内の未知fieldは入力ミスとして拒否する
-- 正解、候補、hint本文、`judge_config`を`assets/`へ置かない
+- 画像などのbinary fileはmock問題データへ含めない
+- このIssueでは各problemの`assets`を空配列`[]`にする
 
 ## トップレベル
 
@@ -77,7 +78,7 @@ DBの`rooms.is_published`は入稿時には`false`とし、公開作業で別途
 | `title` | string | 前後空白を除いて空でない |
 | `body_markdown` | string | 前後空白を除いて空でない |
 | `submission_type` | string | `operation_sequence`または`string` |
-| `assets` | array | `Asset`の配列。空配列可 |
+| `assets` | array | 必須。このIssueでは空配列`[]`だけを許可する |
 | `input_schema` | object | 公開可能な入力制限 |
 | `hints` | array | `Hint`の配列。空配列可 |
 | `judge_config` | object | 非公開の判定設定 |
@@ -254,53 +255,13 @@ validationでは次を確認します。
 
 ## Asset
 
-公開用`assets`のJSONはOpenAPIと同じ3 fieldだけを持ちます。
+assetの保存・配信・validationは別Issue／別PRで扱います。
 
-```json
-{
-  "type": "image",
-  "url": "/assets/problems/11111111-1111-4111-8111-111111111111/birthday.png",
-  "alt": "問題資料"
-}
-```
+このmock dataでは`assets` fieldを必須の空配列`[]`とします。非空のassetはvalidationで拒否します。
 
-### path対応
-
-上の例は次のpathへ対応します。
-
-| 種類 | path |
-| --- | --- |
-| source | `problem-data/rooms/11111111-1111-4111-8111-111111111111/assets/birthday.png` |
-| build後 | `client/dist/assets/problems/11111111-1111-4111-8111-111111111111/birthday.png` |
-| 試遊会URL | `/assets/problems/11111111-1111-4111-8111-111111111111/birthday.png` |
-| NeoShowcase URL | `/assets/problems/11111111-1111-4111-8111-111111111111/birthday.png` |
-
-環境固有のhost名をJSONへ含めず、同一originの絶対pathを使用します。sourceからbuild後pathへのcopy処理と
-asset配信serverはこのIssueの対象外ですが、この対応規則を後続処理で維持します。
-
-### validation規則
-
-- `type`は現在`image`だけを許可する
-- URLは`/assets/problems/<room_id>/<file name>`形式とする
-- `<room_id>`は親roomと一致させる
-- file名は小文字英数字で始まり、小文字英数字、`.`、`_`、`-`だけを許可する
-- subdirectory、絶対filesystem path、`.`、`..`、backslash、query、fragmentを禁止する
-- 対応するsource fileが存在し、通常fileでなければならない
-- 許可する形式はPNG、JPEG、WebPとする
-- 拡張子とfile signatureから求めたMIMEが一致しなければならない
-- 許可MIMEは`image/png`、`image/jpeg`、`image/webp`とする
-- file sizeは5 MiB以下とする
-- `alt`は前後空白を除いて空でない
-
-SVGはscriptや外部参照を含み得るため初期実装では許可しません。
-
-### cacheと404
-
-- assetは同じURLで差し替わる可能性があるため`Cache-Control: public, max-age=3600`を想定する
-- hash付きfile名を導入するまでは`immutable`を付けない
-- assetが存在しない場合は通常のHTTP 404とし、別assetへのfallbackを行わない
-
-HTTP headerの実装はasset配信serverを実装するIssueで行います。
+後続のasset対応では、問題データに画像binaryや環境別URLを含めず、object keyだけを保存します。
+API返却時にobject keyから環境別URLを組み立てる方針です。object storageへのupload、MIME、size、
+cache、404の規則はasset用PRで決定します。動画対応は今回の対象外です。
 
 ## Hint
 
@@ -406,13 +367,7 @@ errorには次の安全な識別情報を含めます。
       "title": "生年月日",
       "body_markdown": "問題文です",
       "submission_type": "operation_sequence",
-      "assets": [
-        {
-          "type": "image",
-          "url": "/assets/problems/11111111-1111-4111-8111-111111111111/birthday.png",
-          "alt": "問題資料"
-        }
-      ],
+      "assets": [],
       "input_schema": {
         "query": {
           "type": "operation_sequence",
@@ -588,7 +543,8 @@ validation済みmodelを正本とし、利用側に応じて次のprojectionを�
 - roomの`number`、`name`、`genre`、`description`を同名列へ渡す
 - `rooms.is_published`は`false`とする
 - problemの各fieldを`problems`の同名列へ渡す
-- `assets`、`input_schema`、`hints`、`judge_config`は型付きmodelからJSONへserializeする
+- `assets`はJSONの空配列`[]`として扱う
+- `input_schema`、`hints`、`judge_config`は型付きmodelからJSONへserializeする
 - `created_at`はDB既定値を使用する
 
 validation済みmodelにはこの変換に必要な値をすべて保持しますが、このIssueではSQL文、seed、汎用repository

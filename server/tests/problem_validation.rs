@@ -31,23 +31,13 @@ impl TestProblemData {
     fn write_room_json(&self, directory_name: &str, value: &serde_json::Value) {
         let room_directory = self.root.join("rooms").join(directory_name);
 
-        fs::create_dir_all(room_directory.join("assets"))
-            .expect("temporary room directory should be created");
+        fs::create_dir_all(&room_directory).expect("temporary room directory should be created");
 
         let json =
             serde_json::to_string_pretty(value).expect("test room JSON should be serializable");
 
         fs::write(room_directory.join("room.json"), json)
             .expect("test room JSON should be written");
-
-        let source_asset = problem_data_root()
-            .join("rooms")
-            .join("1411824c-d357-4941-af76-c76cb827dda6")
-            .join("assets")
-            .join("test-image.png");
-
-        fs::copy(source_asset, room_directory.join("assets/test-image.png"))
-            .expect("test asset should be copied");
     }
 
     fn write_raw_room_json(&self, directory_name: &str, json: &str) {
@@ -66,12 +56,12 @@ impl Drop for TestProblemData {
     }
 }
 
-fn problem_data_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../problem-data")
+fn mock_problem_data_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../mock-problem-data")
 }
 
 fn source_room_json() -> serde_json::Value {
-    let file_path = problem_data_root()
+    let file_path = mock_problem_data_root()
         .join("rooms")
         .join("1411824c-d357-4941-af76-c76cb827dda6")
         .join("room.json");
@@ -89,7 +79,7 @@ fn source_room_id(value: &serde_json::Value) -> &str {
 
 #[test]
 fn valid_problem_data_loads() {
-    let root = problem_data_root();
+    let root = mock_problem_data_root();
 
     let catalog = load_problem_data(root).expect("problem data should be valid");
 
@@ -228,6 +218,37 @@ fn submission_type_and_judge_config_must_match() {
 }
 
 #[test]
+fn non_empty_assets_are_rejected_while_support_is_deferred() {
+    let test_data = TestProblemData::new();
+    let mut value = source_room_json();
+    let room_id = source_room_id(&value).to_owned();
+
+    value["problems"][0]["assets"] = serde_json::json!([
+        {
+            "type": "image",
+            "object_key": "problems/example.png",
+            "alt": "問題資料"
+        }
+    ]);
+
+    test_data.write_room_json(&room_id, &value);
+
+    let error =
+        load_problem_data(test_data.root()).expect_err("non-empty assets should be rejected");
+
+    match error {
+        ProblemDataError::Validation { field, message } => {
+            assert_eq!(field, "problems[0].assets");
+            assert_eq!(
+                message,
+                "assets are deferred to a separate issue and must be empty"
+            );
+        }
+        other => panic!("unexpected error: {other}"),
+    }
+}
+
+#[test]
 fn empty_problem_catalog_is_rejected() {
     let test_data = TestProblemData::new();
 
@@ -245,7 +266,8 @@ fn empty_problem_catalog_is_rejected() {
 
 #[test]
 fn public_problem_excludes_private_fields() {
-    let catalog = load_problem_data(problem_data_root()).expect("problem data should be valid");
+    let catalog =
+        load_problem_data(mock_problem_data_root()).expect("problem data should be valid");
 
     let public_problems = catalog.rooms[0]
         .problems

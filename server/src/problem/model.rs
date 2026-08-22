@@ -28,7 +28,7 @@ pub(super) struct ProblemInput {
     pub title: String,
     pub body_markdown: String,
     pub submission_type: SubmissionType,
-    pub assets: Vec<Asset>,
+    pub assets: Vec<serde_json::Value>,
     pub input_schema: InputSchema,
     pub hints: Vec<Hint>,
     pub judge_config: JudgeConfigInput,
