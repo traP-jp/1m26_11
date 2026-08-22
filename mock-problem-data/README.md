@@ -272,6 +272,7 @@ validationでは次を確認します。
   "object_key": "problems/11111111-1111-4111-8111-111111111111/birthday.png",
   "alt": "生年月日の問題用画像"
 }
+```
 
 ## Hint
 
@@ -526,7 +527,7 @@ errorには次の安全な識別情報を含めます。
 JSON parse errorや必須field不足を1段階目で検出し、複数problemにまたがる重複・参照・循環を2段階目への
 変換時に検出します。DB row型やOpenAPI生成型を入稿JSONのdeserialize型として直接使用しません。
 
-## 後続処理への変換
+## Database Seeder
 
 validation済みmodelを正本とし、利用側に応じて次のprojectionを作ります。
 
@@ -540,5 +541,41 @@ validation済みmodelを正本とし、利用側に応じて次のprojectionを�
 - `input_schema`、`hints`、`judge_config`は型付きmodelからJSONへserializeする
 - `created_at`はDB既定値を使用する
 
-Database Seederはvalidation済みmodelを受け取り、transaction内で`rooms`を先に、`problems`を依存順に投入します。
-SQLや実行方法の詳細はSeeder実装後にこの節へ追記します。
+Database Seederは次の順序で処理します。
+
+1. `mock-problem-data/rooms/*/room.json`をすべて読み込む
+2. DBへ接続する前に全データをvalidationする
+3. MariaDBへ接続してmigrationを適用する
+4. transactionを開始する
+5. `rooms`をINSERTする
+6. problemを番号順に並べ、`problems`へINSERTする
+7. 全件成功した場合だけtransactionをcommitする
+
+途中で失敗した場合はtransaction全体をrollbackします。同じUUIDがすでに存在する場合もエラーとし、
+既存行の上書きや削除は行いません。
+
+リポジトリルートから次のように実行します。
+
+```sh
+DATABASE_URL='mysql://<user>:<password>@<host>:<port>/<database>' \
+mise run seed-mock-problem-data
+```
+
+直接Cargoから実行する場合は次のコマンドを使用します。
+
+```sh
+DATABASE_URL='mysql://<user>:<password>@<host>:<port>/<database>' \
+cargo run --manifest-path server/Cargo.toml --locked \
+  --bin seed_problem_data -- mock-problem-data
+```
+
+成功時は投入件数を表示します。
+
+```text
+seeded 1 room(s) and 4 problem(s)
+```
+
+Backendはリクエスト処理時にこのJSONを直接読みません。Seederが保存した`rooms`と`problems`を
+MariaDBからSELECTして利用します。APIからの取得・回答判定・asset URL生成は別Issueの範囲です。
+
+SeederはDBを書き換えるため、`DATABASE_URL`が意図した接続先であることを実行前に確認してください。

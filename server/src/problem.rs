@@ -1,5 +1,6 @@
 mod loader;
 mod model;
+mod seeder;
 mod validation;
 
 use std::{io, path::PathBuf};
@@ -11,6 +12,7 @@ pub use model::{
     Asset, InputSchema, JudgeConfig, Operation, Problem, ProblemCatalog, ProblemType, Room,
     SubmissionType,
 };
+pub use seeder::{ProblemSeedError, SeedSummary, seed_problem_data};
 
 #[derive(Debug, Error)]
 pub enum ProblemDataError {

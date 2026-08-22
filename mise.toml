@@ -35,9 +35,17 @@ dir = "server"
 run = "cargo test --locked"
 
 [tasks.test-integration]
-description = "Run ignored server API integration tests"
+description = "Run ignored server integration tests"
 dir = "server"
-run = "cargo test --locked --test api -- --ignored --test-threads=1"
+run = """
+cargo test --locked --test api -- --ignored --test-threads=1
+cargo test --locked --test problem_seeder -- --ignored --test-threads=1
+"""
+
+[tasks.seed-mock-problem-data]
+description = "Validate and seed mock problem data into MariaDB"
+dir = "server"
+run = "cargo run --locked --bin seed_problem_data -- ../mock-problem-data"
 
 [tasks.test]
 description = "Run server tests that do not require a database"
