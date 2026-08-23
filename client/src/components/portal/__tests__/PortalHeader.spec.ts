@@ -13,7 +13,9 @@ describe('PortalHeader', () => {
     })
 
     expect(wrapper.get('header').element.tagName).toBe('HEADER')
-    expect(wrapper.get('[aria-label="ワンマンそん ホーム"]').text()).toBe('ワンマンそん')
+    const homeLink = wrapper.get('a[aria-label="ワンマンそん ホーム"]')
+    expect(homeLink.text()).toBe('ワンマンそん')
+    expect(homeLink.attributes('href')).toBe('/')
     expect(wrapper.get('a[href="#instructions"]').text()).toBe('操作説明')
     expect(wrapper.text()).not.toContain('kaomojikun')
 

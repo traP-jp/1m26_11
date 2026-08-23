@@ -11,6 +11,15 @@ const emit = defineEmits<{
   logout: []
   showInstructions: []
 }>()
+
+const instructionControlClasses = [
+  'inline-flex min-h-8 cursor-pointer items-center justify-center gap-[0.35rem]',
+  'rounded-[0.45rem] border border-[#d8e1ee] bg-[#f5f8fc] px-3 py-[0.45rem]',
+  'text-[0.6875rem] font-bold leading-none text-[#22324c]',
+  'transition-colors duration-150 hover:border-[#bdcadd] hover:bg-[#edf3fa]',
+  'focus-visible:outline-2 focus-visible:outline-offset-[3px]',
+  'focus-visible:outline-[#3997ea] max-[34rem]:w-8 max-[34rem]:px-0',
+]
 </script>
 
 <template>
@@ -19,6 +28,7 @@ const emit = defineEmits<{
   >
     <a
       class="inline-flex shrink-0 flex-col leading-none text-inherit no-underline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[#3997ea]"
+      :href="homeHref"
       aria-label="ワンマンそん ホーム"
     >
       <span class="text-[0.9375rem] font-extrabold tracking-[0.025em]">ワンマンそん</span>
@@ -27,7 +37,8 @@ const emit = defineEmits<{
     <nav class="flex items-center gap-2.5 max-[34rem]:gap-[0.45rem]" aria-label="ポータル操作">
       <a
         v-if="instructionsHref"
-        class="inline-flex min-h-8 cursor-pointer items-center justify-center gap-[0.35rem] rounded-[0.45rem] border border-[#d8e1ee] bg-[#f5f8fc] px-3 py-[0.45rem] text-[0.6875rem] font-bold leading-none text-[#22324c] no-underline transition-colors duration-150 hover:border-[#bdcadd] hover:bg-[#edf3fa] focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[#3997ea] max-[34rem]:w-8 max-[34rem]:px-0"
+        class="no-underline"
+        :class="instructionControlClasses"
         :href="instructionsHref"
         aria-label="操作説明"
       >
@@ -44,7 +55,7 @@ const emit = defineEmits<{
       </a>
       <button
         v-else
-        class="inline-flex min-h-8 cursor-pointer items-center justify-center gap-[0.35rem] rounded-[0.45rem] border border-[#d8e1ee] bg-[#f5f8fc] px-3 py-[0.45rem] text-[0.6875rem] font-bold leading-none text-[#22324c] transition-colors duration-150 hover:border-[#bdcadd] hover:bg-[#edf3fa] focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[#3997ea] max-[34rem]:w-8 max-[34rem]:px-0"
+        :class="instructionControlClasses"
         type="button"
         aria-label="操作説明"
         @click="emit('showInstructions')"

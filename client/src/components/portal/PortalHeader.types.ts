@@ -16,7 +16,7 @@ export type PortalUserStatusState =
     }
 
 export interface PortalHeaderProps {
-  homeHref?: string | null
+  homeHref: string
   instructionsHref?: string | null
   userStatus: PortalUserStatusState
 }
