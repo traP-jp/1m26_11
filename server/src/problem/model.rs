@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct RoomFileInput {
     pub room: RoomInput,
@@ -18,7 +18,7 @@ pub(super) struct RoomInput {
     pub description: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct ProblemInput {
     pub problem_id: String,
@@ -32,8 +32,15 @@ pub(super) struct ProblemInput {
     pub input_schema: InputSchema,
     pub hints: Vec<Hint>,
     pub judge_config: JudgeConfigInput,
-    pub depends_on_problem_id: Option<String>,
+    pub depends_on_problem_id: RequiredNullable<String>,
     pub is_required: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub(super) enum RequiredNullable<T> {
+    Value(T),
+    Null,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
@@ -50,7 +57,7 @@ pub enum SubmissionType {
     String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub(super) enum JudgeConfigInput {
     OperationSequence {
@@ -63,7 +70,7 @@ pub(super) enum JudgeConfigInput {
     },
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum JudgeConfig {
     OperationSequence {
@@ -121,7 +128,7 @@ pub enum AnswerInputType {
     String,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Clone, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Hint {
     pub body_markdown: String,
@@ -134,7 +141,7 @@ pub struct Operation {
     pub count: i32,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Clone, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Candidate {
     pub candidate_id: String,
@@ -156,12 +163,12 @@ pub enum UnicodeNormalization {
     Nfkc,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ProblemCatalog {
     pub rooms: Vec<Room>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Room {
     pub room_id: Uuid,
     pub number: i32,
@@ -171,7 +178,7 @@ pub struct Room {
     pub problems: Vec<Problem>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Problem {
     pub problem_id: Uuid,
     pub room_id: Uuid,

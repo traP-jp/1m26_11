@@ -76,6 +76,16 @@ fn source_room_id(value: &serde_json::Value) -> &str {
         .expect("source room ID should be a string")
 }
 
+fn expect_problem_data_error<T>(
+    result: Result<T, ProblemDataError>,
+    message: &str,
+) -> ProblemDataError {
+    match result {
+        Err(error) => error,
+        Ok(_) => panic!("{message}"),
+    }
+}
+
 #[test]
 fn valid_problem_data_loads() {
     let root = mock_problem_data_root();
@@ -126,7 +136,10 @@ fn malformed_json_is_rejected() {
 
     test_data.write_raw_room_json(room_id, "{ invalid json");
 
-    let error = load_problem_data(test_data.root()).expect_err("malformed JSON should be rejected");
+    let error = expect_problem_data_error(
+        load_problem_data(test_data.root()),
+        "malformed JSON should be rejected",
+    );
 
     match error {
         ProblemDataError::Json { path, .. } => {
@@ -149,7 +162,10 @@ fn unknown_json_field_is_rejected() {
 
     test_data.write_room_json(&room_id, &value);
 
-    let error = load_problem_data(test_data.root()).expect_err("unknown field should be rejected");
+    let error = expect_problem_data_error(
+        load_problem_data(test_data.root()),
+        "unknown field should be rejected",
+    );
 
     assert!(matches!(error, ProblemDataError::Json { .. }));
     assert!(error.to_string().contains("room.json"));
@@ -168,10 +184,146 @@ fn missing_required_json_field_is_rejected() {
 
     test_data.write_room_json(&room_id, &value);
 
-    let error =
-        load_problem_data(test_data.root()).expect_err("missing required field should be rejected");
+    let error = expect_problem_data_error(
+        load_problem_data(test_data.root()),
+        "missing required field should be rejected",
+    );
 
     assert!(matches!(error, ProblemDataError::Json { .. }));
+}
+
+#[test]
+fn missing_depends_on_problem_id_is_rejected() {
+    let test_data = TestProblemData::new();
+    let mut value = source_room_json();
+    let room_id = source_room_id(&value).to_owned();
+
+    value["problems"][0]
+        .as_object_mut()
+        .expect("problem should be an object")
+        .remove("depends_on_problem_id");
+
+    test_data.write_room_json(&room_id, &value);
+
+    let error = expect_problem_data_error(
+        load_problem_data(test_data.root()),
+        "missing depends_on_problem_id should be rejected",
+    );
+
+    match error {
+        ProblemDataError::Json { source, .. } => {
+            assert!(source.to_string().contains("depends_on_problem_id"));
+        }
+        other => panic!("unexpected error: {other}"),
+    }
+}
+
+#[test]
+fn explicit_null_dependency_is_accepted() {
+    let test_data = TestProblemData::new();
+    let mut value = source_room_json();
+    let room_id = source_room_id(&value).to_owned();
+
+    value["problems"][0]["depends_on_problem_id"] = serde_json::Value::Null;
+
+    test_data.write_room_json(&room_id, &value);
+
+    let catalog =
+        load_problem_data(test_data.root()).expect("explicit null dependency should be accepted");
+
+    assert_eq!(catalog.rooms[0].problems[0].depends_on_problem_id, None);
+}
+
+#[test]
+fn varchar_fields_accept_character_limits() {
+    let test_data = TestProblemData::new();
+    let mut value = source_room_json();
+    let room_id = source_room_id(&value).to_owned();
+
+    value["room"]["name"] = serde_json::Value::String("あ".repeat(255));
+    value["room"]["genre"] = serde_json::Value::String("界".repeat(64));
+    value["problems"][0]["title"] = serde_json::Value::String("題".repeat(255));
+
+    test_data.write_room_json(&room_id, &value);
+
+    let catalog =
+        load_problem_data(test_data.root()).expect("VARCHAR boundary values should be accepted");
+
+    assert_eq!(catalog.rooms[0].name.chars().count(), 255);
+    assert_eq!(catalog.rooms[0].genre.chars().count(), 64);
+    assert_eq!(catalog.rooms[0].problems[0].title.chars().count(), 255);
+}
+
+#[test]
+fn room_name_over_character_limit_is_rejected() {
+    let test_data = TestProblemData::new();
+    let mut value = source_room_json();
+    let room_id = source_room_id(&value).to_owned();
+
+    value["room"]["name"] = serde_json::Value::String("あ".repeat(256));
+
+    test_data.write_room_json(&room_id, &value);
+
+    let error = expect_problem_data_error(
+        load_problem_data(test_data.root()),
+        "room name over 255 characters should be rejected",
+    );
+
+    match error {
+        ProblemDataError::Validation { field, message } => {
+            assert_eq!(field, "room.name");
+            assert_eq!(message, "must be at most 255 characters");
+        }
+        other => panic!("unexpected error: {other}"),
+    }
+}
+
+#[test]
+fn room_genre_over_character_limit_is_rejected() {
+    let test_data = TestProblemData::new();
+    let mut value = source_room_json();
+    let room_id = source_room_id(&value).to_owned();
+
+    value["room"]["genre"] = serde_json::Value::String("界".repeat(65));
+
+    test_data.write_room_json(&room_id, &value);
+
+    let error = expect_problem_data_error(
+        load_problem_data(test_data.root()),
+        "room genre over 64 characters should be rejected",
+    );
+
+    match error {
+        ProblemDataError::Validation { field, message } => {
+            assert_eq!(field, "room.genre");
+            assert_eq!(message, "must be at most 64 characters");
+        }
+        other => panic!("unexpected error: {other}"),
+    }
+}
+
+#[test]
+fn problem_title_over_character_limit_is_rejected() {
+    let test_data = TestProblemData::new();
+    let mut value = source_room_json();
+    let room_id = source_room_id(&value).to_owned();
+
+    value["problems"][0]["title"] = serde_json::Value::String("題".repeat(256));
+
+    test_data.write_room_json(&room_id, &value);
+
+    let error = expect_problem_data_error(
+        load_problem_data(test_data.root()),
+        "problem title over 255 characters should be rejected",
+    );
+
+    match error {
+        ProblemDataError::Validation { field, message } => {
+            assert_eq!(field, "problems[0].title");
+            assert_eq!(message, "must be at most 255 characters");
+        }
+        other => panic!("unexpected error: {other}"),
+    }
 }
 
 #[test]
@@ -182,8 +334,10 @@ fn room_id_must_match_directory_name() {
 
     test_data.write_room_json(&different_directory_id, &value);
 
-    let error =
-        load_problem_data(test_data.root()).expect_err("directory ID mismatch should be rejected");
+    let error = expect_problem_data_error(
+        load_problem_data(test_data.root()),
+        "directory ID mismatch should be rejected",
+    );
 
     match error {
         ProblemDataError::Validation { field, message } => {
@@ -204,8 +358,10 @@ fn submission_type_and_judge_config_must_match() {
 
     test_data.write_room_json(&room_id, &value);
 
-    let error = load_problem_data(test_data.root())
-        .expect_err("mismatched judge config should be rejected");
+    let error = expect_problem_data_error(
+        load_problem_data(test_data.root()),
+        "mismatched judge config should be rejected",
+    );
 
     match error {
         ProblemDataError::Validation { field, message } => {
@@ -241,8 +397,10 @@ fn empty_asset_object_key_is_rejected() {
 
     test_data.write_room_json(&room_id, &value);
 
-    let error =
-        load_problem_data(test_data.root()).expect_err("empty object key should be rejected");
+    let error = expect_problem_data_error(
+        load_problem_data(test_data.root()),
+        "empty object key should be rejected",
+    );
 
     match error {
         ProblemDataError::Validation { field, message } => {
@@ -257,8 +415,10 @@ fn empty_asset_object_key_is_rejected() {
 fn empty_problem_catalog_is_rejected() {
     let test_data = TestProblemData::new();
 
-    let error =
-        load_problem_data(test_data.root()).expect_err("empty problem catalog should be rejected");
+    let error = expect_problem_data_error(
+        load_problem_data(test_data.root()),
+        "empty problem catalog should be rejected",
+    );
 
     match error {
         ProblemDataError::Validation { field, message } => {
@@ -279,8 +439,10 @@ fn validation_error_does_not_expose_judge_values() {
 
     test_data.write_room_json(&room_id, &value);
 
-    let error =
-        load_problem_data(test_data.root()).expect_err("empty accepted answers should be rejected");
+    let error = expect_problem_data_error(
+        load_problem_data(test_data.root()),
+        "empty accepted answers should be rejected",
+    );
 
     let display = error.to_string();
     let debug = format!("{error:?}");

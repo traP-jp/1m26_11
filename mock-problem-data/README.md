@@ -59,8 +59,8 @@ mock-problem-data/
 | --- | --- | --- |
 | `room_id` | string | UUID。ディレクトリ名と一致する |
 | `number` | integer | `1`以上 |
-| `name` | string | 前後空白を除いて空でない |
-| `genre` | string | 前後空白を除いて空でない |
+| `name` | string | 前後空白を除いて空でなく、255文字以下 |
+| `genre` | string | 前後空白を除いて空でなく、64文字以下 |
 | `description` | string | 前後空白を除いて空でない |
 
 DBの`rooms.is_published`は入稿時には`false`とし、公開作業で別途変更します。
@@ -76,14 +76,14 @@ DBの`rooms.is_published`は入稿時には`false`とし、公開作業で別途
 | `room_id` | string | 親の`room.room_id`と一致する |
 | `number` | integer | `1`以上。同じroom内で重複不可 |
 | `problem_type` | string | `small`または`final` |
-| `title` | string | 前後空白を除いて空でない |
+| `title` | string | 前後空白を除いて空でなく、255文字以下 |
 | `body_markdown` | string | 前後空白を除いて空でない |
 | `submission_type` | string | `operation_sequence`または`string` |
 | `assets` | array | asset参照の配列。空配列可。binaryや環境別URLは含めない |
 | `input_schema` | object | 公開可能な入力制限 |
 | `hints` | array | `Hint`の配列。空配列可 |
 | `judge_config` | object | 非公開の判定設定 |
-| `depends_on_problem_id` | stringまたはnull | 同じroom内の別problemを参照する |
+| `depends_on_problem_id` | stringまたはnull | fieldは必須。値は同じroom内のUUIDまたは`null` |
 | `is_required` | boolean | 現在の必須4問では`true` |
 
 `assets`の各要素は次のfieldを持ちます。
@@ -333,6 +333,8 @@ errorには次の安全な識別情報を含めます。
 
 例えば文字列正解が空だった場合も、実際の正解値は表示せず、
 `problems[1].judge_config.accepted_answers[0]: normalized answer must not be empty`のようにfield位置だけを示します。
+
+正解、候補、hintを含む内部modelは`Debug`を実装しません。
 
 ## 完全な入力例
 

@@ -9,12 +9,16 @@ use super::{
     ProblemDataError,
     model::{
         Candidate, JudgeConfig, JudgeConfigInput, Operation, Problem, ProblemCatalog, ProblemInput,
-        ProblemType, Room, RoomFileInput, StringNormalization, SubmissionType,
+        ProblemType, RequiredNullable, Room, RoomFileInput, StringNormalization, SubmissionType,
         UnicodeNormalization,
     },
 };
 
 use unicode_normalization::UnicodeNormalization as _;
+
+const ROOM_NAME_MAX_CHARS: usize = 255;
+const ROOM_GENRE_MAX_CHARS: usize = 64;
+const PROBLEM_TITLE_MAX_CHARS: usize = 255;
 
 pub(super) fn validate_room_file(
     input: RoomFileInput,
@@ -44,6 +48,20 @@ pub(super) fn validate_room_file(
     require_non_empty(&input.room.name, "room.name")?;
     require_non_empty(&input.room.genre, "room.genre")?;
     require_non_empty(&input.room.description, "room.description")?;
+
+    require_max_chars(
+        &input.room.name,
+        ROOM_NAME_MAX_CHARS,
+        "room.name",
+        "must be at most 255 characters",
+    )?;
+
+    require_max_chars(
+        &input.room.genre,
+        ROOM_GENRE_MAX_CHARS,
+        "room.genre",
+        "must be at most 64 characters",
+    )?;
 
     let problems = input
         .problems
@@ -255,6 +273,19 @@ fn parse_uuid(value: &str, field: impl Into<String>) -> Result<Uuid, ProblemData
 fn require_non_empty(value: &str, field: impl Into<String>) -> Result<(), ProblemDataError> {
     if value.trim().is_empty() {
         return Err(validation_error(field, "must not be empty"));
+    }
+
+    Ok(())
+}
+
+fn require_max_chars(
+    value: &str,
+    max_chars: usize,
+    field: impl Into<String>,
+    message: &'static str,
+) -> Result<(), ProblemDataError> {
+    if value.chars().count() > max_chars {
+        return Err(validation_error(field, message));
     }
 
     Ok(())
@@ -519,6 +550,13 @@ fn validate_problem(
         format!("{field_prefix}.body_markdown"),
     )?;
 
+    require_max_chars(
+        &input.title,
+        PROBLEM_TITLE_MAX_CHARS,
+        format!("{field_prefix}.title"),
+        "must be at most 255 characters",
+    )?;
+
     if input.input_schema.query.max_operations <= 0 {
         return Err(validation_error(
             format!("{field_prefix}.input_schema.query.max_operations"),
@@ -580,11 +618,13 @@ fn validate_problem(
         )?;
     }
 
-    let depends_on_problem_id = input
-        .depends_on_problem_id
-        .as_deref()
-        .map(|value| parse_uuid(value, format!("{field_prefix}.depends_on_problem_id")))
-        .transpose()?;
+    let depends_on_problem_id = match input.depends_on_problem_id {
+        RequiredNullable::Null => None,
+        RequiredNullable::Value(value) => Some(parse_uuid(
+            &value,
+            format!("{field_prefix}.depends_on_problem_id"),
+        )?),
+    };
 
     let judge_config = match (input.submission_type, input.judge_config) {
         (
@@ -695,6 +735,16 @@ mod tests {
                 assert_eq!(message, expected_message);
             }
             other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    fn expect_problem_data_error<T>(
+        result: Result<T, ProblemDataError>,
+        message: &str,
+    ) -> ProblemDataError {
+        match result {
+            Err(error) => error,
+            Ok(_) => panic!("{message}"),
         }
     }
 
@@ -904,14 +954,16 @@ mod tests {
 
     #[test]
     fn empty_candidates_are_rejected() {
-        let error = validate_operation_judge_config(
-            vec![operation("down", 1)],
-            Vec::new(),
-            &["down".to_owned()],
-            100,
-            "judge_config",
-        )
-        .expect_err("empty candidates should be rejected");
+        let error = expect_problem_data_error(
+            validate_operation_judge_config(
+                vec![operation("down", 1)],
+                Vec::new(),
+                &["down".to_owned()],
+                100,
+                "judge_config",
+            ),
+            "empty candidates should be rejected",
+        );
 
         assert_problem_data_error(
             error,
@@ -922,17 +974,19 @@ mod tests {
 
     #[test]
     fn duplicate_candidate_id_is_rejected_after_trimming() {
-        let error = validate_operation_judge_config(
-            vec![operation("down", 1)],
-            vec![
-                candidate("pattern-a", vec![operation("down", 1)]),
-                candidate(" pattern-a ", vec![operation("down", 2)]),
-            ],
-            &["down".to_owned()],
-            100,
-            "judge_config",
-        )
-        .expect_err("duplicate candidate IDs should be rejected");
+        let error = expect_problem_data_error(
+            validate_operation_judge_config(
+                vec![operation("down", 1)],
+                vec![
+                    candidate("pattern-a", vec![operation("down", 1)]),
+                    candidate(" pattern-a ", vec![operation("down", 2)]),
+                ],
+                &["down".to_owned()],
+                100,
+                "judge_config",
+            ),
+            "duplicate candidate IDs should be rejected",
+        );
 
         assert_problem_data_error(
             error,
@@ -943,20 +997,22 @@ mod tests {
 
     #[test]
     fn duplicate_normalized_candidate_operations_are_rejected() {
-        let error = validate_operation_judge_config(
-            vec![operation("down", 2)],
-            vec![
-                candidate(
-                    "pattern-a",
-                    vec![operation("down", 1), operation("down", 1)],
-                ),
-                candidate("pattern-b", vec![operation("down", 2)]),
-            ],
-            &["down".to_owned()],
-            100,
-            "judge_config",
-        )
-        .expect_err("duplicate normalized candidates should be rejected");
+        let error = expect_problem_data_error(
+            validate_operation_judge_config(
+                vec![operation("down", 2)],
+                vec![
+                    candidate(
+                        "pattern-a",
+                        vec![operation("down", 1), operation("down", 1)],
+                    ),
+                    candidate("pattern-b", vec![operation("down", 2)]),
+                ],
+                &["down".to_owned()],
+                100,
+                "judge_config",
+            ),
+            "duplicate normalized candidates should be rejected",
+        );
 
         assert_problem_data_error(
             error,
@@ -967,14 +1023,16 @@ mod tests {
 
     #[test]
     fn correct_operations_must_match_a_candidate() {
-        let error = validate_operation_judge_config(
-            vec![operation("down", 1)],
-            vec![candidate("pattern-a", vec![operation("up", 1)])],
-            &["down".to_owned(), "up".to_owned()],
-            100,
-            "judge_config",
-        )
-        .expect_err("unknown correct operations should be rejected");
+        let error = expect_problem_data_error(
+            validate_operation_judge_config(
+                vec![operation("down", 1)],
+                vec![candidate("pattern-a", vec![operation("up", 1)])],
+                &["down".to_owned(), "up".to_owned()],
+                100,
+                "judge_config",
+            ),
+            "unknown correct operations should be rejected",
+        );
 
         assert_problem_data_error(
             error,
@@ -994,9 +1052,10 @@ mod tests {
 
     #[test]
     fn empty_accepted_answers_are_rejected() {
-        let error =
-            validate_string_judge_config(Vec::new(), string_normalization(), 50, "judge_config")
-                .expect_err("empty accepted answers should be rejected");
+        let error = expect_problem_data_error(
+            validate_string_judge_config(Vec::new(), string_normalization(), 50, "judge_config"),
+            "empty accepted answers should be rejected",
+        );
 
         assert_problem_data_error(
             error,
@@ -1007,13 +1066,15 @@ mod tests {
 
     #[test]
     fn normalized_empty_answer_is_rejected() {
-        let error = validate_string_judge_config(
-            vec!["　 \t".to_owned()],
-            string_normalization(),
-            50,
-            "judge_config",
-        )
-        .expect_err("whitespace-only answer should be rejected");
+        let error = expect_problem_data_error(
+            validate_string_judge_config(
+                vec!["　 \t".to_owned()],
+                string_normalization(),
+                50,
+                "judge_config",
+            ),
+            "whitespace-only answer should be rejected",
+        );
 
         assert_problem_data_error(
             error,
@@ -1024,13 +1085,15 @@ mod tests {
 
     #[test]
     fn answer_length_is_checked_before_normalization() {
-        let error = validate_string_judge_config(
-            vec!["ＡＢＣＤ".to_owned()],
-            string_normalization(),
-            3,
-            "judge_config",
-        )
-        .expect_err("answer over max length should be rejected");
+        let error = expect_problem_data_error(
+            validate_string_judge_config(
+                vec!["ＡＢＣＤ".to_owned()],
+                string_normalization(),
+                3,
+                "judge_config",
+            ),
+            "answer over max length should be rejected",
+        );
 
         assert_problem_data_error(
             error,
@@ -1061,13 +1124,15 @@ mod tests {
 
     #[test]
     fn answers_duplicated_after_normalization_are_rejected() {
-        let error = validate_string_judge_config(
-            vec!["Ａ".to_owned(), "a".to_owned()],
-            string_normalization(),
-            50,
-            "judge_config",
-        )
-        .expect_err("normalized duplicate answers should be rejected");
+        let error = expect_problem_data_error(
+            validate_string_judge_config(
+                vec!["Ａ".to_owned(), "a".to_owned()],
+                string_normalization(),
+                50,
+                "judge_config",
+            ),
+            "normalized duplicate answers should be rejected",
+        );
 
         assert_problem_data_error(
             error,
