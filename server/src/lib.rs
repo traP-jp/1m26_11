@@ -20,6 +20,7 @@ pub(crate) mod auth;
 pub mod config;
 mod error;
 mod handler;
+pub mod problem;
 pub mod repository;
 
 pub const OPENAPI_DOCUMENT: &str = include_str!(concat!(env!("OUT_DIR"), "/openapi-v1.yaml"));
