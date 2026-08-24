@@ -36,6 +36,8 @@ pub enum StartOrResumeRunResponse {
     Status401(models::ErrorResponse),
     /// 対象resourceが存在しないか、現在のAUTH_MODEではendpointが有効ではありません。具体的なerror.codeは未確定です。
     Status404(models::ErrorResponse),
+    /// この部屋をクリア済みのため再挑戦できません
+    Status409(models::ErrorResponse),
     /// server内部エラー。具体的なerror.codeは未確定です。
     Status500_Server(models::ErrorResponse),
 }
