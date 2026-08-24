@@ -60,14 +60,10 @@ async fn mariadb_problem_clear_flow_is_transactional() {
 
     let mut transaction = pool.begin().await.expect("transaction should begin");
 
-    let locked_error = apply_problem_clear_in_transaction(
-        &mut transaction,
-        run_id,
-        second_problem_id,
-        test_time(1),
-    )
-    .await
-    .expect_err("locked problem should be rejected");
+    let locked_error =
+        apply_problem_clear_in_transaction(&mut transaction, run_id, second_problem_id)
+            .await
+            .expect_err("locked problem should be rejected");
 
     assert!(matches!(locked_error, RepositoryError::ProblemLocked));
 
@@ -78,14 +74,10 @@ async fn mariadb_problem_clear_flow_is_transactional() {
 
     let mut transaction = pool.begin().await.expect("transaction should begin");
 
-    let rollback_plan = apply_problem_clear_in_transaction(
-        &mut transaction,
-        run_id,
-        first_problem_id,
-        test_time(1),
-    )
-    .await
-    .expect("first problem should be clearable");
+    let rollback_plan =
+        apply_problem_clear_in_transaction(&mut transaction, run_id, first_problem_id)
+            .await
+            .expect("first problem should be clearable");
 
     assert_eq!(rollback_plan.unlocked_problem_ids, vec![second_problem_id]);
 
@@ -121,16 +113,73 @@ async fn mariadb_problem_clear_flow_is_transactional() {
         vec!["available", "locked", "locked", "available"]
     );
 
-    let mut transaction = pool.begin().await.expect("transaction should begin");
+    let mut blocking_transaction = pool
+        .begin()
+        .await
+        .expect("blocking transaction should begin");
 
-    let first_plan = apply_problem_clear_in_transaction(
-        &mut transaction,
-        run_id,
-        first_problem_id,
-        test_time(1),
+    sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT run_id
+        FROM runs
+        WHERE run_id = ?
+        FOR UPDATE
+        "#,
     )
+    .bind(run_id)
+    .fetch_one(&mut *blocking_transaction)
     .await
-    .expect("first problem should be clearable");
+    .expect("blocking transaction should lock the active run");
+
+    let worker_pool = pool.clone();
+    let (worker_started_sender, worker_started_receiver) = tokio::sync::oneshot::channel();
+
+    let mut waiting_clear_task = tokio::spawn(async move {
+        let mut transaction = worker_pool
+            .begin()
+            .await
+            .expect("waiting transaction should begin");
+
+        worker_started_sender
+            .send(())
+            .expect("test should receive worker start notification");
+
+        let plan = apply_problem_clear_in_transaction(&mut transaction, run_id, first_problem_id)
+            .await
+            .expect("first problem should be clearable after lock release");
+
+        transaction
+            .commit()
+            .await
+            .expect("first clear should commit");
+
+        plan
+    });
+
+    worker_started_receiver
+        .await
+        .expect("waiting transaction should start");
+
+    assert!(
+        tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            &mut waiting_clear_task,
+        )
+        .await
+        .is_err(),
+        "clear transaction should wait for the run lock",
+    );
+
+    let immediately_before_lock_release = Utc::now();
+
+    blocking_transaction
+        .rollback()
+        .await
+        .expect("blocking transaction should release the lock");
+
+    let first_plan = waiting_clear_task
+        .await
+        .expect("waiting clear task should finish");
 
     assert_eq!(first_plan.target_problem_status, ProblemStatus::Cleared);
     assert_eq!(first_plan.unlocked_problem_ids, vec![second_problem_id]);
@@ -143,31 +192,36 @@ async fn mariadb_problem_clear_flow_is_transactional() {
     );
     assert_eq!(first_plan.run_status, RunStatus::Active);
 
-    transaction
-        .commit()
-        .await
-        .expect("first clear should commit");
+    let first_plan_cleared_at = first_plan
+        .problem_cleared_at
+        .expect("newly cleared problem should receive cleared_at");
+
+    assert!(
+        first_plan_cleared_at >= immediately_before_lock_release,
+        "cleared_at must be obtained after the FOR UPDATE lock is released",
+    );
+    assert!(first_plan.elapsed >= Duration::zero());
 
     assert_eq!(
         progress_statuses(&pool, run_id).await,
         vec!["cleared", "available", "locked", "available"]
     );
 
+    let first_stored_cleared_at = problem_cleared_at(&pool, run_id, first_problem_id)
+        .await
+        .expect("first problem should have cleared_at");
+
     assert_eq!(
-        problem_cleared_at(&pool, run_id, first_problem_id).await,
-        Some(test_time(1))
+        first_stored_cleared_at.timestamp_millis(),
+        first_plan_cleared_at.timestamp_millis()
     );
 
     let mut transaction = pool.begin().await.expect("transaction should begin");
 
-    let repeated_plan = apply_problem_clear_in_transaction(
-        &mut transaction,
-        run_id,
-        first_problem_id,
-        test_time(2),
-    )
-    .await
-    .expect("already-cleared problem should be handled successfully");
+    let repeated_plan =
+        apply_problem_clear_in_transaction(&mut transaction, run_id, first_problem_id)
+            .await
+            .expect("already-cleared problem should be handled successfully");
 
     assert_eq!(repeated_plan.problem_cleared_at, None);
     assert!(repeated_plan.unlocked_problem_ids.is_empty());
@@ -179,7 +233,7 @@ async fn mariadb_problem_clear_flow_is_transactional() {
         }
     );
     assert_eq!(repeated_plan.run_status, RunStatus::Active);
-    assert_eq!(repeated_plan.elapsed, Duration::seconds(2));
+    assert!(repeated_plan.elapsed >= first_plan.elapsed);
 
     transaction
         .commit()
@@ -188,19 +242,14 @@ async fn mariadb_problem_clear_flow_is_transactional() {
 
     assert_eq!(
         problem_cleared_at(&pool, run_id, first_problem_id).await,
-        Some(test_time(1))
+        Some(first_stored_cleared_at)
     );
 
     let mut transaction = pool.begin().await.expect("transaction should begin");
 
-    let final_plan = apply_problem_clear_in_transaction(
-        &mut transaction,
-        run_id,
-        final_problem_id,
-        test_time(3),
-    )
-    .await
-    .expect("final problem should be clearable first");
+    let final_plan = apply_problem_clear_in_transaction(&mut transaction, run_id, final_problem_id)
+        .await
+        .expect("final problem should be clearable first");
 
     assert_eq!(final_plan.run_status, RunStatus::Active);
     assert_eq!(
@@ -218,14 +267,10 @@ async fn mariadb_problem_clear_flow_is_transactional() {
 
     let mut transaction = pool.begin().await.expect("transaction should begin");
 
-    let second_plan = apply_problem_clear_in_transaction(
-        &mut transaction,
-        run_id,
-        second_problem_id,
-        test_time(4),
-    )
-    .await
-    .expect("second problem should be clearable");
+    let second_plan =
+        apply_problem_clear_in_transaction(&mut transaction, run_id, second_problem_id)
+            .await
+            .expect("second problem should be clearable");
 
     assert_eq!(second_plan.unlocked_problem_ids, vec![third_problem_id]);
     assert_eq!(second_plan.run_status, RunStatus::Active);
@@ -237,14 +282,9 @@ async fn mariadb_problem_clear_flow_is_transactional() {
 
     let mut transaction = pool.begin().await.expect("transaction should begin");
 
-    let third_plan = apply_problem_clear_in_transaction(
-        &mut transaction,
-        run_id,
-        third_problem_id,
-        test_time(5),
-    )
-    .await
-    .expect("third problem should be clearable");
+    let third_plan = apply_problem_clear_in_transaction(&mut transaction, run_id, third_problem_id)
+        .await
+        .expect("third problem should be clearable");
 
     assert_eq!(
         third_plan.progress,
@@ -254,7 +294,11 @@ async fn mariadb_problem_clear_flow_is_transactional() {
         }
     );
     assert_eq!(third_plan.run_status, RunStatus::Cleared);
-    assert_eq!(third_plan.run_cleared_at, Some(test_time(5)));
+    assert_eq!(third_plan.run_cleared_at, third_plan.problem_cleared_at);
+
+    let expected_run_cleared_at = third_plan
+        .run_cleared_at
+        .expect("completed run should receive cleared_at");
 
     transaction
         .commit()
@@ -264,18 +308,20 @@ async fn mariadb_problem_clear_flow_is_transactional() {
     let (run_status, run_cleared_at) = run_status(&pool, run_id).await;
 
     assert_eq!(run_status, "cleared");
-    assert_eq!(run_cleared_at, Some(test_time(5)));
+
+    let stored_run_cleared_at = run_cleared_at.expect("cleared run should have cleared_at");
+
+    assert_eq!(
+        stored_run_cleared_at.timestamp_millis(),
+        expected_run_cleared_at.timestamp_millis()
+    );
 
     let mut transaction = pool.begin().await.expect("transaction should begin");
 
-    let cleared_run_error = apply_problem_clear_in_transaction(
-        &mut transaction,
-        run_id,
-        third_problem_id,
-        test_time(6),
-    )
-    .await
-    .expect_err("cleared run should no longer be active");
+    let cleared_run_error =
+        apply_problem_clear_in_transaction(&mut transaction, run_id, third_problem_id)
+            .await
+            .expect_err("cleared run should no longer be active");
 
     assert!(matches!(cleared_run_error, RepositoryError::RunNotFound));
 
@@ -296,7 +342,7 @@ async fn connect_test_database() -> MySqlPool {
         MySqlConnectOptions::from_str(&database_url).expect("TEST_DATABASE_URL should be valid");
 
     MySqlPoolOptions::new()
-        .max_connections(1)
+        .max_connections(2)
         .connect_with(options)
         .await
         .expect("test database should be reachable")

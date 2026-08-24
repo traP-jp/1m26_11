@@ -518,7 +518,6 @@ pub(crate) async fn apply_problem_clear_in_transaction(
     transaction: &mut Transaction<'_, MySql>,
     run_id: Uuid,
     target_problem_id: Uuid,
-    now: DateTime<Utc>,
 ) -> Result<ClearProblemPlan, RepositoryError> {
     let run = sqlx::query_as::<_, RunRecord>(
         r#"
@@ -581,6 +580,8 @@ pub(crate) async fn apply_problem_clear_in_transaction(
         room_id: run.room_id,
         started_at: run.started_at,
     };
+
+    let now = Utc::now();
 
     let plan = plan_problem_clear(&active_run, &problems, target_problem_id, now)
         .map_err(RepositoryError::from)?;
