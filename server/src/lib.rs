@@ -19,6 +19,14 @@ use tower_http::trace::TraceLayer;
 pub(crate) mod auth;
 pub mod config;
 mod error;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "query and answer handlers will use the shared clear flow"
+    )
+)]
+pub(crate) mod game_progress;
 mod handler;
 pub mod problem;
 pub mod repository;

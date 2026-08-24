@@ -1,6 +1,10 @@
+use crate::game_progress::{
+    ActiveRunState, ClearProblemError, ClearProblemPlan, ProblemState, ProblemStatus,
+    plan_problem_clear,
+};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use sqlx::{FromRow, MySqlPool};
+use sqlx::{FromRow, MySql, MySqlPool, Transaction};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -8,8 +12,40 @@ use uuid::Uuid;
 pub enum RepositoryError {
     #[error("database operation failed")]
     Database(#[source] sqlx::Error),
+
     #[error("user was not found after get-or-create")]
     UserNotFoundAfterUpsert,
+
+    #[error("active run was not found")]
+    RunNotFound,
+
+    #[error("problem was not found in the active run")]
+    ProblemNotFound,
+
+    #[error("problem is locked")]
+    ProblemLocked,
+
+    #[error("elapsed duration must not be negative")]
+    InvalidElapsed,
+
+    #[error("stored problem status is invalid: {status}")]
+    InvalidProblemStatus { status: String },
+
+    #[error("problem progress update affected an unexpected number of rows")]
+    ProblemProgressUpdateConflict,
+
+    #[error("run update affected an unexpected number of rows")]
+    RunUpdateConflict,
+}
+
+impl From<ClearProblemError> for RepositoryError {
+    fn from(error: ClearProblemError) -> Self {
+        match error {
+            ClearProblemError::ProblemNotFound => Self::ProblemNotFound,
+            ClearProblemError::ProblemLocked => Self::ProblemLocked,
+            ClearProblemError::InvalidElapsed => Self::InvalidElapsed,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -75,6 +111,40 @@ pub struct ProblemProgressRecord {
     pub status: String,
     pub answer_attempt_count: i32,
     pub cleared_at: Option<DateTime<Utc>>,
+}
+
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "query and answer handlers will call the shared transaction flow"
+    )
+)]
+#[derive(FromRow)]
+struct GameProgressProblemRow {
+    problem_id: Uuid,
+    room_id: Uuid,
+    depends_on_problem_id: Option<Uuid>,
+    is_required: bool,
+    status: String,
+}
+
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "query and answer handlers will call the shared transaction flow"
+    )
+)]
+fn parse_problem_status(status: &str) -> Result<ProblemStatus, RepositoryError> {
+    match status {
+        "locked" => Ok(ProblemStatus::Locked),
+        "available" => Ok(ProblemStatus::Available),
+        "cleared" => Ok(ProblemStatus::Cleared),
+        _ => Err(RepositoryError::InvalidProblemStatus {
+            status: status.to_owned(),
+        }),
+    }
 }
 
 #[async_trait]
@@ -430,3 +500,158 @@ impl AuthRepository for SqlxUserRepository {
         Ok(rows.into_iter().map(|r| r.problem_id).collect())
     }
 }
+
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "query and answer handlers will call the shared transaction flow"
+    )
+)]
+/// Locks the active run and its problem progress, calculates the clear plan,
+/// and applies the updates to the supplied transaction.
+///
+/// This function intentionally does not commit or roll back. Query and answer
+/// handlers must include their own records in the same transaction and decide
+/// whether to commit the complete operation.
+pub(crate) async fn apply_problem_clear_in_transaction(
+    transaction: &mut Transaction<'_, MySql>,
+    run_id: Uuid,
+    target_problem_id: Uuid,
+    now: DateTime<Utc>,
+) -> Result<ClearProblemPlan, RepositoryError> {
+    let run = sqlx::query_as::<_, RunRecord>(
+        r#"
+        SELECT
+            run_id AS id,
+            user_id,
+            room_id,
+            status,
+            started_at,
+            cleared_at
+        FROM runs
+        WHERE run_id = ?
+          AND status = 'active'
+        FOR UPDATE
+        "#,
+    )
+    .bind(run_id)
+    .fetch_optional(&mut **transaction)
+    .await
+    .map_err(RepositoryError::Database)?
+    .ok_or(RepositoryError::RunNotFound)?;
+
+    let rows = sqlx::query_as::<_, GameProgressProblemRow>(
+        r#"
+        SELECT
+            problems.problem_id,
+            problems.room_id,
+            problems.depends_on_problem_id,
+            problems.is_required,
+            problem_progress.status
+        FROM problem_progress
+        INNER JOIN problems
+            ON problems.problem_id = problem_progress.problem_id
+        WHERE problem_progress.run_id = ?
+          AND problems.room_id = ?
+        ORDER BY problems.number
+        FOR UPDATE
+        "#,
+    )
+    .bind(run.id)
+    .bind(run.room_id)
+    .fetch_all(&mut **transaction)
+    .await
+    .map_err(RepositoryError::Database)?;
+
+    let mut problems = Vec::with_capacity(rows.len());
+
+    for row in rows {
+        problems.push(ProblemState {
+            problem_id: row.problem_id,
+            room_id: row.room_id,
+            depends_on_problem_id: row.depends_on_problem_id,
+            is_required: row.is_required,
+            status: parse_problem_status(&row.status)?,
+        });
+    }
+
+    let active_run = ActiveRunState {
+        run_id: run.id,
+        room_id: run.room_id,
+        started_at: run.started_at,
+    };
+
+    let plan = plan_problem_clear(&active_run, &problems, target_problem_id, now)
+        .map_err(RepositoryError::from)?;
+
+    if let Some(problem_cleared_at) = plan.problem_cleared_at.as_ref() {
+        let result = sqlx::query(
+            r#"
+            UPDATE problem_progress
+            SET status = 'cleared',
+                cleared_at = ?
+            WHERE run_id = ?
+              AND problem_id = ?
+              AND status = 'available'
+            "#,
+        )
+        .bind(problem_cleared_at.to_owned())
+        .bind(run.id)
+        .bind(target_problem_id)
+        .execute(&mut **transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        if result.rows_affected() != 1 {
+            return Err(RepositoryError::ProblemProgressUpdateConflict);
+        }
+    }
+
+    for unlocked_problem_id in &plan.unlocked_problem_ids {
+        let result = sqlx::query(
+            r#"
+            UPDATE problem_progress
+            SET status = 'available'
+            WHERE run_id = ?
+              AND problem_id = ?
+              AND status = 'locked'
+            "#,
+        )
+        .bind(run.id)
+        .bind(*unlocked_problem_id)
+        .execute(&mut **transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        if result.rows_affected() != 1 {
+            return Err(RepositoryError::ProblemProgressUpdateConflict);
+        }
+    }
+
+    if let Some(run_cleared_at) = plan.run_cleared_at.as_ref() {
+        let result = sqlx::query(
+            r#"
+            UPDATE runs
+            SET status = 'cleared',
+                cleared_at = ?
+            WHERE run_id = ?
+              AND status = 'active'
+            "#,
+        )
+        .bind(run_cleared_at.to_owned())
+        .bind(run.id)
+        .execute(&mut **transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        if result.rows_affected() != 1 {
+            return Err(RepositoryError::RunUpdateConflict);
+        }
+    }
+
+    Ok(plan)
+}
+
+#[cfg(test)]
+mod game_progress_tests;
