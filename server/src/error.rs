@@ -12,7 +12,7 @@ use openapi_generated::{
     types::Object,
 };
 
-use crate::repository::RepositoryError;
+use crate::{problem::ProblemProjectionError, repository::RepositoryError};
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
@@ -40,6 +40,10 @@ pub(crate) enum AppError {
         #[source]
         source: BoxError,
     },
+    #[error("active run was not found")]
+    RunNotFound,
+    #[error("problem is locked")]
+    ProblemLocked,
 }
 
 impl AppError {
@@ -64,6 +68,12 @@ impl AppError {
 
 impl From<RepositoryError> for AppError {
     fn from(error: RepositoryError) -> Self {
+        Self::internal(error)
+    }
+}
+
+impl From<ProblemProjectionError> for AppError {
+    fn from(error: ProblemProjectionError) -> Self {
         Self::internal(error)
     }
 }
@@ -93,6 +103,16 @@ impl IntoResponse for AppError {
                     "internal server error".to_owned(),
                 )
             }
+            Self::RunNotFound => (
+                StatusCode::NOT_FOUND,
+                "RUN_NOT_FOUND",
+                "挑戦中のrunが見つかりません".to_owned(),
+            ),
+            Self::ProblemLocked => (
+                StatusCode::CONFLICT,
+                "PROBLEM_LOCKED",
+                "この問題はまだ解放されていません".to_owned(),
+            ),
         };
 
         let body = ErrorResponse::new(ErrorResponseError::new(
