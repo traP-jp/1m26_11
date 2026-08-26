@@ -5,6 +5,7 @@ use axum::{
     routing::{get, post},
 };
 use config::AuthMode;
+use problem::{AssetUrlResolver, UnconfiguredAssetUrlResolver};
 use repository::AuthRepository;
 use sqlx::MySqlPool;
 use tower_http::trace::TraceLayer;
@@ -37,6 +38,7 @@ pub const OPENAPI_DOCUMENT: &str = include_str!(concat!(env!("OUT_DIR"), "/opena
 pub struct AppState {
     pub(crate) auth_mode: AuthMode,
     pub(crate) auth_repository: Arc<dyn AuthRepository>,
+    pub(crate) asset_url_resolver: Arc<dyn AssetUrlResolver>,
 }
 
 impl AppState {
@@ -45,7 +47,17 @@ impl AppState {
         Self {
             auth_mode,
             auth_repository,
+            asset_url_resolver: Arc::new(UnconfiguredAssetUrlResolver),
         }
+    }
+
+    #[must_use]
+    pub fn with_asset_url_resolver(
+        mut self,
+        asset_url_resolver: Arc<dyn AssetUrlResolver>,
+    ) -> Self {
+        self.asset_url_resolver = asset_url_resolver;
+        self
     }
 }
 
@@ -74,6 +86,10 @@ pub fn app(state: AppState) -> Router {
         .route(
             "/api/rooms/{room_id}/runs",
             post(handler::start_or_resume_run).fallback(handler::method_not_allowed),
+        )
+        .route(
+            "/api/rooms/{room_id}/problems/{problem_id}",
+            get(handler::get_problem).fallback(handler::method_not_allowed),
         )
         .route(
             "/api/rooms/{room_id}/runs/current",
