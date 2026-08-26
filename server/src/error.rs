@@ -33,6 +33,8 @@ pub(crate) enum AppError {
     Conflict(String),
     #[error("{0}")]
     NotFound(String),
+    #[error("run not found")]
+    RunNotFound,
     #[error("method not allowed")]
     MethodNotAllowed,
     #[error("internal server error")]
@@ -53,6 +55,10 @@ impl AppError {
 
     pub(crate) fn not_found(message: impl Into<String>) -> Self {
         Self::NotFound(message.into())
+    }
+
+    pub(crate) fn run_not_found() -> Self {
+        Self::RunNotFound
     }
 
     fn internal(error: impl Error + Send + Sync + 'static) -> Self {
@@ -79,6 +85,11 @@ impl IntoResponse for AppError {
             Self::BadRequest(message) => (StatusCode::BAD_REQUEST, "BAD_REQUEST", message.clone()),
             Self::Conflict(message) => (StatusCode::CONFLICT, "CONFLICT", message.clone()),
             Self::NotFound(message) => (StatusCode::NOT_FOUND, "NOT_FOUND", message.clone()),
+            Self::RunNotFound => (
+                StatusCode::NOT_FOUND,
+                "RUN_NOT_FOUND",
+                "挑戦中のrunが見つかりません".to_owned(),
+            ),
             Self::MethodNotAllowed => (
                 StatusCode::METHOD_NOT_ALLOWED,
                 "METHOD_NOT_ALLOWED",
@@ -130,6 +141,30 @@ mod tests {
 
         let expected: serde_json::Value = serde_json::from_str(include_str!(
             "../../openapi/examples/auth/error-unauthorized.json"
+        ))
+        .expect("OpenAPI fixture should be valid JSON");
+
+        assert_eq!(actual, expected);
+    }
+
+    #[tokio::test]
+    async fn run_not_found_response_matches_openapi_fixture() {
+        let response = AppError::RunNotFound.into_response();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .expect("response body should be readable")
+            .to_bytes();
+
+        let actual: serde_json::Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        let expected: serde_json::Value = serde_json::from_str(include_str!(
+            "../../openapi/examples/runs/error-run-not-found.json"
         ))
         .expect("OpenAPI fixture should be valid JSON");
 

@@ -155,3 +155,44 @@ pub(crate) async fn start_or_resume_run(
 
     Ok(Json(response))
 }
+
+pub(crate) async fn get_current_run(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(room_id): Path<String>,
+) -> Result<Json<ActiveRunResponse>, AppError> {
+    let room_id =
+        Uuid::parse_str(&room_id).map_err(|_| AppError::bad_request("invalid room_id"))?;
+
+    let room = state.auth_repository.find_room_by_id(room_id).await?;
+    if room.is_none() {
+        return Err(AppError::not_found("room not found"));
+    }
+
+    let run = state
+        .auth_repository
+        .find_active_run(user.user_id, room_id)
+        .await?;
+
+    let run_record = match run {
+        Some(active_run) => active_run,
+        None => return Err(AppError::run_not_found()),
+    };
+
+    let cleared_problem_ids = state
+        .auth_repository
+        .find_cleared_problem_ids(run_record.id)
+        .await?;
+
+    let elapsed: chrono::Duration = Utc::now() - run_record.started_at;
+    let elapsed_ms = elapsed.num_milliseconds().max(0) as u64;
+
+    let response = ActiveRunResponse::new(
+        "active".to_owned(),
+        run_record.started_at,
+        elapsed_ms,
+        cleared_problem_ids,
+    );
+
+    Ok(Json(response))
+}

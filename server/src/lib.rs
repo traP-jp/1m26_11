@@ -75,6 +75,10 @@ pub fn app(state: AppState) -> Router {
             "/api/rooms/{room_id}/runs",
             post(handler::start_or_resume_run).fallback(handler::method_not_allowed),
         )
+        .route(
+            "/api/rooms/{room_id}/runs/current",
+            get(handler::get_current_run).fallback(handler::method_not_allowed),
+        )
         .fallback(handler::not_found)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
