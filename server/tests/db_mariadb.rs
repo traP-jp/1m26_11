@@ -796,6 +796,13 @@ async fn mariadb_problem_detail_repository_is_scoped_to_run_and_room() {
     assert_eq!(input_schema["answer"]["type"], "string");
     assert_eq!(input_schema["answer"]["max_length"], 40);
 
+    assert_eq!(record.judge_config.0["type"], "operation_sequence");
+    assert_eq!(
+        record.judge_config.0["correct_operations"][0]["control"],
+        "up"
+    );
+    assert_eq!(record.judge_config.0["correct_operations"][0]["count"], 1);
+
     let wrong_run = repository
         .find_problem_for_run(Uuid::new_v4(), room_id, problem_id)
         .await

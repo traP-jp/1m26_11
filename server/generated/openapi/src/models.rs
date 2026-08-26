@@ -1028,7 +1028,8 @@ pub struct CorrectQueryResponse {
     pub remaining_pattern_count: i32,
 
     #[serde(rename = "query_count")]
-    pub query_count: i32,
+    #[validate(range(min = 0u64))]
+    pub query_count: u64,
 
     /// Note: inline enums are not fully supported by openapi-generator
     #[serde(rename = "problem_status")]
@@ -1043,7 +1044,7 @@ impl CorrectQueryResponse {
         correct: bool,
         normalized_operations: Vec<models::Operation>,
         remaining_pattern_count: i32,
-        query_count: i32,
+        query_count: u64,
         problem_status: String,
     ) -> CorrectQueryResponse {
         CorrectQueryResponse {
@@ -1098,7 +1099,7 @@ impl std::str::FromStr for CorrectQueryResponse {
             pub correct: Vec<bool>,
             pub normalized_operations: Vec<Vec<models::Operation>>,
             pub remaining_pattern_count: Vec<i32>,
-            pub query_count: Vec<i32>,
+            pub query_count: Vec<u64>,
             pub problem_status: Vec<String>,
         }
 
@@ -1129,7 +1130,7 @@ impl std::str::FromStr for CorrectQueryResponse {
                     #[allow(clippy::redundant_clone)]
                     "remaining_pattern_count" => intermediate_rep.remaining_pattern_count.push(<i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
                     #[allow(clippy::redundant_clone)]
-                    "query_count" => intermediate_rep.query_count.push(<i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    "query_count" => intermediate_rep.query_count.push(<u64 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
                     #[allow(clippy::redundant_clone)]
                     "problem_status" => intermediate_rep.problem_status.push(<String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
                     _ => return std::result::Result::Err("Unexpected key while parsing CorrectQueryResponse".to_string())
@@ -2031,7 +2032,8 @@ pub struct IncorrectQueryResponse {
     pub remaining_pattern_count: i32,
 
     #[serde(rename = "query_count")]
-    pub query_count: i32,
+    #[validate(range(min = 0u64))]
+    pub query_count: u64,
 
     /// Note: inline enums are not fully supported by openapi-generator
     #[serde(rename = "problem_status")]
@@ -2046,7 +2048,7 @@ impl IncorrectQueryResponse {
         correct: bool,
         normalized_operations: Vec<models::Operation>,
         remaining_pattern_count: i32,
-        query_count: i32,
+        query_count: u64,
         problem_status: String,
     ) -> IncorrectQueryResponse {
         IncorrectQueryResponse {
@@ -2101,7 +2103,7 @@ impl std::str::FromStr for IncorrectQueryResponse {
             pub correct: Vec<bool>,
             pub normalized_operations: Vec<Vec<models::Operation>>,
             pub remaining_pattern_count: Vec<i32>,
-            pub query_count: Vec<i32>,
+            pub query_count: Vec<u64>,
             pub problem_status: Vec<String>,
         }
 
@@ -2132,7 +2134,7 @@ impl std::str::FromStr for IncorrectQueryResponse {
                     #[allow(clippy::redundant_clone)]
                     "remaining_pattern_count" => intermediate_rep.remaining_pattern_count.push(<i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
                     #[allow(clippy::redundant_clone)]
-                    "query_count" => intermediate_rep.query_count.push(<i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    "query_count" => intermediate_rep.query_count.push(<u64 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
                     #[allow(clippy::redundant_clone)]
                     "problem_status" => intermediate_rep.problem_status.push(<String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
                     _ => return std::result::Result::Err("Unexpected key while parsing IncorrectQueryResponse".to_string())
