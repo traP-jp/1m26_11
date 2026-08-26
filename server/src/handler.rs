@@ -10,11 +10,14 @@ use axum::{
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar};
 use chrono::Utc;
-use openapi_generated::models::{ActiveRunResponse, GuestLoginRequest, GuestLoginResponse, User};
+use openapi_generated::models::{
+    ActiveRunResponse, GuestLoginRequest, GuestLoginResponse, ProblemResponse, User,
+};
 use uuid::Uuid;
 
 use crate::{
     AppState, OPENAPI_DOCUMENT, auth::current_user::CurrentUser, config::AuthMode, error::AppError,
+    problem::build_problem_response,
 };
 
 pub(crate) async fn ping() -> Response {
@@ -152,6 +155,38 @@ pub(crate) async fn start_or_resume_run(
         elapsed_ms,
         cleared_problem_ids,
     );
+
+    Ok(Json(response))
+}
+
+pub(crate) async fn get_problem(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path((room_id, problem_id)): Path<(String, String)>,
+) -> Result<Json<ProblemResponse>, AppError> {
+    let room_id =
+        Uuid::parse_str(&room_id).map_err(|_| AppError::bad_request("invalid room_id"))?;
+
+    let problem_id =
+        Uuid::parse_str(&problem_id).map_err(|_| AppError::bad_request("invalid problem_id"))?;
+
+    let run = state
+        .auth_repository
+        .find_active_run(user.user_id, room_id)
+        .await?
+        .ok_or(AppError::RunNotFound)?;
+
+    let problem = state
+        .auth_repository
+        .find_problem_for_run(run.id, room_id, problem_id)
+        .await?
+        .ok_or_else(|| AppError::not_found("problem not found"))?;
+
+    if problem.status == "locked" {
+        return Err(AppError::ProblemLocked);
+    }
+
+    let response = build_problem_response(problem, state.asset_url_resolver.as_ref())?;
 
     Ok(Json(response))
 }

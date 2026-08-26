@@ -1,6 +1,9 @@
-use crate::game_progress::{
-    ActiveRunState, ClearProblemError, ClearProblemPlan, ProblemState, ProblemStatus,
-    plan_problem_clear,
+use crate::{
+    game_progress::{
+        ActiveRunState, ClearProblemError, ClearProblemPlan, ProblemState, ProblemStatus,
+        plan_problem_clear,
+    },
+    problem::{Asset, InputSchema},
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -113,6 +116,20 @@ pub struct ProblemProgressRecord {
     pub cleared_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, FromRow)]
+pub struct ProblemDetailRecord {
+    pub id: Uuid,
+    pub number: i32,
+    pub problem_type: String,
+    pub title: String,
+    pub body_markdown: String,
+    pub submission_type: String,
+    pub assets: sqlx::types::Json<Vec<Asset>>,
+    pub input_schema: sqlx::types::Json<InputSchema>,
+    pub status: String,
+    pub hint_count: i64,
+}
+
 #[cfg_attr(
     not(test),
     expect(
@@ -189,6 +206,15 @@ pub trait AuthRepository: Send + Sync {
         _room_id: Uuid,
     ) -> Result<Option<RunRecord>, RepositoryError> {
         unimplemented!("find_active_run is not implemented for this repository")
+    }
+
+    async fn find_problem_for_run(
+        &self,
+        _run_id: Uuid,
+        _room_id: Uuid,
+        _problem_id: Uuid,
+    ) -> Result<Option<ProblemDetailRecord>, RepositoryError> {
+        unimplemented!("find_problem_for_run is not implemented for this repository")
     }
 
     async fn create_run(
@@ -362,6 +388,42 @@ impl AuthRepository for SqlxUserRepository {
         )
         .bind(user_id)
         .bind(room_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)
+    }
+
+    async fn find_problem_for_run(
+        &self,
+        run_id: Uuid,
+        room_id: Uuid,
+        problem_id: Uuid,
+    ) -> Result<Option<ProblemDetailRecord>, RepositoryError> {
+        sqlx::query_as::<_, ProblemDetailRecord>(
+            r#"
+            SELECT
+                problems.problem_id AS id,
+                problems.number,
+                problems.problem_type,
+                problems.title,
+                problems.body_markdown,
+                problems.submission_type,
+                problems.assets,
+                problems.input_schema,
+                problem_progress.status,
+                CAST(JSON_LENGTH(problems.hints) AS SIGNED) AS hint_count
+            FROM problems
+            INNER JOIN problem_progress
+                ON problem_progress.problem_id = problems.problem_id
+               AND problem_progress.run_id = ?
+            WHERE problems.room_id = ?
+              AND problems.problem_id = ?
+            LIMIT 1
+            "#,
+        )
+        .bind(run_id)
+        .bind(room_id)
+        .bind(problem_id)
         .fetch_optional(&self.pool)
         .await
         .map_err(RepositoryError::Database)
