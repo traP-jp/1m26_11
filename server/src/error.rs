@@ -12,7 +12,10 @@ use openapi_generated::{
     types::Object,
 };
 
-use crate::{problem::ProblemProjectionError, repository::RepositoryError};
+use crate::{
+    problem::{ProblemProjectionError, QueryJudgeError},
+    repository::RepositoryError,
+};
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
@@ -44,6 +47,10 @@ pub(crate) enum AppError {
     RunNotFound,
     #[error("problem is locked")]
     ProblemLocked,
+    #[error("problem is already cleared")]
+    ProblemAlreadyCleared,
+    #[error("query validation failed")]
+    ValidationError,
 }
 
 impl AppError {
@@ -72,13 +79,33 @@ impl AppError {
 
 impl From<RepositoryError> for AppError {
     fn from(error: RepositoryError) -> Self {
-        Self::internal(error)
+        match error {
+            RepositoryError::RunNotFound => Self::RunNotFound,
+            RepositoryError::ProblemNotFound => Self::not_found("problem not found"),
+            RepositoryError::ProblemLocked => Self::ProblemLocked,
+            RepositoryError::ProblemAlreadyCleared => Self::ProblemAlreadyCleared,
+            error => Self::internal(error),
+        }
     }
 }
 
 impl From<ProblemProjectionError> for AppError {
     fn from(error: ProblemProjectionError) -> Self {
         Self::internal(error)
+    }
+}
+
+impl From<QueryJudgeError> for AppError {
+    fn from(error: QueryJudgeError) -> Self {
+        match error {
+            error @ QueryJudgeError::InvalidStoredJudgeConfig => Self::internal(error),
+            QueryJudgeError::InvalidSource
+            | QueryJudgeError::EmptyOperations
+            | QueryJudgeError::NonPositiveCount
+            | QueryJudgeError::UnknownControl
+            | QueryJudgeError::OperationLimitExceeded
+            | QueryJudgeError::WrongSubmissionType => Self::ValidationError,
+        }
     }
 }
 
@@ -117,6 +144,16 @@ impl IntoResponse for AppError {
                 "PROBLEM_LOCKED",
                 "この問題はまだ解放されていません".to_owned(),
             ),
+            Self::ProblemAlreadyCleared => (
+                StatusCode::CONFLICT,
+                "PROBLEM_ALREADY_CLEARED",
+                "この問題はすでにクリア済みですわ".to_owned(),
+            ),
+            Self::ValidationError => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "VALIDATION_ERROR",
+                "入力内容が正しくありませんわ".to_owned(),
+            ),
         };
 
         let body = ErrorResponse::new(ErrorResponseError::new(
@@ -136,11 +173,14 @@ mod tests {
 
     use super::AppError;
 
-    #[tokio::test]
-    async fn unauthorized_response_matches_openapi_fixture() {
-        let response = AppError::Unauthorized.into_response();
+    async fn assert_response_matches_fixture(
+        error: AppError,
+        expected_status: StatusCode,
+        expected_fixture: &str,
+    ) {
+        let response = error.into_response();
 
-        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(response.status(), expected_status);
 
         let body = response
             .into_body()
@@ -152,35 +192,49 @@ mod tests {
         let actual: serde_json::Value =
             serde_json::from_slice(&body).expect("response body should be valid JSON");
 
-        let expected: serde_json::Value = serde_json::from_str(include_str!(
-            "../../openapi/examples/auth/error-unauthorized.json"
-        ))
-        .expect("OpenAPI fixture should be valid JSON");
+        let expected: serde_json::Value =
+            serde_json::from_str(expected_fixture).expect("OpenAPI fixture should be valid JSON");
 
         assert_eq!(actual, expected);
     }
 
     #[tokio::test]
+    async fn unauthorized_response_matches_openapi_fixture() {
+        assert_response_matches_fixture(
+            AppError::Unauthorized,
+            StatusCode::UNAUTHORIZED,
+            include_str!("../../openapi/examples/auth/error-unauthorized.json"),
+        )
+        .await;
+    }
+
+    #[tokio::test]
     async fn run_not_found_response_matches_openapi_fixture() {
-        let response = AppError::RunNotFound.into_response();
+        assert_response_matches_fixture(
+            AppError::RunNotFound,
+            StatusCode::NOT_FOUND,
+            include_str!("../../openapi/examples/runs/error-run-not-found.json"),
+        )
+        .await;
+    }
 
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    #[tokio::test]
+    async fn problem_already_cleared_response_matches_openapi_fixture() {
+        assert_response_matches_fixture(
+            AppError::ProblemAlreadyCleared,
+            StatusCode::CONFLICT,
+            include_str!("../../openapi/examples/problems/error-problem-already-cleared.json"),
+        )
+        .await;
+    }
 
-        let body = response
-            .into_body()
-            .collect()
-            .await
-            .expect("response body should be readable")
-            .to_bytes();
-
-        let actual: serde_json::Value =
-            serde_json::from_slice(&body).expect("response body should be valid JSON");
-
-        let expected: serde_json::Value = serde_json::from_str(include_str!(
-            "../../openapi/examples/runs/error-run-not-found.json"
-        ))
-        .expect("OpenAPI fixture should be valid JSON");
-
-        assert_eq!(actual, expected);
+    #[tokio::test]
+    async fn validation_error_response_matches_openapi_fixture() {
+        assert_response_matches_fixture(
+            AppError::ValidationError,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            include_str!("../../openapi/examples/queries/error-validation.json"),
+        )
+        .await;
     }
 }

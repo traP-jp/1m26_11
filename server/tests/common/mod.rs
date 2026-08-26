@@ -16,7 +16,8 @@ use server::{
     config::AuthMode,
     problem::{Asset, AssetUrlResolveError, AssetUrlResolver, InputSchema},
     repository::{
-        AuthRepository, AuthUserRecord, ProblemDetailRecord, RepositoryError, RoomRecord, RunRecord,
+        AuthRepository, AuthUserRecord, ProblemDetailRecord, QuerySubmission,
+        QuerySubmissionResult, RepositoryError, RoomRecord, RunRecord,
     },
 };
 use sqlx::{
@@ -63,6 +64,42 @@ pub fn problem_detail_record(id: Uuid, status: &str) -> ProblemDetailRecord {
             }))
             .expect("problem input schema should be valid"),
         ),
+        judge_config: Json(json!({
+            "type": "operation_sequence",
+            "correct_operations": [
+                {
+                    "control": "down",
+                    "count": 16
+                },
+                {
+                    "control": "right",
+                    "count": 2
+                },
+                {
+                    "control": "up",
+                    "count": 1
+                }
+            ],
+            "candidates": [
+                {
+                    "candidate_id": "correct",
+                    "operations": [
+                        {
+                            "control": "down",
+                            "count": 16
+                        },
+                        {
+                            "control": "right",
+                            "count": 2
+                        },
+                        {
+                            "control": "up",
+                            "count": 1
+                        }
+                    ]
+                }
+            ]
+        })),
         status: status.to_owned(),
         hint_count: 2,
     }
@@ -240,6 +277,22 @@ impl AuthRepository for StubAuthRepository {
             Ok(Some(problem_detail_record(problem_id, "cleared")))
         } else {
             Ok(None)
+        }
+    }
+    async fn record_query_judgement(
+        &self,
+        submission: QuerySubmission,
+    ) -> Result<QuerySubmissionResult, RepositoryError> {
+        if submission.is_correct {
+            Ok(QuerySubmissionResult {
+                query_count: 5,
+                problem_status: "cleared".to_owned(),
+            })
+        } else {
+            Ok(QuerySubmissionResult {
+                query_count: 4,
+                problem_status: "available".to_owned(),
+            })
         }
     }
 }

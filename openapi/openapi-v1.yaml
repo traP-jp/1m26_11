@@ -162,9 +162,9 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          $ref: "#/components/responses/ProblemLocked"
+          $ref: "#/components/responses/QueryConflict"
         "422":
-          $ref: "#/components/responses/UnprocessableEntity"
+          $ref: "#/components/responses/QueryValidationError"
         "500":
           $ref: "#/components/responses/InternalServerError"
   /api/rooms/{room_id}/problems/{problem_id}/answers:
@@ -237,6 +237,9 @@ components:
             serial_operations:
               summary: シリアル入力から作った操作列
               externalValue: ./examples/queries/request-serial.json
+            invalid_source:
+              summary: 許可されていない入力元
+              externalValue: ./examples/queries/request-invalid-source.json
     SubmitAnswer:
       required: true
       content:
@@ -389,6 +392,30 @@ components:
             problem_locked:
               summary: lockedな問題を操作した場合
               externalValue: ./examples/problems/error-problem-locked.json
+    QueryConflict:
+      description: 操作列を送信できない問題状態です。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            problem_locked:
+              summary: lockedな問題へ送信した場合
+              externalValue: ./examples/problems/error-problem-locked.json
+            problem_already_cleared:
+              summary: cleared済み問題へ送信した場合
+              externalValue: ./examples/problems/error-problem-already-cleared.json
+    QueryValidationError:
+      description: 操作列またはsourceが問題ごとの制約に違反しています。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            validation_error:
+              summary: 操作列またはsourceが不正な場合
+              externalValue: ./examples/queries/error-validation.json
+
     UnprocessableEntity:
       description: 文字数超過など入力内容が不正です。具体的なerror.codeは未確定です。
       content:

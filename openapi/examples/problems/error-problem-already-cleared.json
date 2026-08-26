@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "PROBLEM_ALREADY_CLEARED",
+    "message": "この問題はすでにクリア済みですわ",
+    "details": {}
+  }
+}

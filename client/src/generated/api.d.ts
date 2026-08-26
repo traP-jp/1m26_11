@@ -513,6 +513,24 @@ export interface components {
         'application/json': components['schemas']['ErrorResponse']
       }
     }
+    /** @description 操作列を送信できない問題状態です。 */
+    QueryConflict: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 操作列またはsourceが問題ごとの制約に違反しています。 */
+    QueryValidationError: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
     /** @description 文字数超過など入力内容が不正です。具体的なerror.codeは未確定です。 */
     UnprocessableEntity: {
       headers: {
@@ -741,8 +759,8 @@ export interface operations {
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthorized']
       404: components['responses']['NotFound']
-      409: components['responses']['ProblemLocked']
-      422: components['responses']['UnprocessableEntity']
+      409: components['responses']['QueryConflict']
+      422: components['responses']['QueryValidationError']
       500: components['responses']['InternalServerError']
     }
   }
