@@ -18,13 +18,16 @@ use server::{
     AppState, app,
     config::AuthMode,
     migrate,
+    problem::{Asset, AssetUrlResolveError, AssetUrlResolver, InputSchema},
     repository::{
-        AuthRepository, AuthUserRecord, RepositoryError, RoomRecord, RunRecord, SqlxUserRepository,
+        AuthRepository, AuthUserRecord, ProblemDetailRecord, RepositoryError, RoomRecord,
+        RunRecord, SqlxUserRepository,
     },
 };
 use sqlx::{
     MySqlPool,
     mysql::{MySqlConnectOptions, MySqlPoolOptions},
+    types::Json,
 };
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -34,6 +37,54 @@ const MOCK_RESUME_ROOM_ID: &str = "11111111-1111-4111-8111-111111111111";
 const MOCK_NEW_ROOM_ID: &str = "33333333-3333-4333-8333-333333333333";
 const MOCK_CLEARED_ROOM_ID: &str = "44444444-4444-4444-8444-444444444444";
 const MOCK_CLEARED_PROBLEM_ID: &str = "22222222-2222-4222-8222-222222222221";
+const MOCK_LOCKED_PROBLEM_ID: &str = "22222222-2222-4222-8222-222222222222";
+const MOCK_CLEARED_DETAIL_PROBLEM_ID: &str = "22222222-2222-4222-8222-222222222223";
+const MOCK_DATABASE_ERROR_PROBLEM_ID: &str = "22222222-2222-4222-8222-222222222224";
+
+fn problem_detail_record(id: Uuid, status: &str) -> ProblemDetailRecord {
+    ProblemDetailRecord {
+        id,
+        number: 1,
+        problem_type: "small".to_owned(),
+        title: "生年月日".to_owned(),
+        body_markdown: "問題文です".to_owned(),
+        submission_type: "operation_sequence".to_owned(),
+        assets: Json(vec![Asset {
+            asset_type: "image".to_owned(),
+            object_key: "private/problem-assets/birthday.png".to_owned(),
+            alt: "問題資料".to_owned(),
+        }]),
+        input_schema: Json(
+            serde_json::from_value::<InputSchema>(json!({
+                "query": {
+                    "type": "operation_sequence",
+                    "allowed_controls": ["down", "right", "up"],
+                    "max_operations": 100
+                },
+                "answer": {
+                    "type": "string",
+                    "max_length": 50
+                }
+            }))
+            .expect("problem input schema should be valid"),
+        ),
+        status: status.to_owned(),
+        hint_count: 2,
+    }
+}
+
+struct StubAssetUrlResolver;
+
+impl AssetUrlResolver for StubAssetUrlResolver {
+    fn resolve(&self, object_key: &str) -> Result<String, AssetUrlResolveError> {
+        assert_eq!(
+            object_key, "private/problem-assets/birthday.png",
+            "expected object key should be passed to the resolver",
+        );
+
+        Ok("/assets/problems/birthday.png".to_owned())
+    }
+}
 
 struct StubAuthRepository;
 
@@ -160,6 +211,40 @@ impl AuthRepository for StubAuthRepository {
             Ok(vec![Uuid::from_str(MOCK_CLEARED_PROBLEM_ID).unwrap()])
         } else {
             Ok(vec![])
+        }
+    }
+
+    async fn find_problem_for_run(
+        &self,
+        run_id: Uuid,
+        room_id: Uuid,
+        problem_id: Uuid,
+    ) -> Result<Option<ProblemDetailRecord>, RepositoryError> {
+        let active_run_id = Uuid::from_str(MOCK_RESUME_ROOM_ID).unwrap();
+
+        if run_id != active_run_id || room_id != active_run_id {
+            return Ok(None);
+        }
+
+        let available_id = Uuid::from_str(MOCK_CLEARED_PROBLEM_ID).unwrap();
+        let locked_id = Uuid::from_str(MOCK_LOCKED_PROBLEM_ID).unwrap();
+        let cleared_id = Uuid::from_str(MOCK_CLEARED_DETAIL_PROBLEM_ID).unwrap();
+        let database_error_id = Uuid::from_str(MOCK_DATABASE_ERROR_PROBLEM_ID).unwrap();
+
+        if problem_id == database_error_id {
+            return Err(RepositoryError::Database(sqlx::Error::Protocol(
+                "simulated private database failure".to_owned(),
+            )));
+        }
+
+        if problem_id == available_id {
+            Ok(Some(problem_detail_record(problem_id, "available")))
+        } else if problem_id == locked_id {
+            Ok(Some(problem_detail_record(problem_id, "locked")))
+        } else if problem_id == cleared_id {
+            Ok(Some(problem_detail_record(problem_id, "cleared")))
+        } else {
+            Ok(None)
         }
     }
 }
@@ -886,6 +971,11 @@ fn test_app() -> Router {
     app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)))
 }
 
+fn problem_test_app() -> Router {
+    app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository))
+        .with_asset_url_resolver(Arc::new(StubAssetUrlResolver)))
+}
+
 async fn request(app: &Router, request: Request<Body>) -> axum::response::Response {
     app.clone().oneshot(request).await.unwrap()
 }
@@ -1238,4 +1328,478 @@ async fn start_run_already_cleared_returns_409() {
     let body: serde_json::Value = body_json(response).await;
     assert_eq!(body["error"]["code"], "CONFLICT");
     assert_eq!(body["error"]["message"], "room already cleared");
+}
+
+#[tokio::test]
+async fn get_available_problem_matches_openapi_fixture() {
+    let app = problem_test_app();
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_RESUME_ROOM_ID}/problems/{MOCK_CLEARED_PROBLEM_ID}"
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
+
+    let actual: serde_json::Value = body_json(response).await;
+
+    let expected: serde_json::Value = serde_json::from_str(include_str!(
+        "../../openapi/examples/problems/available-response.json"
+    ))
+    .expect("OpenAPI fixture should be valid JSON");
+
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn get_cleared_problem_succeeds() {
+    let app = problem_test_app();
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_RESUME_ROOM_ID}/problems/{MOCK_CLEARED_DETAIL_PROBLEM_ID}"
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
+
+    let body: serde_json::Value = body_json(response).await;
+
+    assert_eq!(body["id"], MOCK_CLEARED_DETAIL_PROBLEM_ID);
+    assert_eq!(body["status"], "cleared");
+}
+
+#[tokio::test]
+async fn get_locked_problem_matches_openapi_fixture() {
+    let app = problem_test_app();
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_RESUME_ROOM_ID}/problems/{MOCK_LOCKED_PROBLEM_ID}"
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
+
+    let actual: serde_json::Value = body_json(response).await;
+
+    let expected: serde_json::Value = serde_json::from_str(include_str!(
+        "../../openapi/examples/problems/error-problem-locked.json"
+    ))
+    .expect("OpenAPI fixture should be valid JSON");
+
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn get_missing_problem_returns_404() {
+    let app = problem_test_app();
+    let missing_problem_id = "99999999-9999-4999-8999-999999999999";
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_RESUME_ROOM_ID}/problems/{missing_problem_id}"
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
+
+    let body: serde_json::Value = body_json(response).await;
+
+    assert_eq!(body["error"]["code"], "NOT_FOUND");
+    assert_eq!(body["error"]["message"], "problem not found");
+    assert_eq!(body["error"]["details"], json!({}));
+}
+
+#[tokio::test]
+async fn get_problem_unauthorized_matches_openapi_fixture() {
+    let app = problem_test_app();
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_RESUME_ROOM_ID}/problems/{MOCK_CLEARED_PROBLEM_ID}"
+    ))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
+
+    let actual: serde_json::Value = body_json(response).await;
+
+    let expected: serde_json::Value = serde_json::from_str(include_str!(
+        "../../openapi/examples/auth/error-unauthorized.json"
+    ))
+    .expect("OpenAPI fixture should be valid JSON");
+
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn get_problem_without_active_run_matches_openapi_fixture() {
+    let app = problem_test_app();
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_NEW_ROOM_ID}/problems/{MOCK_CLEARED_PROBLEM_ID}"
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
+
+    let actual: serde_json::Value = body_json(response).await;
+
+    let expected: serde_json::Value = serde_json::from_str(include_str!(
+        "../../openapi/examples/runs/error-run-not-found.json"
+    ))
+    .expect("OpenAPI fixture should be valid JSON");
+
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn get_problem_invalid_room_id_returns_400() {
+    let app = problem_test_app();
+
+    let req = Request::get(format!(
+        "/api/rooms/not-a-uuid/problems/{MOCK_CLEARED_PROBLEM_ID}"
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
+
+    let body: serde_json::Value = body_json(response).await;
+
+    assert_eq!(body["error"]["code"], "BAD_REQUEST");
+    assert_eq!(body["error"]["message"], "invalid room_id");
+    assert_eq!(body["error"]["details"], json!({}));
+}
+
+#[tokio::test]
+async fn get_problem_invalid_problem_id_returns_400() {
+    let app = problem_test_app();
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_RESUME_ROOM_ID}/problems/not-a-uuid"
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
+
+    let body: serde_json::Value = body_json(response).await;
+
+    assert_eq!(body["error"]["code"], "BAD_REQUEST");
+    assert_eq!(body["error"]["message"], "invalid problem_id");
+    assert_eq!(body["error"]["details"], json!({}));
+}
+
+#[tokio::test]
+async fn get_problem_repository_error_returns_500_without_details() {
+    let app = problem_test_app();
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_RESUME_ROOM_ID}/problems/{MOCK_DATABASE_ERROR_PROBLEM_ID}"
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
+
+    let body = body_bytes(response).await;
+    let body_text = std::str::from_utf8(&body).expect("response body should be UTF-8");
+
+    assert!(
+        !body_text.contains("simulated private database failure"),
+        "database error details must not be exposed"
+    );
+
+    let body: serde_json::Value =
+        serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+    assert_eq!(body["error"]["details"], json!({}));
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_problem_detail_repository_is_scoped_to_run_and_room() {
+    let pool = connect_test_database().await;
+
+    migrate(&pool).await.expect("migration should succeed");
+
+    let user_id = Uuid::new_v4();
+    let room_id = Uuid::new_v4();
+    let problem_id = Uuid::new_v4();
+    let run_id = Uuid::new_v4();
+
+    let room_number = (room_id.as_u128() % 2_000_000_000) as i32 + 1;
+    let provider_subject = format!("problem-detail-test-{user_id}");
+
+    sqlx::query(
+        r#"
+        INSERT INTO users (
+            user_id,
+            auth_provider,
+            provider_subject,
+            display_name
+        )
+        VALUES (?, 'demo', ?, 'problem-detail-test-user')
+        "#,
+    )
+    .bind(user_id)
+    .bind(&provider_subject)
+    .execute(&pool)
+    .await
+    .expect("test user should be inserted");
+
+    sqlx::query(
+        r#"
+        INSERT INTO rooms (
+            room_id,
+            number,
+            name,
+            genre,
+            description,
+            is_published
+        )
+        VALUES (
+            ?, ?, 'problem-detail-test-room',
+            'test', 'problem detail repository test', 1
+        )
+        "#,
+    )
+    .bind(room_id)
+    .bind(room_number)
+    .execute(&pool)
+    .await
+    .expect("test room should be inserted");
+
+    sqlx::query(
+        r#"
+        INSERT INTO problems (
+            problem_id,
+            room_id,
+            number,
+            problem_type,
+            title,
+            body_markdown,
+            submission_type,
+            assets,
+            input_schema,
+            hints,
+            judge_config,
+            depends_on_problem_id,
+            is_required
+        )
+        VALUES (
+            ?, ?, 1, 'small', 'MariaDB test problem',
+            'MariaDBから取得する問題文です',
+            'operation_sequence',
+            ?, ?, ?, ?, NULL, 1
+        )
+        "#,
+    )
+    .bind(problem_id)
+    .bind(room_id)
+    .bind(Json(json!([
+        {
+            "type": "image",
+            "object_key": "private/problem-assets/mariadb-test.png",
+            "alt": "MariaDBテスト画像"
+        }
+    ])))
+    .bind(Json(json!({
+        "query": {
+            "type": "operation_sequence",
+            "allowed_controls": ["up", "down"],
+            "max_operations": 20
+        },
+        "answer": {
+            "type": "string",
+            "max_length": 40
+        }
+    })))
+    .bind(Json(json!([
+        {
+            "body_markdown": "非公開ヒント1"
+        },
+        {
+            "body_markdown": "非公開ヒント2"
+        }
+    ])))
+    .bind(Json(json!({
+        "type": "operation_sequence",
+        "correct_operations": [
+            {
+                "control": "up",
+                "count": 1
+            }
+        ],
+        "candidates": []
+    })))
+    .execute(&pool)
+    .await
+    .expect("test problem should be inserted");
+
+    sqlx::query(
+        r#"
+        INSERT INTO runs (
+            run_id,
+            user_id,
+            room_id,
+            status,
+            started_at,
+            cleared_at
+        )
+        VALUES (?, ?, ?, 'active', CURRENT_TIMESTAMP(3), NULL)
+        "#,
+    )
+    .bind(run_id)
+    .bind(user_id)
+    .bind(room_id)
+    .execute(&pool)
+    .await
+    .expect("test run should be inserted");
+
+    sqlx::query(
+        r#"
+        INSERT INTO problem_progress (
+            run_id,
+            problem_id,
+            status,
+            answer_attempt_count,
+            cleared_at
+        )
+        VALUES (?, ?, 'available', 0, NULL)
+        "#,
+    )
+    .bind(run_id)
+    .bind(problem_id)
+    .execute(&pool)
+    .await
+    .expect("test problem progress should be inserted");
+
+    let repository = SqlxUserRepository::new(pool.clone());
+
+    let record = repository
+        .find_problem_for_run(run_id, room_id, problem_id)
+        .await
+        .expect("problem lookup should succeed")
+        .expect("problem should be found for the active run");
+
+    assert_eq!(record.id, problem_id);
+    assert_eq!(record.number, 1);
+    assert_eq!(record.problem_type, "small");
+    assert_eq!(record.title, "MariaDB test problem");
+    assert_eq!(record.body_markdown, "MariaDBから取得する問題文です");
+    assert_eq!(record.submission_type, "operation_sequence");
+    assert_eq!(record.status, "available");
+    assert_eq!(record.hint_count, 2);
+
+    assert_eq!(record.assets.0.len(), 1);
+    assert_eq!(record.assets.0[0].asset_type, "image");
+    assert_eq!(
+        record.assets.0[0].object_key,
+        "private/problem-assets/mariadb-test.png"
+    );
+    assert_eq!(record.assets.0[0].alt, "MariaDBテスト画像");
+
+    let input_schema =
+        serde_json::to_value(&record.input_schema.0).expect("input schema should serialize");
+
+    assert_eq!(input_schema["query"]["type"], "operation_sequence");
+    assert_eq!(input_schema["query"]["max_operations"], 20);
+    assert_eq!(input_schema["answer"]["type"], "string");
+    assert_eq!(input_schema["answer"]["max_length"], 40);
+
+    let wrong_run = repository
+        .find_problem_for_run(Uuid::new_v4(), room_id, problem_id)
+        .await
+        .expect("lookup with another run should succeed");
+
+    assert!(
+        wrong_run.is_none(),
+        "problem must not be returned for another run"
+    );
+
+    let wrong_room = repository
+        .find_problem_for_run(run_id, Uuid::new_v4(), problem_id)
+        .await
+        .expect("lookup with another room should succeed");
+
+    assert!(
+        wrong_room.is_none(),
+        "problem must not be returned for another room"
+    );
+
+    let wrong_problem = repository
+        .find_problem_for_run(run_id, room_id, Uuid::new_v4())
+        .await
+        .expect("lookup with another problem should succeed");
+
+    assert!(
+        wrong_problem.is_none(),
+        "unknown problem must not be returned"
+    );
+
+    sqlx::query("DELETE FROM runs WHERE run_id = ?")
+        .bind(run_id)
+        .execute(&pool)
+        .await
+        .expect("test run should be removed");
+
+    sqlx::query("DELETE FROM problems WHERE problem_id = ?")
+        .bind(problem_id)
+        .execute(&pool)
+        .await
+        .expect("test problem should be removed");
+
+    sqlx::query("DELETE FROM rooms WHERE room_id = ?")
+        .bind(room_id)
+        .execute(&pool)
+        .await
+        .expect("test room should be removed");
+
+    sqlx::query("DELETE FROM users WHERE user_id = ?")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("test user should be removed");
+
+    pool.close().await;
 }
