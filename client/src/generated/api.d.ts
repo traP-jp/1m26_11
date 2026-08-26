@@ -350,6 +350,7 @@ export interface components {
       correct: false
       normalized_operations: components['schemas']['Operation'][]
       remaining_pattern_count: number
+      /** Format: int64 */
       query_count: number
       /** @constant */
       problem_status: 'available'
@@ -361,6 +362,7 @@ export interface components {
       correct: true
       normalized_operations: components['schemas']['Operation'][]
       remaining_pattern_count: number
+      /** Format: int64 */
       query_count: number
       /** @constant */
       problem_status: 'cleared'

@@ -31,7 +31,7 @@ pub enum RepositoryError {
     #[error("problem is already cleared")]
     ProblemAlreadyCleared,
 
-    #[error("query count exceeds the supported range")]
+    #[error("query count is outside the supported range")]
     InvalidQueryCount,
 
     #[error("elapsed duration must not be negative")]
@@ -151,7 +151,7 @@ pub struct QuerySubmission {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct QuerySubmissionResult {
-    pub query_count: i32,
+    pub query_count: u64,
     pub problem_status: String,
 }
 
@@ -565,7 +565,7 @@ impl AuthRepository for SqlxUserRepository {
         .map_err(RepositoryError::Database)?;
 
         let query_count =
-            i32::try_from(query_count).map_err(|_| RepositoryError::InvalidQueryCount)?;
+            u64::try_from(query_count).map_err(|_| RepositoryError::InvalidQueryCount)?;
 
         transaction
             .commit()

@@ -729,6 +729,8 @@ components:
           type: integer
         query_count:
           type: integer
+          format: int64
+          minimum: 0
         problem_status:
           type: string
           const: available
@@ -756,6 +758,8 @@ components:
           type: integer
         query_count:
           type: integer
+          format: int64
+          minimum: 0
         problem_status:
           type: string
           const: cleared
