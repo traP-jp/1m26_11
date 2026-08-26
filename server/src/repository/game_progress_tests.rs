@@ -4,16 +4,18 @@ use chrono::{DateTime, Duration, TimeZone, Utc};
 use sqlx::{
     MySqlPool,
     mysql::{MySqlConnectOptions, MySqlPoolOptions},
+    types::Json,
 };
 use uuid::Uuid;
 
 use super::{
-    AuthRepository, RepositoryError, SqlxUserRepository, apply_problem_clear_in_transaction,
+    AuthRepository, QuerySubmission, RepositoryError, SqlxUserRepository,
+    apply_problem_clear_in_transaction,
 };
 use crate::{
     game_progress::{ProblemStatus, Progress, RunStatus},
     migrate,
-    problem::{load_problem_data, seed_problem_data},
+    problem::{Operation, load_problem_data, seed_problem_data},
 };
 
 const ROOM_ID: &str = "1411824c-d357-4941-af76-c76cb827dda6";
@@ -334,6 +336,148 @@ async fn mariadb_problem_clear_flow_is_transactional() {
     pool.close().await;
 }
 
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_query_judgement_is_recorded_transactionally() {
+    let pool = connect_test_database().await;
+
+    migrate(&pool).await.expect("migration should succeed");
+    cleanup_test_data(&pool).await;
+    seed_room_and_problems(&pool).await;
+    insert_test_user(&pool).await;
+
+    let room_id = parse_uuid(ROOM_ID);
+    let user_id = parse_uuid(USER_ID);
+    let run_id = parse_uuid(RUN_ID);
+
+    let first_problem_id = parse_uuid(PROBLEM_IDS[0]);
+    let second_problem_id = parse_uuid(PROBLEM_IDS[1]);
+
+    let repository = SqlxUserRepository::new(pool.clone());
+
+    repository
+        .create_run(run_id, user_id, room_id, test_time(0))
+        .await
+        .expect("active run should be created");
+
+    let locked_error = repository
+        .record_query_judgement(query_submission(
+            Uuid::new_v4(),
+            run_id,
+            second_problem_id,
+            false,
+        ))
+        .await
+        .expect_err("locked problem should reject query");
+
+    assert!(matches!(locked_error, RepositoryError::ProblemLocked));
+
+    assert_eq!(
+        stored_query_count(&pool, run_id, second_problem_id).await,
+        0
+    );
+
+    let first_query_id = Uuid::new_v4();
+
+    let first_result = repository
+        .record_query_judgement(query_submission(
+            first_query_id,
+            run_id,
+            first_problem_id,
+            false,
+        ))
+        .await
+        .expect("incorrect query should be recorded");
+
+    assert_eq!(first_result.query_count, 1);
+    assert_eq!(first_result.problem_status, "available");
+
+    let stored = sqlx::query_as::<
+        _,
+        (
+            String,
+            Json<Vec<Operation>>,
+            Json<Vec<Operation>>,
+            i32,
+            bool,
+        ),
+    >(
+        r#"
+        SELECT
+            source,
+            operations,
+            normalized_operations,
+            remaining_pattern_count,
+            is_correct
+        FROM queries
+        WHERE query_id = ?
+        "#,
+    )
+    .bind(first_query_id)
+    .fetch_one(&pool)
+    .await
+    .expect("stored query should be readable");
+
+    assert_eq!(stored.0, "serial");
+    assert!(stored.1.0 == vec![operation("down", 1), operation("down", 1),]);
+    assert!(stored.2.0 == vec![operation("down", 2)]);
+    assert_eq!(stored.3, 2);
+    assert!(!stored.4);
+
+    let second_result = repository
+        .record_query_judgement(query_submission(
+            Uuid::new_v4(),
+            run_id,
+            first_problem_id,
+            false,
+        ))
+        .await
+        .expect("second incorrect query should be recorded");
+
+    assert_eq!(second_result.query_count, 2);
+    assert_eq!(second_result.problem_status, "available");
+
+    let correct_result = repository
+        .record_query_judgement(query_submission(
+            Uuid::new_v4(),
+            run_id,
+            first_problem_id,
+            true,
+        ))
+        .await
+        .expect("correct query should be recorded");
+
+    assert_eq!(correct_result.query_count, 3);
+    assert_eq!(correct_result.problem_status, "cleared");
+
+    assert_eq!(
+        progress_statuses(&pool, run_id).await,
+        vec!["cleared", "available", "locked", "available"]
+    );
+
+    assert_eq!(stored_query_count(&pool, run_id, first_problem_id).await, 3);
+
+    let cleared_error = repository
+        .record_query_judgement(query_submission(
+            Uuid::new_v4(),
+            run_id,
+            first_problem_id,
+            false,
+        ))
+        .await
+        .expect_err("cleared problem should reject query");
+
+    assert!(matches!(
+        cleared_error,
+        RepositoryError::ProblemAlreadyCleared
+    ));
+
+    assert_eq!(stored_query_count(&pool, run_id, first_problem_id).await, 3);
+
+    cleanup_test_data(&pool).await;
+    pool.close().await;
+}
+
 async fn connect_test_database() -> MySqlPool {
     let database_url = env::var("TEST_DATABASE_URL")
         .expect("TEST_DATABASE_URL must point to a disposable test database");
@@ -461,6 +605,61 @@ fn test_time(seconds_after_start: i64) -> DateTime<Utc> {
         .single()
         .expect("test time should be valid")
         + Duration::seconds(seconds_after_start)
+}
+
+fn operation(control: &str, count: i32) -> Operation {
+    Operation {
+        control: control.to_owned(),
+        count,
+    }
+}
+
+fn query_submission(
+    query_id: Uuid,
+    run_id: Uuid,
+    problem_id: Uuid,
+    is_correct: bool,
+) -> QuerySubmission {
+    let (operations, normalized_operations, remaining_pattern_count) = if is_correct {
+        (
+            vec![operation("down", 2), operation("right", 1)],
+            vec![operation("down", 2), operation("right", 1)],
+            1,
+        )
+    } else {
+        (
+            vec![operation("down", 1), operation("down", 1)],
+            vec![operation("down", 2)],
+            2,
+        )
+    };
+
+    QuerySubmission {
+        query_id,
+        run_id,
+        problem_id,
+        source: "serial".to_owned(),
+        operations,
+        normalized_operations,
+        remaining_pattern_count,
+        is_correct,
+    }
+}
+
+async fn stored_query_count(pool: &MySqlPool, run_id: Uuid, problem_id: Uuid) -> i64 {
+    sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM queries
+        WHERE run_id = ?
+          AND problem_id = ?
+        "#,
+    )
+    .bind(run_id)
+    .bind(problem_id)
+    .fetch_one(pool)
+    .await
+    .expect("query count should be readable")
 }
 
 fn parse_uuid(value: &str) -> Uuid {

@@ -3,7 +3,7 @@ use crate::{
         ActiveRunState, ClearProblemError, ClearProblemPlan, ProblemState, ProblemStatus,
         plan_problem_clear,
     },
-    problem::{Asset, InputSchema},
+    problem::{Asset, InputSchema, Operation},
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -27,6 +27,12 @@ pub enum RepositoryError {
 
     #[error("problem is locked")]
     ProblemLocked,
+
+    #[error("problem is already cleared")]
+    ProblemAlreadyCleared,
+
+    #[error("query count is outside the supported range")]
+    InvalidQueryCount,
 
     #[error("elapsed duration must not be negative")]
     InvalidElapsed,
@@ -116,7 +122,7 @@ pub struct ProblemProgressRecord {
     pub cleared_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, FromRow)]
+#[derive(Clone, Eq, PartialEq, FromRow)]
 pub struct ProblemDetailRecord {
     pub id: Uuid,
     pub number: i32,
@@ -126,17 +132,29 @@ pub struct ProblemDetailRecord {
     pub submission_type: String,
     pub assets: sqlx::types::Json<Vec<Asset>>,
     pub input_schema: sqlx::types::Json<InputSchema>,
+    pub judge_config: sqlx::types::Json<serde_json::Value>,
     pub status: String,
     pub hint_count: i64,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "query and answer handlers will call the shared transaction flow"
-    )
-)]
+#[derive(Clone, Eq, PartialEq)]
+pub struct QuerySubmission {
+    pub query_id: Uuid,
+    pub run_id: Uuid,
+    pub problem_id: Uuid,
+    pub source: String,
+    pub operations: Vec<Operation>,
+    pub normalized_operations: Vec<Operation>,
+    pub remaining_pattern_count: i32,
+    pub is_correct: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct QuerySubmissionResult {
+    pub query_count: u64,
+    pub problem_status: String,
+}
+
 #[derive(FromRow)]
 struct GameProgressProblemRow {
     problem_id: Uuid,
@@ -146,13 +164,6 @@ struct GameProgressProblemRow {
     status: String,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "query and answer handlers will call the shared transaction flow"
-    )
-)]
 fn parse_problem_status(status: &str) -> Result<ProblemStatus, RepositoryError> {
     match status {
         "locked" => Ok(ProblemStatus::Locked),
@@ -215,6 +226,13 @@ pub trait AuthRepository: Send + Sync {
         _problem_id: Uuid,
     ) -> Result<Option<ProblemDetailRecord>, RepositoryError> {
         unimplemented!("find_problem_for_run is not implemented for this repository")
+    }
+
+    async fn record_query_judgement(
+        &self,
+        _submission: QuerySubmission,
+    ) -> Result<QuerySubmissionResult, RepositoryError> {
+        unimplemented!("record_query_judgement is not implemented for this repository")
     }
 
     async fn create_run(
@@ -410,6 +428,7 @@ impl AuthRepository for SqlxUserRepository {
                 problems.submission_type,
                 problems.assets,
                 problems.input_schema,
+                problems.judge_config,
                 problem_progress.status,
                 CAST(JSON_LENGTH(problems.hints) AS SIGNED) AS hint_count
             FROM problems
@@ -427,6 +446,136 @@ impl AuthRepository for SqlxUserRepository {
         .fetch_optional(&self.pool)
         .await
         .map_err(RepositoryError::Database)
+    }
+
+    async fn record_query_judgement(
+        &self,
+        submission: QuerySubmission,
+    ) -> Result<QuerySubmissionResult, RepositoryError> {
+        let mut transaction = self.pool.begin().await.map_err(RepositoryError::Database)?;
+
+        let room_id = sqlx::query_scalar::<_, Uuid>(
+            r#"
+            SELECT room_id
+            FROM runs
+            WHERE run_id = ?
+              AND status = 'active'
+            FOR UPDATE
+            "#,
+        )
+        .bind(submission.run_id)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?
+        .ok_or(RepositoryError::RunNotFound)?;
+
+        let stored_status = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT problem_progress.status
+            FROM problem_progress
+            INNER JOIN problems
+                ON problems.problem_id =
+                   problem_progress.problem_id
+            WHERE problem_progress.run_id = ?
+              AND problem_progress.problem_id = ?
+              AND problems.room_id = ?
+            FOR UPDATE
+            "#,
+        )
+        .bind(submission.run_id)
+        .bind(submission.problem_id)
+        .bind(room_id)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?
+        .ok_or(RepositoryError::ProblemNotFound)?;
+
+        match stored_status.as_str() {
+            "available" => {}
+            "locked" => {
+                return Err(RepositoryError::ProblemLocked);
+            }
+            "cleared" => {
+                return Err(RepositoryError::ProblemAlreadyCleared);
+            }
+            _ => {
+                return Err(RepositoryError::InvalidProblemStatus {
+                    status: stored_status,
+                });
+            }
+        }
+
+        sqlx::query(
+            r#"
+            INSERT INTO queries (
+                query_id,
+                run_id,
+                problem_id,
+                source,
+                operations,
+                normalized_operations,
+                remaining_pattern_count,
+                is_correct
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(submission.query_id)
+        .bind(submission.run_id)
+        .bind(submission.problem_id)
+        .bind(&submission.source)
+        .bind(sqlx::types::Json(&submission.operations))
+        .bind(sqlx::types::Json(&submission.normalized_operations))
+        .bind(submission.remaining_pattern_count)
+        .bind(submission.is_correct)
+        .execute(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        let problem_status = if submission.is_correct {
+            let plan = apply_problem_clear_in_transaction(
+                &mut transaction,
+                submission.run_id,
+                submission.problem_id,
+            )
+            .await?;
+
+            match plan.target_problem_status {
+                ProblemStatus::Locked => "locked",
+                ProblemStatus::Available => "available",
+                ProblemStatus::Cleared => "cleared",
+            }
+            .to_owned()
+        } else {
+            "available".to_owned()
+        };
+
+        let query_count = sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT COUNT(*)
+            FROM queries
+            WHERE run_id = ?
+              AND problem_id = ?
+            "#,
+        )
+        .bind(submission.run_id)
+        .bind(submission.problem_id)
+        .fetch_one(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        let query_count =
+            u64::try_from(query_count).map_err(|_| RepositoryError::InvalidQueryCount)?;
+
+        transaction
+            .commit()
+            .await
+            .map_err(RepositoryError::Database)?;
+
+        Ok(QuerySubmissionResult {
+            query_count,
+            problem_status,
+        })
     }
 
     async fn create_run(
@@ -563,13 +712,6 @@ impl AuthRepository for SqlxUserRepository {
     }
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "query and answer handlers will call the shared transaction flow"
-    )
-)]
 /// Locks the active run and its problem progress, calculates the clear plan,
 /// and applies the updates to the supplied transaction.
 ///

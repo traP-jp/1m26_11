@@ -1,0 +1,9 @@
+{
+  "source": "vr",
+  "operations": [
+    {
+      "control": "down",
+      "count": 1
+    }
+  ]
+}

@@ -1,9 +1,11 @@
 mod auth;
 mod me;
+mod queries;
 mod rooms;
 
 pub(crate) use auth::{login_guest, logout_demo};
 pub(crate) use me::get_me;
+pub(crate) use queries::submit_query;
 pub(crate) use rooms::{get_current_run, get_problem, start_or_resume_run};
 
 use axum::{

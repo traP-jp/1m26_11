@@ -350,6 +350,7 @@ export interface components {
       correct: false
       normalized_operations: components['schemas']['Operation'][]
       remaining_pattern_count: number
+      /** Format: int64 */
       query_count: number
       /** @constant */
       problem_status: 'available'
@@ -361,6 +362,7 @@ export interface components {
       correct: true
       normalized_operations: components['schemas']['Operation'][]
       remaining_pattern_count: number
+      /** Format: int64 */
       query_count: number
       /** @constant */
       problem_status: 'cleared'
@@ -506,6 +508,24 @@ export interface components {
     }
     /** @description 問題がまだ解放されていません。 */
     ProblemLocked: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 操作列を送信できない問題状態です。 */
+    QueryConflict: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 操作列またはsourceが問題ごとの制約に違反しています。 */
+    QueryValidationError: {
       headers: {
         [name: string]: unknown
       }
@@ -741,8 +761,8 @@ export interface operations {
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthorized']
       404: components['responses']['NotFound']
-      409: components['responses']['ProblemLocked']
-      422: components['responses']['UnprocessableEntity']
+      409: components['responses']['QueryConflict']
+      422: components['responses']['QueryValidationError']
       500: components['responses']['InternalServerError']
     }
   }

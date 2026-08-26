@@ -2,6 +2,7 @@ mod asset_url;
 mod loader;
 mod model;
 mod public;
+mod query;
 mod seeder;
 mod validation;
 
@@ -17,6 +18,7 @@ pub use model::{
     SubmissionType,
 };
 pub use public::{ProblemProjectionError, build_problem_response};
+pub(crate) use query::{QueryJudgeError, decode_stored_judge_config, judge_query};
 pub use seeder::{ProblemSeedError, SeedSummary, seed_problem_data};
 
 #[derive(Debug, Error)]
