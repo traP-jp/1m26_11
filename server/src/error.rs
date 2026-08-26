@@ -12,7 +12,7 @@ use openapi_generated::{
     types::Object,
 };
 
-use crate::repository::RepositoryError;
+use crate::{problem::ProblemProjectionError, repository::RepositoryError};
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
@@ -40,6 +40,10 @@ pub(crate) enum AppError {
         #[source]
         source: BoxError,
     },
+    #[error("active run was not found")]
+    RunNotFound,
+    #[error("problem is locked")]
+    ProblemLocked,
 }
 
 impl AppError {
@@ -55,6 +59,10 @@ impl AppError {
         Self::NotFound(message.into())
     }
 
+    pub(crate) fn run_not_found() -> Self {
+        Self::RunNotFound
+    }
+
     fn internal(error: impl Error + Send + Sync + 'static) -> Self {
         Self::Internal {
             source: Box::new(error),
@@ -64,6 +72,12 @@ impl AppError {
 
 impl From<RepositoryError> for AppError {
     fn from(error: RepositoryError) -> Self {
+        Self::internal(error)
+    }
+}
+
+impl From<ProblemProjectionError> for AppError {
+    fn from(error: ProblemProjectionError) -> Self {
         Self::internal(error)
     }
 }
@@ -93,6 +107,16 @@ impl IntoResponse for AppError {
                     "internal server error".to_owned(),
                 )
             }
+            Self::RunNotFound => (
+                StatusCode::NOT_FOUND,
+                "RUN_NOT_FOUND",
+                "挑戦中のrunが見つかりません".to_owned(),
+            ),
+            Self::ProblemLocked => (
+                StatusCode::CONFLICT,
+                "PROBLEM_LOCKED",
+                "この問題はまだ解放されていません".to_owned(),
+            ),
         };
 
         let body = ErrorResponse::new(ErrorResponseError::new(
@@ -130,6 +154,30 @@ mod tests {
 
         let expected: serde_json::Value = serde_json::from_str(include_str!(
             "../../openapi/examples/auth/error-unauthorized.json"
+        ))
+        .expect("OpenAPI fixture should be valid JSON");
+
+        assert_eq!(actual, expected);
+    }
+
+    #[tokio::test]
+    async fn run_not_found_response_matches_openapi_fixture() {
+        let response = AppError::RunNotFound.into_response();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .expect("response body should be readable")
+            .to_bytes();
+
+        let actual: serde_json::Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        let expected: serde_json::Value = serde_json::from_str(include_str!(
+            "../../openapi/examples/runs/error-run-not-found.json"
         ))
         .expect("OpenAPI fixture should be valid JSON");
 
