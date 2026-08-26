@@ -61,10 +61,11 @@ const emit = defineEmits<{
 .room-card {
   width: 100%;
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 12%);
+  border: 1px solid #d8e1ee;
   border-radius: 1.25rem;
-  background: rgba(15, 28, 36, 0.76);
-  box-shadow: 0 0.25rem 1.75rem rgb(0 0 0 / 28%);
+  color: #121a2a;
+  background: #fff;
+  box-shadow: 0 0.25rem 1.75rem rgb(21 34 56 / 12%);
   backdrop-filter: blur(1rem);
 }
 
@@ -89,15 +90,15 @@ const emit = defineEmits<{
 }
 
 .room-card__genre {
-  color: #5eead4;
-  font-size: 0.72rem;
+  color: hsl(244, 60%, 64%);
+  font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .room-card__header:hover {
-  background: rgb(255 255 255 / 4%);
+  background: #f5f8fc;
 }
 
 .room-card__header:focus-visible {
@@ -112,7 +113,7 @@ const emit = defineEmits<{
 }
 
 .room-card__toggle {
-  color: #aeb7d1;
+  color: #65758d;
   font-size: 1.25rem;
   font-variation-settings:
     'FILL' 0,
@@ -131,12 +132,12 @@ const emit = defineEmits<{
   display: grid;
   gap: 1.25rem;
   padding: 1.25rem 1.5rem 1.5rem;
-  border-top: 1px solid rgb(255 255 255 / 8%);
+  border-top: 1px solid #e5eaf2;
 }
 
 .room-card__description {
   margin: 0;
-  color: #aeb7d1;
+  color: #65758d;
   line-height: 1.7;
 }
 
@@ -146,17 +147,17 @@ const emit = defineEmits<{
   border: 0;
   border-radius: 0.7rem;
   color: #07111f;
-  background: #5eead4;
+  background: hsl(171 30% 78%);
   font-weight: 700;
   cursor: pointer;
 }
 
 .room-card__start:hover:not(:disabled) {
-  background: #99f6e4;
+  background: hsl(171 35% 70%);
 }
 
 .room-card__start:focus-visible {
-  outline: 2px solid #c7d2fe;
+  outline: 2px solid hsl(171 45% 42%);
   outline-offset: 3px;
 }
 
