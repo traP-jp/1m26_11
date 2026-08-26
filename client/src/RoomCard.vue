@@ -2,9 +2,9 @@
 import { Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
 
 export interface Room {
-  id: string
+  room_id: string
   number: number
-  title: string
+  name: string
   genre: string
   description: string
 }
@@ -22,7 +22,7 @@ withDefaults(
 )
 
 const emit = defineEmits<{
-  start: [room: Room]
+  start: [roomId: string]
 }>()
 </script>
 
@@ -32,7 +32,7 @@ const emit = defineEmits<{
       <span class="room-card__number" aria-hidden="true">{{ room.number }}</span>
       <span class="room-card__heading">
         <span class="room-card__genre">{{ room.genre }}</span>
-        <span class="room-card__title">{{ room.title }}</span>
+        <span class="room-card__title">{{ room.name }}</span>
       </span>
       <span class="room-card__toggle" aria-hidden="true" :data-open="open">
         <img
@@ -49,7 +49,7 @@ const emit = defineEmits<{
         class="room-card__start"
         type="button"
         :disabled="starting"
-        @click="emit('start', room)"
+        @click="emit('start', room.room_id)"
       >
         {{ starting ? '開始しています…' : '開始する' }}
       </button>

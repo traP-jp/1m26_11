@@ -2,11 +2,11 @@
 import RoomCard from './RoomCard.vue'
 
 const roomFixture = {
-  id: 'room-01',
+  room_id: '1411824c-d357-4941-af76-c76cb827dda6',
   number: 1,
-  title: 'Room 01',
-  genre: 'General',
-  description: 'A cozy room for general discussions.',
+  name: '最初の部屋',
+  genre: 'logic',
+  description: '動作確認用の問題セットです',
 }
 </script>
 

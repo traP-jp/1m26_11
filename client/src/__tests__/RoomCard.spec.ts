@@ -4,11 +4,11 @@ import { mount } from '@vue/test-utils'
 import RoomCard from '../RoomCard.vue'
 
 const room = {
-  id: 'room-01',
+  room_id: '1411824c-d357-4941-af76-c76cb827dda6',
   number: 1,
-  title: 'Room 01',
-  genre: 'General',
-  description: 'A cozy room for general discussions.',
+  name: '最初の部屋',
+  genre: 'logic',
+  description: '動作確認用の問題セットです',
 }
 
 describe('RoomCard', () => {
@@ -16,7 +16,7 @@ describe('RoomCard', () => {
     const wrapper = mount(RoomCard, { props: { room } })
 
     expect(wrapper.get('article').classes()).toContain('room-card')
-    expect(wrapper.get('.room-card__header').text()).toContain('Room 01')
+    expect(wrapper.get('.room-card__header').text()).toContain(room.name)
     expect(wrapper.find('.room-card__body').exists()).toBe(false)
   })
 
@@ -30,11 +30,11 @@ describe('RoomCard', () => {
     expect(wrapper.find('.room-card__body').exists()).toBe(false)
   })
 
-  it('emits the room from the start button', async () => {
+  it('emits the room ID from the start button', async () => {
     const wrapper = mount(RoomCard, { props: { room, defaultOpen: true } })
 
     await wrapper.get('.room-card__start').trigger('click')
 
-    expect(wrapper.emitted('start')).toEqual([[room]])
+    expect(wrapper.emitted('start')).toEqual([[room.room_id]])
   })
 })
