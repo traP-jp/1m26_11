@@ -34,14 +34,11 @@ const emit = defineEmits<{
         <span class="room-card__genre">{{ room.genre }}</span>
         <span class="room-card__title">{{ room.title }}</span>
       </span>
-      <span
-        class="material-symbols-outlined room-card__toggle"
-        aria-hidden="true"
-        :data-open="open"
-      >
+      <span class="room-card__toggle" aria-hidden="true" :data-open="open">
         <img
           src="@/assets/icon/keyboard_arrow_down_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg"
-          alt="Toggle"
+          alt=""
+          aria-hidden="true"
         />
       </span>
     </DisclosureButton>
