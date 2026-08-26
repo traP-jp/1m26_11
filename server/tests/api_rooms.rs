@@ -347,3 +347,96 @@ async fn get_problem_repository_error_returns_500_without_details() {
 
     assert_eq!(body["error"]["details"], json!({}));
 }
+
+#[tokio::test]
+async fn get_current_run_succeeds() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::get(format!("/api/rooms/{MOCK_RESUME_ROOM_ID}/runs/current"))
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["status"], "active");
+    let elapsed = body["elapsed_ms"].as_i64().unwrap();
+    assert!(elapsed >= 65000);
+    let cleared_ids: Vec<String> = body["cleared_problem_ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(cleared_ids, vec![MOCK_CLEARED_PROBLEM_ID.to_string()]);
+}
+
+#[tokio::test]
+async fn get_current_run_not_found() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::get(format!("/api/rooms/{MOCK_NEW_ROOM_ID}/runs/current"))
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["error"]["code"], "RUN_NOT_FOUND");
+    assert_eq!(body["error"]["message"], "挑戦中のrunが見つかりません");
+}
+
+#[tokio::test]
+async fn get_current_run_unauthorized() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::get(format!("/api/rooms/{MOCK_RESUME_ROOM_ID}/runs/current"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn get_current_run_room_not_found() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::get(format!("/api/rooms/{}/runs/current", Uuid::nil()))
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["error"]["code"], "NOT_FOUND");
+    assert_eq!(body["error"]["message"], "room not found");
+}
+
+#[tokio::test]
+async fn get_current_run_invalid_room_id_format() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::get("/api/rooms/not-a-uuid/runs/current")
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["error"]["code"], "BAD_REQUEST");
+    assert_eq!(body["error"]["message"], "invalid room_id");
+}
