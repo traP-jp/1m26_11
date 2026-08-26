@@ -59,6 +59,10 @@ impl AppError {
         Self::NotFound(message.into())
     }
 
+    pub(crate) fn run_not_found() -> Self {
+        Self::RunNotFound
+    }
+
     fn internal(error: impl Error + Send + Sync + 'static) -> Self {
         Self::Internal {
             source: Box::new(error),
@@ -150,6 +154,30 @@ mod tests {
 
         let expected: serde_json::Value = serde_json::from_str(include_str!(
             "../../openapi/examples/auth/error-unauthorized.json"
+        ))
+        .expect("OpenAPI fixture should be valid JSON");
+
+        assert_eq!(actual, expected);
+    }
+
+    #[tokio::test]
+    async fn run_not_found_response_matches_openapi_fixture() {
+        let response = AppError::RunNotFound.into_response();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .expect("response body should be readable")
+            .to_bytes();
+
+        let actual: serde_json::Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        let expected: serde_json::Value = serde_json::from_str(include_str!(
+            "../../openapi/examples/runs/error-run-not-found.json"
         ))
         .expect("OpenAPI fixture should be valid JSON");
 
