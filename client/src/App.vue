@@ -1,44 +1,29 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { RouterView, useRouter } from 'vue-router'
 
-import ClearPage from './ClearPage.vue'
-import PortalPage from './PortalPage.vue'
-import RoomPage from './RoomPage.vue'
 import { roomPageFixture } from './RoomPage.fixture'
 import type { RoomUiEvent } from './RoomPage.types'
-import { resolveRoute } from './routes'
 
-const pathname = ref(window.location.pathname)
-const route = computed(() => resolveRoute(pathname.value))
-
-function syncPathname(): void {
-  pathname.value = window.location.pathname
-}
-
-function navigate(path: string): void {
-  window.history.pushState({}, '', path)
-  syncPathname()
-}
-
-onMounted(() => window.addEventListener('popstate', syncPathname))
-onBeforeUnmount(() => window.removeEventListener('popstate', syncPathname))
+const router = useRouter()
 
 function handleRoomSelected(roomId: string): void {
-  navigate(`/rooms/${encodeURIComponent(roomId)}`)
+  void router.push({ name: 'room', params: { roomId } })
 }
 
 function handleRoomUiEvent(event: RoomUiEvent): void {
-  if (event.type === 'room-exited') navigate('/')
+  if (event.type === 'room-exited') void router.push({ name: 'portal' })
 }
 </script>
 
 <template>
-  <PortalPage v-if="route.name === 'portal'" @room-selected="handleRoomSelected" />
-  <RoomPage
-    v-else-if="route.name === 'room'"
-    :view-model="roomPageFixture"
-    @ui-event="handleRoomUiEvent"
-  />
-  <ClearPage v-else-if="route.name === 'clear'" />
-  <PortalPage v-else @room-selected="handleRoomSelected" />
+  <RouterView v-slot="{ Component, route }">
+    <component :is="Component" v-if="route.name === 'portal'" @room-selected="handleRoomSelected" />
+    <component
+      :is="Component"
+      v-else-if="route.name === 'room'"
+      :view-model="roomPageFixture"
+      @ui-event="handleRoomUiEvent"
+    />
+    <component :is="Component" v-else />
+  </RouterView>
 </template>

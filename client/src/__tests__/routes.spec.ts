@@ -1,15 +1,28 @@
 import { describe, expect, it } from 'vitest'
+import { createMemoryHistory } from 'vue-router'
 
-import { resolveRoute } from '../routes'
+import { createAppRouter } from '../router'
 
-describe('resolveRoute', () => {
+describe('router', () => {
   it('resolves the three application routes', () => {
-    expect(resolveRoute('/')).toEqual({ name: 'portal' })
-    expect(resolveRoute('/rooms/room-1')).toEqual({ name: 'room', roomId: 'room-1' })
-    expect(resolveRoute('/rooms/room-1/clear')).toEqual({ name: 'clear', roomId: 'room-1' })
+    const router = createAppRouter(createMemoryHistory())
+
+    expect(router.resolve('/').name).toBe('portal')
+    expect(router.resolve('/rooms/room-1')).toMatchObject({
+      name: 'room',
+      params: { roomId: 'room-1' },
+    })
+    expect(router.resolve('/rooms/room-1/clear')).toMatchObject({
+      name: 'clear',
+      params: { roomId: 'room-1' },
+    })
   })
 
-  it('marks an unknown route for fallback', () => {
-    expect(resolveRoute('/unknown')).toEqual({ name: 'not-found' })
+  it('redirects an unknown route to Portal', async () => {
+    const router = createAppRouter(createMemoryHistory())
+
+    await router.push('/unknown')
+
+    expect(router.currentRoute.value.name).toBe('portal')
   })
 })
