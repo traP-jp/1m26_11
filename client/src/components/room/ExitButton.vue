@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/vue'
 
 const isOpen = ref(false)
+const isExiting = ref(false)
 const emit = defineEmits(['exit'])
 
 function openModal() {
@@ -15,6 +16,7 @@ function closeModal() {
 
 function confirmExit() {
   isOpen.value = false
+  isExiting.value = true
   emit('exit')
 }
 </script>
@@ -23,7 +25,8 @@ function confirmExit() {
   <div>
     <button
       @click="openModal"
-      class="border-2 border-gray-300 flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 transition-colors"
+      :disabled="isExiting"
+      class="border-2 border-gray-300 flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
