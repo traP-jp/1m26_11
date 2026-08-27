@@ -1,48 +1,44 @@
 <script setup lang="ts">
-import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
-const stack = ['Vue 3', 'Vite', 'TypeScript', 'pnpm']
+import ClearPage from './ClearPage.vue'
+import PortalPage from './PortalPage.vue'
+import RoomPage from './RoomPage.vue'
+import { roomPageFixture } from './RoomPage.fixture'
+import type { RoomUiEvent } from './RoomPage.types'
+import { resolveRoute } from './routes'
 
-const actions = ['Save changes', 'Duplicate', 'Archive']
+const pathname = ref(window.location.pathname)
+const route = computed(() => resolveRoute(pathname.value))
+
+function syncPathname(): void {
+  pathname.value = window.location.pathname
+}
+
+function navigate(path: string): void {
+  window.history.pushState({}, '', path)
+  syncPathname()
+}
+
+onMounted(() => window.addEventListener('popstate', syncPathname))
+onBeforeUnmount(() => window.removeEventListener('popstate', syncPathname))
+
+function handleRoomSelected(roomId: string): void {
+  navigate(`/rooms/${encodeURIComponent(roomId)}`)
+}
+
+function handleRoomUiEvent(event: RoomUiEvent): void {
+  if (event.type === 'room-exited') navigate('/')
+}
 </script>
 
 <template>
-  <main class="app-shell">
-    <section class="hero" aria-labelledby="app-name">
-      <p class="eyebrow">1Monthon 2026 · Team 11</p>
-      <h1 id="app-name">Frontend is ready.</h1>
-      <p class="description">
-        Vue と Rust server をつなぐための、シンプルな開発環境をセットアップしました。
-      </p>
-
-      <Menu as="div" class="relative inline-block py-1 text-left">
-        <MenuButton
-          class="rounded bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-sky-500 active:bg-sky-700"
-        >
-          Open actions
-        </MenuButton>
-
-        <MenuItems
-          class="absolute right-0 z-10 mt-3 w-56 origin-top-right overflow-hidden rounded-xl border border-white/10 bg-slate-900/95 p-1 shadow-2xl ring-1 ring-black/20 backdrop-blur"
-        >
-          <MenuItem v-for="action in actions" :key="action" v-slot="{ active }">
-            <button
-              :class="[
-                'block w-full rounded-lg px-4 py-3 text-left text-sm transition',
-                active ? 'bg-sky-500 text-white' : 'text-slate-200 hover:bg-white/5',
-              ]"
-            >
-              {{ action }}
-            </button>
-          </MenuItem>
-        </MenuItems>
-      </Menu>
-
-      <ul class="stack" aria-label="Frontend stack">
-        <li v-for="item in stack" :key="item">{{ item }}</li>
-      </ul>
-
-      <a class="contract-link" href="/openapi.yaml">OpenAPI contract を確認</a>
-    </section>
-  </main>
+  <PortalPage v-if="route.name === 'portal'" @room-selected="handleRoomSelected" />
+  <RoomPage
+    v-else-if="route.name === 'room'"
+    :view-model="roomPageFixture"
+    @ui-event="handleRoomUiEvent"
+  />
+  <ClearPage v-else-if="route.name === 'clear'" />
+  <PortalPage v-else @room-selected="handleRoomSelected" />
 </template>
