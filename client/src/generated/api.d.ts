@@ -390,6 +390,7 @@ export interface components {
       unlocked_problem_ids: string[]
       run_status: components['schemas']['RunStatus']
       progress: components['schemas']['Progress']
+      /** Format: int64 */
       elapsed_ms: number
     }
     Progress: {

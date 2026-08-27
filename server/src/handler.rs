@@ -1,8 +1,10 @@
+mod answers;
 mod auth;
 mod me;
 mod queries;
 mod rooms;
 
+pub(crate) use answers::submit_answer;
 pub(crate) use auth::{login_guest, logout_demo};
 pub(crate) use me::get_me;
 pub(crate) use queries::submit_query;
