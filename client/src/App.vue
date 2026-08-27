@@ -8,9 +8,9 @@ const actions = ['Save changes', 'Duplicate', 'Archive']
 
 <template>
   <main class="app-shell">
-    <section class="hero" aria-labelledby="app-title">
+    <section class="hero" aria-labelledby="app-name">
       <p class="eyebrow">1Monthon 2026 · Team 11</p>
-      <h1 id="app-title">Frontend is ready.</h1>
+      <h1 id="app-name">Frontend is ready.</h1>
       <p class="description">
         Vue と Rust server をつなぐための、シンプルな開発環境をセットアップしました。
       </p>
