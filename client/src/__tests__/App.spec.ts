@@ -1,27 +1,58 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+import { createMemoryHistory, type Router } from 'vue-router'
 
-import { mount } from '@vue/test-utils'
-import { nextTick } from 'vue'
 import App from '../App.vue'
+import PortalPage from '../PortalPage.vue'
+import RoomPage from '../RoomPage.vue'
+import { createAppRouter } from '../router'
+
+async function mountAt(
+  path: string,
+): Promise<{ router: Router; wrapper: ReturnType<typeof mount> }> {
+  const router = createAppRouter(createMemoryHistory())
+  await router.push(path)
+  const wrapper = mount(App, { global: { plugins: [router] } })
+  await router.isReady()
+  await flushPromises()
+  return { router, wrapper }
+}
 
 describe('App', () => {
-  it('renders the project setup', () => {
-    const wrapper = mount(App)
+  it('renders the portal page at the root route', async () => {
+    const { wrapper } = await mountAt('/')
 
-    expect(wrapper.get('h1').text()).toBe('Frontend is ready.')
-    expect(wrapper.get('button').text()).toBe('Open actions')
-    expect(wrapper.get('a').attributes('href')).toBe('/openapi.yaml')
-    expect(wrapper.findAll('.stack li')).toHaveLength(4)
+    expect(wrapper.get('h1').text()).toBe('Portal')
   })
 
-  it('opens the headless ui menu', async () => {
-    const wrapper = mount(App)
+  it('falls back to the portal page for an unknown route', async () => {
+    const { router, wrapper } = await mountAt('/unknown')
 
-    await wrapper.get('button').trigger('click')
-    await nextTick()
+    expect(router.currentRoute.value.name).toBe('portal')
+    expect(wrapper.get('h1').text()).toBe('Portal')
+  })
 
-    expect(wrapper.text()).toContain('Save changes')
-    expect(wrapper.text()).toContain('Duplicate')
-    expect(wrapper.text()).toContain('Archive')
+  it('navigates from Portal to Room and back through semantic UI events', async () => {
+    const { router, wrapper } = await mountAt('/')
+
+    wrapper
+      .getComponent(PortalPage)
+      .vm.$emit('roomSelected', '1411824c-d357-4941-af76-c76cb827dda6')
+    await flushPromises()
+
+    expect(router.currentRoute.value.fullPath).toBe('/rooms/1411824c-d357-4941-af76-c76cb827dda6')
+    expect(wrapper.findComponent(RoomPage).exists()).toBe(true)
+
+    wrapper.getComponent(RoomPage).vm.$emit('uiEvent', { type: 'room-exited' })
+    await flushPromises()
+
+    expect(router.currentRoute.value.fullPath).toBe('/')
+    expect(wrapper.findComponent(PortalPage).exists()).toBe(true)
+  })
+
+  it('renders the Clear page route', async () => {
+    const { wrapper } = await mountAt('/rooms/room-1/clear')
+
+    expect(wrapper.get('h1').text()).toBe('Clear')
   })
 })

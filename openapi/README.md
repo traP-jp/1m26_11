@@ -60,10 +60,10 @@ Rustの`rust-axum` Generator 7.24.0はOpenAPI 3.1の`type: "null"`を標準で�
 | `startOrResumeRun` | bodyなし | `200`: `new_run`, `resumed_run`; `401`: `unauthorized` |
 | `getCurrentRun` | なし | `200`: `current_run`; `401`: `unauthorized`; `404`: `run_not_found` |
 | `getProblem` | なし | `200`: `available_problem`; `401`: `unauthorized`; `409`: `problem_locked` |
-| `submitQuery` | `serial_operations` | `200`: `incorrect_query`, `correct_query`; `401`: `unauthorized`; `409`: `problem_locked` |
+| `submitQuery` | `serial_operations`, `invalid_source` | `200`: `incorrect_query`, `correct_query`; `401`: `unauthorized`; `409`: `problem_locked`, `problem_already_cleared`; `422`: `validation_error` |
 | `submitAnswer` | `submitted_answer`, `too_long_for_example_problem` | `200`: `incorrect_answer`, `correct_answer_unlocks_problem`, `correct_answer_clears_run`; `401`: `unauthorized`; `409`: `problem_locked` |
 
-`400`、部屋・問題の`404`、`422`、`500`はstatusと共通Error schemaまで定義していますが、未確定の`error.code`を発明しないためresponse exampleは置いていません。入力不備は、例示問題の`max_length: 50`に対する51文字のrequestと、scenario上の`422`で表現しています。このrequestはtransport共通schemaでは文字列として妥当で、問題ごとの制限によって不正となります。
+`400`、部屋・問題の`404`、`submitAnswer`の`422`、`500`はstatusと共通Error schemaまで定義していますが、未確定の`error.code`を発明しないためresponse exampleは置いていません。`submitQuery`の意味的な入力不備は`422 VALIDATION_ERROR`として確定しており、`invalid_source` requestと`validation_error` responseで表現しています。例示問題の`max_length: 50`に対する51文字のrequestは、transport共通schemaでは文字列として妥当ですが、問題ごとの制限によって不正となる`submitAnswer`の例です。
 
 ## フロントエンドのmock
 

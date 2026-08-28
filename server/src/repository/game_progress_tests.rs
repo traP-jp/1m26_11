@@ -4,16 +4,18 @@ use chrono::{DateTime, Duration, TimeZone, Utc};
 use sqlx::{
     MySqlPool,
     mysql::{MySqlConnectOptions, MySqlPoolOptions},
+    types::Json,
 };
 use uuid::Uuid;
 
 use super::{
-    AuthRepository, RepositoryError, SqlxUserRepository, apply_problem_clear_in_transaction,
+    AnswerRunStatus, AnswerSubmission, AnswerSubmissionResult, AuthRepository, QuerySubmission,
+    RepositoryError, SqlxUserRepository, apply_problem_clear_in_transaction,
 };
 use crate::{
     game_progress::{ProblemStatus, Progress, RunStatus},
     migrate,
-    problem::{load_problem_data, seed_problem_data},
+    problem::{Operation, load_problem_data, seed_problem_data},
 };
 
 const ROOM_ID: &str = "1411824c-d357-4941-af76-c76cb827dda6";
@@ -334,6 +336,433 @@ async fn mariadb_problem_clear_flow_is_transactional() {
     pool.close().await;
 }
 
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_query_judgement_is_recorded_transactionally() {
+    let pool = connect_test_database().await;
+
+    migrate(&pool).await.expect("migration should succeed");
+    cleanup_test_data(&pool).await;
+    seed_room_and_problems(&pool).await;
+    insert_test_user(&pool).await;
+
+    let room_id = parse_uuid(ROOM_ID);
+    let user_id = parse_uuid(USER_ID);
+    let run_id = parse_uuid(RUN_ID);
+
+    let first_problem_id = parse_uuid(PROBLEM_IDS[0]);
+    let second_problem_id = parse_uuid(PROBLEM_IDS[1]);
+
+    let repository = SqlxUserRepository::new(pool.clone());
+
+    repository
+        .create_run(run_id, user_id, room_id, test_time(0))
+        .await
+        .expect("active run should be created");
+
+    let locked_error = repository
+        .record_query_judgement(query_submission(
+            Uuid::new_v4(),
+            run_id,
+            second_problem_id,
+            false,
+        ))
+        .await
+        .expect_err("locked problem should reject query");
+
+    assert!(matches!(locked_error, RepositoryError::ProblemLocked));
+
+    assert_eq!(
+        stored_query_count(&pool, run_id, second_problem_id).await,
+        0
+    );
+
+    let first_query_id = Uuid::new_v4();
+
+    let first_result = repository
+        .record_query_judgement(query_submission(
+            first_query_id,
+            run_id,
+            first_problem_id,
+            false,
+        ))
+        .await
+        .expect("incorrect query should be recorded");
+
+    assert_eq!(first_result.query_count, 1);
+    assert_eq!(first_result.problem_status, "available");
+
+    let stored = sqlx::query_as::<
+        _,
+        (
+            String,
+            Json<Vec<Operation>>,
+            Json<Vec<Operation>>,
+            i32,
+            bool,
+        ),
+    >(
+        r#"
+        SELECT
+            source,
+            operations,
+            normalized_operations,
+            remaining_pattern_count,
+            is_correct
+        FROM queries
+        WHERE query_id = ?
+        "#,
+    )
+    .bind(first_query_id)
+    .fetch_one(&pool)
+    .await
+    .expect("stored query should be readable");
+
+    assert_eq!(stored.0, "serial");
+    assert!(stored.1.0 == vec![operation("down", 1), operation("down", 1),]);
+    assert!(stored.2.0 == vec![operation("down", 2)]);
+    assert_eq!(stored.3, 2);
+    assert!(!stored.4);
+
+    let second_result = repository
+        .record_query_judgement(query_submission(
+            Uuid::new_v4(),
+            run_id,
+            first_problem_id,
+            false,
+        ))
+        .await
+        .expect("second incorrect query should be recorded");
+
+    assert_eq!(second_result.query_count, 2);
+    assert_eq!(second_result.problem_status, "available");
+
+    let correct_result = repository
+        .record_query_judgement(query_submission(
+            Uuid::new_v4(),
+            run_id,
+            first_problem_id,
+            true,
+        ))
+        .await
+        .expect("correct query should be recorded");
+
+    assert_eq!(correct_result.query_count, 3);
+    assert_eq!(correct_result.problem_status, "cleared");
+
+    assert_eq!(
+        progress_statuses(&pool, run_id).await,
+        vec!["cleared", "available", "locked", "available"]
+    );
+
+    assert_eq!(stored_query_count(&pool, run_id, first_problem_id).await, 3);
+
+    let cleared_error = repository
+        .record_query_judgement(query_submission(
+            Uuid::new_v4(),
+            run_id,
+            first_problem_id,
+            false,
+        ))
+        .await
+        .expect_err("cleared problem should reject query");
+
+    assert!(matches!(
+        cleared_error,
+        RepositoryError::ProblemAlreadyCleared
+    ));
+
+    assert_eq!(stored_query_count(&pool, run_id, first_problem_id).await, 3);
+
+    cleanup_test_data(&pool).await;
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_answer_judgement_updates_counter_transactionally() {
+    let pool = connect_test_database().await;
+
+    migrate(&pool).await.expect("migration should succeed");
+    cleanup_test_data(&pool).await;
+    seed_room_and_problems(&pool).await;
+    insert_test_user(&pool).await;
+
+    let room_id = parse_uuid(ROOM_ID);
+    let user_id = parse_uuid(USER_ID);
+    let run_id = parse_uuid(RUN_ID);
+
+    let operation_problem_id = parse_uuid(PROBLEM_IDS[0]);
+    let locked_string_problem_id = parse_uuid(PROBLEM_IDS[1]);
+    let final_problem_id = parse_uuid(PROBLEM_IDS[3]);
+
+    let repository = SqlxUserRepository::new(pool.clone());
+
+    repository
+        .create_run(run_id, user_id, room_id, test_time(0))
+        .await
+        .expect("active run should be created");
+
+    let locked_error = repository
+        .record_answer_judgement(answer_submission(
+            run_id,
+            locked_string_problem_id,
+            "かおもじくん",
+        ))
+        .await
+        .expect_err("locked problem should reject answer");
+
+    assert!(matches!(locked_error, RepositoryError::ProblemLocked));
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, locked_string_problem_id).await,
+        0
+    );
+
+    let wrong_type_error = repository
+        .record_answer_judgement(answer_submission(run_id, operation_problem_id, "answer"))
+        .await
+        .expect_err("operation sequence problem should reject string answer");
+
+    assert!(matches!(
+        wrong_type_error,
+        RepositoryError::WrongAnswerSubmissionType
+    ));
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, operation_problem_id).await,
+        0
+    );
+
+    let too_long_error = repository
+        .record_answer_judgement(answer_submission(run_id, final_problem_id, &"x".repeat(51)))
+        .await
+        .expect_err("answer over max length should be rejected");
+
+    assert!(matches!(
+        too_long_error,
+        RepositoryError::AnswerLengthExceeded
+    ));
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, final_problem_id).await,
+        0
+    );
+
+    let first_incorrect = repository
+        .record_answer_judgement(answer_submission(run_id, final_problem_id, "incorrect"))
+        .await
+        .expect("incorrect answer should be recorded");
+
+    assert_eq!(
+        first_incorrect,
+        AnswerSubmissionResult::Incorrect {
+            answer_attempt_count: 1,
+        }
+    );
+
+    let second_incorrect = repository
+        .record_answer_judgement(answer_submission(
+            run_id,
+            final_problem_id,
+            "still incorrect",
+        ))
+        .await
+        .expect("second incorrect answer should be recorded");
+
+    assert_eq!(
+        second_incorrect,
+        AnswerSubmissionResult::Incorrect {
+            answer_attempt_count: 2,
+        }
+    );
+
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, final_problem_id).await,
+        2
+    );
+
+    let correct = repository
+        .record_answer_judgement(answer_submission(
+            run_id,
+            final_problem_id,
+            "  ワンマンソン  ",
+        ))
+        .await
+        .expect("normalized correct answer should clear the problem");
+
+    match correct {
+        AnswerSubmissionResult::Correct {
+            unlocked_problem_ids,
+            run_status,
+            cleared_problem_count,
+            total_problem_count,
+            elapsed_ms,
+        } => {
+            assert!(unlocked_problem_ids.is_empty());
+            assert_eq!(run_status, AnswerRunStatus::Active);
+            assert_eq!(cleared_problem_count, 1);
+            assert_eq!(total_problem_count, 4);
+            assert!(elapsed_ms > 0);
+        }
+        AnswerSubmissionResult::Incorrect { .. } => {
+            panic!("correct answer should return the correct result");
+        }
+    }
+
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, final_problem_id).await,
+        2,
+        "correct answer must not increment the counter"
+    );
+
+    assert_eq!(
+        progress_statuses(&pool, run_id).await,
+        vec!["available", "locked", "locked", "cleared"]
+    );
+
+    let (stored_run_status, stored_run_cleared_at) = run_status(&pool, run_id).await;
+
+    assert_eq!(stored_run_status, "active");
+    assert_eq!(stored_run_cleared_at, None);
+
+    let repeated_error = repository
+        .record_answer_judgement(answer_submission(run_id, final_problem_id, "ワンマンソン"))
+        .await
+        .expect_err("already cleared problem should reject repeated answer");
+
+    assert!(matches!(
+        repeated_error,
+        RepositoryError::ProblemAlreadyCleared
+    ));
+
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, final_problem_id).await,
+        2
+    );
+
+    cleanup_test_data(&pool).await;
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_correct_answer_can_complete_run() {
+    let pool = connect_test_database().await;
+
+    migrate(&pool).await.expect("migration should succeed");
+    cleanup_test_data(&pool).await;
+    seed_room_and_problems(&pool).await;
+    insert_test_user(&pool).await;
+
+    let room_id = parse_uuid(ROOM_ID);
+    let user_id = parse_uuid(USER_ID);
+    let run_id = parse_uuid(RUN_ID);
+
+    let first_problem_id = parse_uuid(PROBLEM_IDS[0]);
+    let second_problem_id = parse_uuid(PROBLEM_IDS[1]);
+    let third_problem_id = parse_uuid(PROBLEM_IDS[2]);
+    let final_problem_id = parse_uuid(PROBLEM_IDS[3]);
+
+    let repository = SqlxUserRepository::new(pool.clone());
+
+    repository
+        .create_run(run_id, user_id, room_id, test_time(0))
+        .await
+        .expect("active run should be created");
+
+    repository
+        .record_query_judgement(query_submission(
+            Uuid::new_v4(),
+            run_id,
+            first_problem_id,
+            true,
+        ))
+        .await
+        .expect("first operation problem should be cleared");
+
+    let second_result = repository
+        .record_answer_judgement(answer_submission(run_id, second_problem_id, "顔文字くん"))
+        .await
+        .expect("second string problem should be cleared");
+
+    match second_result {
+        AnswerSubmissionResult::Correct {
+            unlocked_problem_ids,
+            run_status,
+            cleared_problem_count,
+            total_problem_count,
+            ..
+        } => {
+            assert_eq!(unlocked_problem_ids, vec![third_problem_id]);
+            assert_eq!(run_status, AnswerRunStatus::Active);
+            assert_eq!(cleared_problem_count, 2);
+            assert_eq!(total_problem_count, 4);
+        }
+        AnswerSubmissionResult::Incorrect { .. } => {
+            panic!("accepted answer should be correct");
+        }
+    }
+
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, second_problem_id).await,
+        0,
+        "correct answer must not increment the counter"
+    );
+
+    repository
+        .record_query_judgement(query_submission(
+            Uuid::new_v4(),
+            run_id,
+            third_problem_id,
+            true,
+        ))
+        .await
+        .expect("third operation problem should be cleared");
+
+    let final_result = repository
+        .record_answer_judgement(answer_submission(run_id, final_problem_id, "ワンマンソン"))
+        .await
+        .expect("last required answer should clear the run");
+
+    match final_result {
+        AnswerSubmissionResult::Correct {
+            unlocked_problem_ids,
+            run_status,
+            cleared_problem_count,
+            total_problem_count,
+            elapsed_ms,
+        } => {
+            assert!(unlocked_problem_ids.is_empty());
+            assert_eq!(run_status, AnswerRunStatus::Cleared);
+            assert_eq!(cleared_problem_count, 4);
+            assert_eq!(total_problem_count, 4);
+            assert!(elapsed_ms > 0);
+        }
+        AnswerSubmissionResult::Incorrect { .. } => {
+            panic!("accepted final answer should be correct");
+        }
+    }
+
+    assert_eq!(
+        progress_statuses(&pool, run_id).await,
+        vec!["cleared", "cleared", "cleared", "cleared"]
+    );
+
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, final_problem_id).await,
+        0
+    );
+
+    let (stored_run_status, stored_run_cleared_at) = run_status(&pool, run_id).await;
+
+    assert_eq!(stored_run_status, "cleared");
+    assert!(
+        stored_run_cleared_at.is_some(),
+        "cleared run should have cleared_at"
+    );
+
+    cleanup_test_data(&pool).await;
+    pool.close().await;
+}
+
 async fn connect_test_database() -> MySqlPool {
     let database_url = env::var("TEST_DATABASE_URL")
         .expect("TEST_DATABASE_URL must point to a disposable test database");
@@ -463,6 +892,85 @@ fn test_time(seconds_after_start: i64) -> DateTime<Utc> {
         + Duration::seconds(seconds_after_start)
 }
 
+fn operation(control: &str, count: i32) -> Operation {
+    Operation {
+        control: control.to_owned(),
+        count,
+    }
+}
+
+fn query_submission(
+    query_id: Uuid,
+    run_id: Uuid,
+    problem_id: Uuid,
+    is_correct: bool,
+) -> QuerySubmission {
+    let (operations, normalized_operations, remaining_pattern_count) = if is_correct {
+        (
+            vec![operation("down", 2), operation("right", 1)],
+            vec![operation("down", 2), operation("right", 1)],
+            1,
+        )
+    } else {
+        (
+            vec![operation("down", 1), operation("down", 1)],
+            vec![operation("down", 2)],
+            2,
+        )
+    };
+
+    QuerySubmission {
+        query_id,
+        run_id,
+        problem_id,
+        source: "serial".to_owned(),
+        operations,
+        normalized_operations,
+        remaining_pattern_count,
+        is_correct,
+    }
+}
+
+async fn stored_query_count(pool: &MySqlPool, run_id: Uuid, problem_id: Uuid) -> i64 {
+    sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM queries
+        WHERE run_id = ?
+          AND problem_id = ?
+        "#,
+    )
+    .bind(run_id)
+    .bind(problem_id)
+    .fetch_one(pool)
+    .await
+    .expect("query count should be readable")
+}
+
 fn parse_uuid(value: &str) -> Uuid {
     Uuid::parse_str(value).expect("test UUID should be valid")
+}
+
+fn answer_submission(run_id: Uuid, problem_id: Uuid, answer: &str) -> AnswerSubmission {
+    AnswerSubmission {
+        run_id,
+        problem_id,
+        answer: answer.to_owned(),
+    }
+}
+
+async fn stored_answer_attempt_count(pool: &MySqlPool, run_id: Uuid, problem_id: Uuid) -> i32 {
+    sqlx::query_scalar::<_, i32>(
+        r#"
+        SELECT answer_attempt_count
+        FROM problem_progress
+        WHERE run_id = ?
+          AND problem_id = ?
+        "#,
+    )
+    .bind(run_id)
+    .bind(problem_id)
+    .fetch_one(pool)
+    .await
+    .expect("answer attempt count should be readable")
 }

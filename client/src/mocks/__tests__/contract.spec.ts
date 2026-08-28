@@ -14,7 +14,7 @@ describe('OpenAPI mock contract', () => {
   it('resolves scenario response examples from the shared OpenAPI fixtures', () => {
     const contract = createMockContract(openApiSource, scenarioSource, fixtureModules)
 
-    expect(contract.scenarios).toHaveLength(20)
+    expect(contract.scenarios).toHaveLength(24)
     expect(contract.getResponseExample('getCurrentRun', 200, 'current_run')).toEqual(currentRun)
   })
 

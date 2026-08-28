@@ -291,7 +291,7 @@ fn require_max_chars(
     Ok(())
 }
 
-fn normalize_operations(operations: &[Operation]) -> Vec<Operation> {
+pub(super) fn normalize_operations(operations: &[Operation]) -> Vec<Operation> {
     let mut normalized: Vec<Operation> = Vec::new();
 
     for operation in operations {
@@ -307,7 +307,7 @@ fn normalize_operations(operations: &[Operation]) -> Vec<Operation> {
     normalized
 }
 
-fn normalize_answer(value: &str, normalization: &StringNormalization) -> String {
+pub(super) fn normalize_answer(value: &str, normalization: &StringNormalization) -> String {
     let mut normalized = match normalization.unicode {
         UnicodeNormalization::Nfkc => value.nfkc().collect::<String>(),
     };
@@ -393,7 +393,7 @@ fn validate_operations(
     Ok(normalize_operations(&operations))
 }
 
-fn validate_operation_judge_config(
+pub(super) fn validate_operation_judge_config(
     correct_operations: Vec<Operation>,
     candidates: Vec<Candidate>,
     allowed_controls: &[String],
@@ -469,7 +469,7 @@ fn validate_operation_judge_config(
     })
 }
 
-fn validate_string_judge_config(
+pub(super) fn validate_string_judge_config(
     accepted_answers: Vec<String>,
     normalization: StringNormalization,
     max_length: i32,

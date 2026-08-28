@@ -168,6 +168,34 @@ mod tests {
                     max_length: 50,
                 },
             }),
+            judge_config: Json(serde_json::json!({
+                "type": "operation_sequence",
+                "correct_operations": [
+                    {
+                        "control": "down",
+                        "count": 2
+                    },
+                    {
+                        "control": "right",
+                        "count": 1
+                    }
+                ],
+                "candidates": [
+                    {
+                        "candidate_id": "correct",
+                        "operations": [
+                            {
+                                "control": "down",
+                                "count": 2
+                            },
+                            {
+                                "control": "right",
+                                "count": 1
+                            }
+                        ]
+                    }
+                ]
+            })),
             status: "available".to_owned(),
             hint_count: 2,
         }

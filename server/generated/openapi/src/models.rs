@@ -98,6 +98,18 @@ pub struct GetProblemPathParams {
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
 #[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct GetProblemHintPathParams {
+    /// 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+    pub room_id: uuid::Uuid,
+    /// 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+    pub problem_id: uuid::Uuid,
+    /// ヒントの段階（1以上の整数）
+    #[validate(range(min = 1u32))]
+    pub level: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
 pub struct SubmitQueryPathParams {
     /// 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
     pub room_id: uuid::Uuid,
@@ -822,7 +834,8 @@ pub struct CorrectAnswerResponse {
     pub progress: models::Progress,
 
     #[serde(rename = "elapsed_ms")]
-    pub elapsed_ms: i32,
+    #[validate(range(min = 0u64))]
+    pub elapsed_ms: u64,
 }
 
 impl CorrectAnswerResponse {
@@ -833,7 +846,7 @@ impl CorrectAnswerResponse {
         unlocked_problem_ids: Vec<uuid::Uuid>,
         run_status: models::RunStatus,
         progress: models::Progress,
-        elapsed_ms: i32,
+        elapsed_ms: u64,
     ) -> CorrectAnswerResponse {
         CorrectAnswerResponse {
             correct,
@@ -889,7 +902,7 @@ impl std::str::FromStr for CorrectAnswerResponse {
             pub unlocked_problem_ids: Vec<Vec<uuid::Uuid>>,
             pub run_status: Vec<models::RunStatus>,
             pub progress: Vec<models::Progress>,
-            pub elapsed_ms: Vec<i32>,
+            pub elapsed_ms: Vec<u64>,
         }
 
         let mut intermediate_rep = IntermediateRep::default();
@@ -921,7 +934,7 @@ impl std::str::FromStr for CorrectAnswerResponse {
                     #[allow(clippy::redundant_clone)]
                     "progress" => intermediate_rep.progress.push(<models::Progress as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
                     #[allow(clippy::redundant_clone)]
-                    "elapsed_ms" => intermediate_rep.elapsed_ms.push(<i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    "elapsed_ms" => intermediate_rep.elapsed_ms.push(<u64 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
                     _ => return std::result::Result::Err("Unexpected key while parsing CorrectAnswerResponse".to_string())
                 }
             }
@@ -1028,7 +1041,8 @@ pub struct CorrectQueryResponse {
     pub remaining_pattern_count: i32,
 
     #[serde(rename = "query_count")]
-    pub query_count: i32,
+    #[validate(range(min = 0u64))]
+    pub query_count: u64,
 
     /// Note: inline enums are not fully supported by openapi-generator
     #[serde(rename = "problem_status")]
@@ -1043,7 +1057,7 @@ impl CorrectQueryResponse {
         correct: bool,
         normalized_operations: Vec<models::Operation>,
         remaining_pattern_count: i32,
-        query_count: i32,
+        query_count: u64,
         problem_status: String,
     ) -> CorrectQueryResponse {
         CorrectQueryResponse {
@@ -1098,7 +1112,7 @@ impl std::str::FromStr for CorrectQueryResponse {
             pub correct: Vec<bool>,
             pub normalized_operations: Vec<Vec<models::Operation>>,
             pub remaining_pattern_count: Vec<i32>,
-            pub query_count: Vec<i32>,
+            pub query_count: Vec<u64>,
             pub problem_status: Vec<String>,
         }
 
@@ -1129,7 +1143,7 @@ impl std::str::FromStr for CorrectQueryResponse {
                     #[allow(clippy::redundant_clone)]
                     "remaining_pattern_count" => intermediate_rep.remaining_pattern_count.push(<i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
                     #[allow(clippy::redundant_clone)]
-                    "query_count" => intermediate_rep.query_count.push(<i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    "query_count" => intermediate_rep.query_count.push(<u64 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
                     #[allow(clippy::redundant_clone)]
                     "problem_status" => intermediate_rep.problem_status.push(<String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
                     _ => return std::result::Result::Err("Unexpected key while parsing CorrectQueryResponse".to_string())
@@ -2031,7 +2045,8 @@ pub struct IncorrectQueryResponse {
     pub remaining_pattern_count: i32,
 
     #[serde(rename = "query_count")]
-    pub query_count: i32,
+    #[validate(range(min = 0u64))]
+    pub query_count: u64,
 
     /// Note: inline enums are not fully supported by openapi-generator
     #[serde(rename = "problem_status")]
@@ -2046,7 +2061,7 @@ impl IncorrectQueryResponse {
         correct: bool,
         normalized_operations: Vec<models::Operation>,
         remaining_pattern_count: i32,
-        query_count: i32,
+        query_count: u64,
         problem_status: String,
     ) -> IncorrectQueryResponse {
         IncorrectQueryResponse {
@@ -2101,7 +2116,7 @@ impl std::str::FromStr for IncorrectQueryResponse {
             pub correct: Vec<bool>,
             pub normalized_operations: Vec<Vec<models::Operation>>,
             pub remaining_pattern_count: Vec<i32>,
-            pub query_count: Vec<i32>,
+            pub query_count: Vec<u64>,
             pub problem_status: Vec<String>,
         }
 
@@ -2132,7 +2147,7 @@ impl std::str::FromStr for IncorrectQueryResponse {
                     #[allow(clippy::redundant_clone)]
                     "remaining_pattern_count" => intermediate_rep.remaining_pattern_count.push(<i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
                     #[allow(clippy::redundant_clone)]
-                    "query_count" => intermediate_rep.query_count.push(<i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    "query_count" => intermediate_rep.query_count.push(<u64 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
                     #[allow(clippy::redundant_clone)]
                     "problem_status" => intermediate_rep.problem_status.push(<String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
                     _ => return std::result::Result::Err("Unexpected key while parsing IncorrectQueryResponse".to_string())
@@ -3265,6 +3280,159 @@ impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<Operation> {
                     }
                     std::result::Result::Err(err) => std::result::Result::Err(format!(
                         r#"Unable to convert header value '{value}' into Operation - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct ProblemHintResponse {
+    #[serde(rename = "level")]
+    pub level: i32,
+
+    #[serde(rename = "body_markdown")]
+    #[validate(custom(function = "check_xss_string"))]
+    pub body_markdown: String,
+}
+
+impl ProblemHintResponse {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(level: i32, body_markdown: String) -> ProblemHintResponse {
+        ProblemHintResponse {
+            level,
+            body_markdown,
+        }
+    }
+}
+
+/// Converts the ProblemHintResponse value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for ProblemHintResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            Some("level".to_string()),
+            Some(self.level.to_string()),
+            Some("body_markdown".to_string()),
+            Some(self.body_markdown.to_string()),
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a ProblemHintResponse value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for ProblemHintResponse {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub level: Vec<i32>,
+            pub body_markdown: Vec<String>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing ProblemHintResponse".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "level" => intermediate_rep.level.push(
+                        <i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "body_markdown" => intermediate_rep.body_markdown.push(
+                        <String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    _ => {
+                        return std::result::Result::Err(
+                            "Unexpected key while parsing ProblemHintResponse".to_string(),
+                        );
+                    }
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(ProblemHintResponse {
+            level: intermediate_rep
+                .level
+                .into_iter()
+                .next()
+                .ok_or_else(|| "level missing in ProblemHintResponse".to_string())?,
+            body_markdown: intermediate_rep
+                .body_markdown
+                .into_iter()
+                .next()
+                .ok_or_else(|| "body_markdown missing in ProblemHintResponse".to_string())?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<ProblemHintResponse> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<ProblemHintResponse>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<ProblemHintResponse>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for ProblemHintResponse - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<ProblemHintResponse> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <ProblemHintResponse as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into ProblemHintResponse - {err}"#
                     )),
                 }
             }

@@ -156,6 +156,34 @@ cases:
           status: 409
           example: problem_locked
 
+  - id: query_already_cleared
+    preconditions:
+      authenticated: true
+      active_run_exists: true
+      problem_status: cleared
+    steps:
+      - operation_id: submitQuery
+        request_example: serial_operations
+        response:
+          status: 409
+          example: problem_already_cleared
+        state_after:
+          problem_status: cleared
+
+  - id: query_invalid_source
+    preconditions:
+      authenticated: true
+      active_run_exists: true
+      problem_status: available
+    steps:
+      - operation_id: submitQuery
+        request_example: invalid_source
+        response:
+          status: 422
+          example: validation_error
+        state_after:
+          problem_status: available
+
   - id: query_incorrect
     preconditions:
       authenticated: true
@@ -187,6 +215,34 @@ cases:
         state_after:
           problem_status: cleared
           next_problem_status: available
+
+  - id: answer_locked
+    preconditions:
+      authenticated: true
+      active_run_exists: true
+      problem_status: locked
+    steps:
+      - operation_id: submitAnswer
+        request_example: submitted_answer
+        response:
+          status: 409
+          example: problem_locked
+        state_after:
+          problem_status: locked
+
+  - id: answer_already_cleared
+    preconditions:
+      authenticated: true
+      active_run_exists: true
+      problem_status: cleared
+    steps:
+      - operation_id: submitAnswer
+        request_example: submitted_answer
+        response:
+          status: 409
+          example: problem_already_cleared
+        state_after:
+          problem_status: cleared
 
   - id: answer_incorrect
     preconditions:

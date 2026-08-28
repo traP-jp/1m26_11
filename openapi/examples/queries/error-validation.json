@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "入力内容が正しくありませんわ",
+    "details": {}
+  }
+}
