@@ -307,7 +307,7 @@ pub(super) fn normalize_operations(operations: &[Operation]) -> Vec<Operation> {
     normalized
 }
 
-fn normalize_answer(value: &str, normalization: &StringNormalization) -> String {
+pub(super) fn normalize_answer(value: &str, normalization: &StringNormalization) -> String {
     let mut normalized = match normalization.unicode {
         UnicodeNormalization::Nfkc => value.nfkc().collect::<String>(),
     };
