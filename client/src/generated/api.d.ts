@@ -525,6 +525,15 @@ export interface components {
         'application/json': components['schemas']['ErrorResponse']
       }
     }
+    /** @description 文字列回答を送信できない問題状態です。 */
+    AnswerConflict: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
     /** @description 操作列またはsourceが問題ごとの制約に違反しています。 */
     QueryValidationError: {
       headers: {
@@ -791,7 +800,7 @@ export interface operations {
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthorized']
       404: components['responses']['NotFound']
-      409: components['responses']['ProblemLocked']
+      409: components['responses']['AnswerConflict']
       422: components['responses']['UnprocessableEntity']
       500: components['responses']['InternalServerError']
     }
