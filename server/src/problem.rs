@@ -16,7 +16,7 @@ pub(crate) use asset_url::UnconfiguredAssetUrlResolver;
 pub use asset_url::{AssetUrlResolveError, AssetUrlResolver};
 pub use loader::load_problem_data;
 pub use model::{
-    Asset, InputSchema, JudgeConfig, Operation, Problem, ProblemCatalog, ProblemType, Room,
+    Asset, Hint, InputSchema, JudgeConfig, Operation, Problem, ProblemCatalog, ProblemType, Room,
     SubmissionType,
 };
 pub use public::{ProblemProjectionError, build_problem_response};

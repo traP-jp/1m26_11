@@ -162,6 +162,42 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/rooms/{room_id}/problems/{problem_id}/hints/{level}': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+        /**
+         * @description ヒントの段階（1以上の整数）
+         * @example 1
+         */
+        level: components['parameters']['HintLevel']
+      }
+      cookie?: never
+    }
+    /**
+     * 問題のヒントを取得する
+     * @description 認証済みユーザーのcurrent runで、指定されたlevelのヒントを取得します。
+     */
+    get: operations['getProblemHint']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/rooms/{room_id}/problems/{problem_id}/queries': {
     parameters: {
       query?: never
@@ -303,6 +339,10 @@ export interface components {
       status: components['schemas']['ProblemStatus']
       input_schema: components['schemas']['ProblemInputSchema']
       hint_count: number
+    }
+    ProblemHintResponse: {
+      level: number
+      body_markdown: string
     }
     /** @enum {string} */
     ProblemType: 'small' | 'final'
@@ -453,6 +493,15 @@ export interface components {
         'application/json': components['schemas']['ProblemResponse']
       }
     }
+    /** @description ヒント本文 */
+    ProblemHintSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ProblemHintResponse']
+      }
+    }
     /** @description 操作列の判定結果。不正解もこの200 responseを使用します。 */
     QuerySuccess: {
       headers: {
@@ -573,6 +622,11 @@ export interface components {
      * @example 22222222-2222-4222-8222-222222222221
      */
     ProblemId: string
+    /**
+     * @description ヒントの段階（1以上の整数）
+     * @example 1
+     */
+    HintLevel: number
   }
   requestBodies: {
     GuestLogin: {
@@ -740,6 +794,39 @@ export interface operations {
     requestBody?: never
     responses: {
       200: components['responses']['ProblemSuccess']
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      404: components['responses']['NotFound']
+      409: components['responses']['ProblemLocked']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  getProblemHint: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+        /**
+         * @description ヒントの段階（1以上の整数）
+         * @example 1
+         */
+        level: components['parameters']['HintLevel']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['ProblemHintSuccess']
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthorized']
       404: components['responses']['NotFound']

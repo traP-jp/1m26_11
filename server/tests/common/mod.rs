@@ -17,8 +17,8 @@ use server::{
     problem::{Asset, AssetUrlResolveError, AssetUrlResolver, InputSchema},
     repository::{
         AnswerRunStatus, AnswerSubmission, AnswerSubmissionResult, AuthRepository, AuthUserRecord,
-        ProblemDetailRecord, QuerySubmission, QuerySubmissionResult, RepositoryError, RoomRecord,
-        RunRecord,
+        HintRecord, ProblemDetailRecord, QuerySubmission, QuerySubmissionResult, RepositoryError,
+        RoomRecord, RunRecord,
     },
 };
 use sqlx::{
@@ -277,6 +277,53 @@ impl AuthRepository for StubAuthRepository {
             Ok(Some(problem_detail_record(problem_id, "locked")))
         } else if problem_id == cleared_id {
             Ok(Some(problem_detail_record(problem_id, "cleared")))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn find_hint_for_run(
+        &self,
+        run_id: Uuid,
+        room_id: Uuid,
+        problem_id: Uuid,
+        level: i32,
+    ) -> Result<Option<HintRecord>, RepositoryError> {
+        let active_run_id = Uuid::from_str(MOCK_RESUME_ROOM_ID).unwrap();
+
+        if run_id != active_run_id || room_id != active_run_id {
+            return Ok(None);
+        }
+
+        let available_id = Uuid::from_str(MOCK_CLEARED_PROBLEM_ID).unwrap();
+        let locked_id = Uuid::from_str(MOCK_LOCKED_PROBLEM_ID).unwrap();
+        let cleared_id = Uuid::from_str(MOCK_CLEARED_DETAIL_PROBLEM_ID).unwrap();
+        let database_error_id = Uuid::from_str(MOCK_DATABASE_ERROR_PROBLEM_ID).unwrap();
+
+        if problem_id == database_error_id {
+            return Err(RepositoryError::Database(sqlx::Error::Protocol(
+                "simulated private database failure".to_owned(),
+            )));
+        }
+
+        if problem_id == locked_id {
+            return Err(RepositoryError::ProblemLocked);
+        }
+
+        if problem_id == available_id || problem_id == cleared_id {
+            if level == 1 {
+                Ok(Some(HintRecord {
+                    level: 1,
+                    body_markdown: "最初の操作に注目してください".to_owned(),
+                }))
+            } else if level == 2 {
+                Ok(Some(HintRecord {
+                    level: 2,
+                    body_markdown: "2番目のヒントです".to_owned(),
+                }))
+            } else {
+                Ok(None)
+            }
         } else {
             Ok(None)
         }

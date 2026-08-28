@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, State},
 };
 use chrono::Utc;
-use openapi_generated::models::{ActiveRunResponse, ProblemResponse};
+use openapi_generated::models::{ActiveRunResponse, ProblemHintResponse, ProblemResponse};
 use uuid::Uuid;
 
 use crate::{
@@ -94,6 +94,42 @@ pub(crate) async fn get_problem(
     }
 
     let response = build_problem_response(problem, state.asset_url_resolver.as_ref())?;
+
+    Ok(Json(response))
+}
+
+pub(crate) async fn get_problem_hint(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path((room_id, problem_id, level)): Path<(String, String, String)>,
+) -> Result<Json<ProblemHintResponse>, AppError> {
+    let room_id =
+        Uuid::parse_str(&room_id).map_err(|_| AppError::bad_request("invalid room_id"))?;
+
+    let problem_id =
+        Uuid::parse_str(&problem_id).map_err(|_| AppError::bad_request("invalid problem_id"))?;
+
+    let level = level
+        .parse::<i32>()
+        .map_err(|_| AppError::bad_request("invalid hint level"))?;
+
+    if level <= 0 {
+        return Err(AppError::bad_request("invalid hint level"));
+    }
+
+    let run = state
+        .auth_repository
+        .find_active_run(user.user_id, room_id)
+        .await?
+        .ok_or(AppError::RunNotFound)?;
+
+    let hint = state
+        .auth_repository
+        .find_hint_for_run(run.id, room_id, problem_id, level)
+        .await?
+        .ok_or_else(|| AppError::not_found("hint not found"))?;
+
+    let response = ProblemHintResponse::new(hint.level, hint.body_markdown);
 
     Ok(Json(response))
 }
