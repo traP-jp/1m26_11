@@ -390,6 +390,7 @@ export interface components {
       unlocked_problem_ids: string[]
       run_status: components['schemas']['RunStatus']
       progress: components['schemas']['Progress']
+      /** Format: int64 */
       elapsed_ms: number
     }
     Progress: {
@@ -517,6 +518,15 @@ export interface components {
     }
     /** @description 操作列を送信できない問題状態です。 */
     QueryConflict: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 文字列回答を送信できない問題状態です。 */
+    AnswerConflict: {
       headers: {
         [name: string]: unknown
       }
@@ -790,7 +800,7 @@ export interface operations {
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthorized']
       404: components['responses']['NotFound']
-      409: components['responses']['ProblemLocked']
+      409: components['responses']['AnswerConflict']
       422: components['responses']['UnprocessableEntity']
       500: components['responses']['InternalServerError']
     }

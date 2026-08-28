@@ -16,8 +16,9 @@ use server::{
     config::AuthMode,
     problem::{Asset, AssetUrlResolveError, AssetUrlResolver, InputSchema},
     repository::{
-        AuthRepository, AuthUserRecord, ProblemDetailRecord, QuerySubmission,
-        QuerySubmissionResult, RepositoryError, RoomRecord, RunRecord,
+        AnswerRunStatus, AnswerSubmission, AnswerSubmissionResult, AuthRepository, AuthUserRecord,
+        ProblemDetailRecord, QuerySubmission, QuerySubmissionResult, RepositoryError, RoomRecord,
+        RunRecord,
     },
 };
 use sqlx::{
@@ -36,6 +37,7 @@ pub const MOCK_CLEARED_PROBLEM_ID: &str = "22222222-2222-4222-8222-222222222221"
 pub const MOCK_LOCKED_PROBLEM_ID: &str = "22222222-2222-4222-8222-222222222222";
 pub const MOCK_CLEARED_DETAIL_PROBLEM_ID: &str = "22222222-2222-4222-8222-222222222223";
 pub const MOCK_DATABASE_ERROR_PROBLEM_ID: &str = "22222222-2222-4222-8222-222222222224";
+pub const MOCK_STRING_PROBLEM_ID: &str = "22222222-2222-4222-8222-222222222225";
 
 pub fn problem_detail_record(id: Uuid, status: &str) -> ProblemDetailRecord {
     ProblemDetailRecord {
@@ -292,6 +294,65 @@ impl AuthRepository for StubAuthRepository {
             Ok(QuerySubmissionResult {
                 query_count: 4,
                 problem_status: "available".to_owned(),
+            })
+        }
+    }
+    async fn record_answer_judgement(
+        &self,
+        submission: AnswerSubmission,
+    ) -> Result<AnswerSubmissionResult, RepositoryError> {
+        let active_run_id = Uuid::from_str(MOCK_RESUME_ROOM_ID).unwrap();
+        let string_problem_id = Uuid::from_str(MOCK_STRING_PROBLEM_ID).unwrap();
+        let operation_problem_id = Uuid::from_str(MOCK_CLEARED_PROBLEM_ID).unwrap();
+        let locked_problem_id = Uuid::from_str(MOCK_LOCKED_PROBLEM_ID).unwrap();
+        let cleared_problem_id = Uuid::from_str(MOCK_CLEARED_DETAIL_PROBLEM_ID).unwrap();
+        let database_error_problem_id = Uuid::from_str(MOCK_DATABASE_ERROR_PROBLEM_ID).unwrap();
+
+        if submission.run_id != active_run_id {
+            return Err(RepositoryError::RunNotFound);
+        }
+
+        if submission.problem_id == locked_problem_id {
+            return Err(RepositoryError::ProblemLocked);
+        }
+
+        if submission.problem_id == cleared_problem_id {
+            return Err(RepositoryError::ProblemAlreadyCleared);
+        }
+
+        if submission.problem_id == database_error_problem_id {
+            return Err(RepositoryError::Database(sqlx::Error::Protocol(
+                "simulated private database failure".to_owned(),
+            )));
+        }
+
+        if submission.problem_id == operation_problem_id {
+            return Err(RepositoryError::WrongAnswerSubmissionType);
+        }
+
+        if submission.problem_id != string_problem_id {
+            return Err(RepositoryError::ProblemNotFound);
+        }
+
+        if submission.answer.chars().count() > 50 {
+            return Err(RepositoryError::AnswerLengthExceeded);
+        }
+
+        if submission.answer.trim().is_empty() {
+            return Err(RepositoryError::EmptyAnswer);
+        }
+
+        if submission.answer == "19520715" {
+            Ok(AnswerSubmissionResult::Correct {
+                unlocked_problem_ids: vec![locked_problem_id],
+                run_status: AnswerRunStatus::Active,
+                cleared_problem_count: 1,
+                total_problem_count: 4,
+                elapsed_ms: 48_321,
+            })
+        } else {
+            Ok(AnswerSubmissionResult::Incorrect {
+                answer_attempt_count: 2,
             })
         }
     }

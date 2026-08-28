@@ -84,6 +84,9 @@ impl From<RepositoryError> for AppError {
             RepositoryError::ProblemNotFound => Self::not_found("problem not found"),
             RepositoryError::ProblemLocked => Self::ProblemLocked,
             RepositoryError::ProblemAlreadyCleared => Self::ProblemAlreadyCleared,
+            RepositoryError::EmptyAnswer
+            | RepositoryError::AnswerLengthExceeded
+            | RepositoryError::WrongAnswerSubmissionType => Self::ValidationError,
             error => Self::internal(error),
         }
     }
