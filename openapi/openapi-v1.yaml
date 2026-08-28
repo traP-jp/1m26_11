@@ -189,7 +189,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          $ref: "#/components/responses/ProblemLocked"
+          $ref: "#/components/responses/AnswerConflict"
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
         "500":
@@ -394,6 +394,19 @@ components:
               externalValue: ./examples/problems/error-problem-locked.json
     QueryConflict:
       description: 操作列を送信できない問題状態です。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            problem_locked:
+              summary: lockedな問題へ送信した場合
+              externalValue: ./examples/problems/error-problem-locked.json
+            problem_already_cleared:
+              summary: cleared済み問題へ送信した場合
+              externalValue: ./examples/problems/error-problem-already-cleared.json
+    AnswerConflict:
+      description: 文字列回答を送信できない問題状態です。
       content:
         application/json:
           schema:
@@ -820,6 +833,8 @@ components:
           $ref: "#/components/schemas/Progress"
         elapsed_ms:
           type: integer
+          format: int64
+          minimum: 0
     Progress:
       type: object
       required:

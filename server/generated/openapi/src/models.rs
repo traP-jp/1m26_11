@@ -822,7 +822,8 @@ pub struct CorrectAnswerResponse {
     pub progress: models::Progress,
 
     #[serde(rename = "elapsed_ms")]
-    pub elapsed_ms: i32,
+    #[validate(range(min = 0u64))]
+    pub elapsed_ms: u64,
 }
 
 impl CorrectAnswerResponse {
@@ -833,7 +834,7 @@ impl CorrectAnswerResponse {
         unlocked_problem_ids: Vec<uuid::Uuid>,
         run_status: models::RunStatus,
         progress: models::Progress,
-        elapsed_ms: i32,
+        elapsed_ms: u64,
     ) -> CorrectAnswerResponse {
         CorrectAnswerResponse {
             correct,
@@ -889,7 +890,7 @@ impl std::str::FromStr for CorrectAnswerResponse {
             pub unlocked_problem_ids: Vec<Vec<uuid::Uuid>>,
             pub run_status: Vec<models::RunStatus>,
             pub progress: Vec<models::Progress>,
-            pub elapsed_ms: Vec<i32>,
+            pub elapsed_ms: Vec<u64>,
         }
 
         let mut intermediate_rep = IntermediateRep::default();
@@ -921,7 +922,7 @@ impl std::str::FromStr for CorrectAnswerResponse {
                     #[allow(clippy::redundant_clone)]
                     "progress" => intermediate_rep.progress.push(<models::Progress as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
                     #[allow(clippy::redundant_clone)]
-                    "elapsed_ms" => intermediate_rep.elapsed_ms.push(<i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    "elapsed_ms" => intermediate_rep.elapsed_ms.push(<u64 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
                     _ => return std::result::Result::Err("Unexpected key while parsing CorrectAnswerResponse".to_string())
                 }
             }
