@@ -70,7 +70,7 @@ onBeforeUnmount(stopTimer)
 
 <template>
   <div class="game-timer" role="timer" :aria-label="`経過時間 ${minutes}分${seconds}秒`">
-    <span :class="['game-timer__value', minutes < 10 ? 'w-[1ch]' : 'w-[2ch]']"> # 幅変わるのキモかったから、固定幅にしたよ
+    <span :class="['game-timer__value', minutes < 10 ? 'w-[1ch]' : 'w-[2ch]']">
       {{ minutes }}
     </span>
     <span class="game-timer__unit">m</span>
