@@ -16,9 +16,9 @@ use server::{
     config::AuthMode,
     problem::{Asset, AssetUrlResolveError, AssetUrlResolver, InputSchema},
     repository::{
-        AnswerRunStatus, AnswerSubmission, AnswerSubmissionResult, AuthRepository, AuthUserRecord,
-        ProblemDetailRecord, QuerySubmission, QuerySubmissionResult, RepositoryError, RoomRecord,
-        RunRecord,
+        AnswerRunStatus, AnswerSubmission, AnswerSubmissionResult, AuthProvider, AuthRepository,
+        AuthUserRecord, ProblemDetailRecord, QuerySubmission, QuerySubmissionResult,
+        RepositoryError, RoomRecord, RunRecord,
     },
 };
 use sqlx::{
@@ -131,12 +131,13 @@ impl AuthRepository for StubAuthRepository {
         Ok(Some(AuthUserRecord {
             user_id: Uuid::from_str(MOCK_SESSION_ID).unwrap(),
             display_name: "test-user".to_owned(),
+            auth_provider: AuthProvider::Demo,
         }))
     }
 
     async fn find_user_by_provider_subject(
         &self,
-        _auth_provider: &str,
+        _auth_provider: AuthProvider,
         _provider_subject: &str,
     ) -> Result<Option<AuthUserRecord>, RepositoryError> {
         Ok(None)
@@ -144,13 +145,14 @@ impl AuthRepository for StubAuthRepository {
 
     async fn get_or_create_user(
         &self,
-        _auth_provider: &str,
+        auth_provider: AuthProvider,
         _provider_subject: &str,
         display_name: &str,
     ) -> Result<AuthUserRecord, RepositoryError> {
         Ok(AuthUserRecord {
             user_id: Uuid::new_v4(),
             display_name: display_name.to_owned(),
+            auth_provider,
         })
     }
 
@@ -389,7 +391,7 @@ impl AuthRepository for RecordingAuthRepository {
 
     async fn find_user_by_provider_subject(
         &self,
-        _auth_provider: &str,
+        _auth_provider: AuthProvider,
         _provider_subject: &str,
     ) -> Result<Option<AuthUserRecord>, RepositoryError> {
         Ok(None)
@@ -397,13 +399,14 @@ impl AuthRepository for RecordingAuthRepository {
 
     async fn get_or_create_user(
         &self,
-        _auth_provider: &str,
+        auth_provider: AuthProvider,
         _provider_subject: &str,
         display_name: &str,
     ) -> Result<AuthUserRecord, RepositoryError> {
         Ok(AuthUserRecord {
             user_id: self.user_id,
             display_name: display_name.to_owned(),
+            auth_provider,
         })
     }
 

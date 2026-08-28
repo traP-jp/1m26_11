@@ -3,7 +3,7 @@ use axum_extra::extract::cookie::{Cookie, CookieJar};
 use openapi_generated::models::{GuestLoginRequest, GuestLoginResponse, User};
 use uuid::Uuid;
 
-use crate::{AppState, config::AuthMode, error::AppError};
+use crate::{AppState, config::AuthMode, error::AppError, repository::AuthProvider};
 
 pub(crate) async fn login_guest(
     State(state): State<AppState>,
@@ -16,7 +16,11 @@ pub(crate) async fn login_guest(
 
     let user_record = state
         .auth_repository
-        .get_or_create_user("demo", &payload.display_name, &payload.display_name)
+        .get_or_create_user(
+            AuthProvider::Demo,
+            &payload.display_name,
+            &payload.display_name,
+        )
         .await?;
 
     let session_id = Uuid::new_v4();

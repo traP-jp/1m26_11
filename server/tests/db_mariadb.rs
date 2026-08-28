@@ -4,7 +4,7 @@ use common::{connect_test_database, foreign_key_delete_rule, index_columns, prim
 use serde_json::json;
 use server::{
     migrate,
-    repository::{AuthRepository, AuthUserRecord, SqlxUserRepository},
+    repository::{AuthProvider, AuthRepository, AuthUserRecord, SqlxUserRepository},
 };
 use sqlx::types::Json;
 use uuid::Uuid;
@@ -61,12 +61,12 @@ async fn mariadb_auth_repository_flow() {
     let neo_subject = format!("integration-neoshowcase-{}", Uuid::new_v4());
 
     let first_neo_user = repository
-        .get_or_create_user("neoshowcase", &neo_subject, "neo-user")
+        .get_or_create_user(AuthProvider::NeoShowcase, &neo_subject, "neo-user")
         .await
         .expect("first NeoShowcase lookup should succeed");
 
     let second_neo_user = repository
-        .get_or_create_user("neoshowcase", &neo_subject, "neo-user")
+        .get_or_create_user(AuthProvider::NeoShowcase, &neo_subject, "neo-user")
         .await
         .expect("second NeoShowcase lookup should succeed");
 
@@ -101,11 +101,13 @@ async fn mariadb_auth_repository_flow() {
         AuthUserRecord {
             user_id: demo_user_id,
             display_name: "demo-user".to_owned(),
+            auth_provider: AuthProvider::Demo,
         }
     );
 
     assert_eq!(first_neo_user, second_neo_user);
     assert_eq!(first_neo_user.display_name, "neo-user");
+    assert_eq!(first_neo_user.auth_provider, AuthProvider::NeoShowcase,);
 }
 
 #[tokio::test]

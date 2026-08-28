@@ -33,7 +33,7 @@ mod tests {
     use axum::http::{HeaderMap, HeaderValue, header};
     use uuid::Uuid;
 
-    use crate::repository::{AuthRepository, AuthUserRecord, RepositoryError};
+    use crate::repository::{AuthProvider, AuthRepository, AuthUserRecord, RepositoryError};
 
     use super::{SESSION_COOKIE_NAME, resolve_current_user};
 
@@ -59,7 +59,7 @@ mod tests {
 
         async fn find_user_by_provider_subject(
             &self,
-            _auth_provider: &str,
+            _auth_provider: AuthProvider,
             _provider_subject: &str,
         ) -> Result<Option<AuthUserRecord>, RepositoryError> {
             panic!("demo resolver must not look up a provider subject");
@@ -67,7 +67,7 @@ mod tests {
 
         async fn get_or_create_user(
             &self,
-            _auth_provider: &str,
+            _auth_provider: AuthProvider,
             _provider_subject: &str,
             _display_name: &str,
         ) -> Result<AuthUserRecord, RepositoryError> {
@@ -130,6 +130,7 @@ mod tests {
             user: Some(AuthUserRecord {
                 user_id,
                 display_name: "alice".to_owned(),
+                auth_provider: AuthProvider::Demo,
             }),
         };
         let headers = headers_with_session_cookie(&session_id.to_string());

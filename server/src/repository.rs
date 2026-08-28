@@ -13,6 +13,21 @@ use sqlx::{FromRow, MySql, MySqlPool, Transaction};
 use thiserror::Error;
 use uuid::Uuid;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AuthProvider {
+    Demo,
+    NeoShowcase,
+}
+
+impl AuthProvider {
+    const fn as_db_str(self) -> &'static str {
+        match self {
+            Self::Demo => "demo",
+            Self::NeoShowcase => "neoshowcase",
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum RepositoryError {
     #[error("database operation failed")]
@@ -65,6 +80,21 @@ pub enum RepositoryError {
 
     #[error("run update affected an unexpected number of rows")]
     RunUpdateConflict,
+
+    #[error("stored auth provider is invalid")]
+    InvalidAuthProvider,
+}
+
+impl TryFrom<&str> for AuthProvider {
+    type Error = RepositoryError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "demo" => Ok(Self::Demo),
+            "neoshowcase" => Ok(Self::NeoShowcase),
+            _ => Err(RepositoryError::InvalidAuthProvider),
+        }
+    }
 }
 
 impl From<ClearProblemError> for RepositoryError {
@@ -100,10 +130,30 @@ impl SqlxUserRepository {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, FromRow)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuthUserRecord {
     pub user_id: Uuid,
     pub display_name: String,
+    pub auth_provider: AuthProvider,
+}
+
+#[derive(FromRow)]
+struct AuthUserRow {
+    user_id: Uuid,
+    display_name: String,
+    auth_provider: String,
+}
+
+impl TryFrom<AuthUserRow> for AuthUserRecord {
+    type Error = RepositoryError;
+
+    fn try_from(row: AuthUserRow) -> Result<Self, Self::Error> {
+        Ok(Self {
+            user_id: row.user_id,
+            display_name: row.display_name,
+            auth_provider: AuthProvider::try_from(row.auth_provider.as_str())?,
+        })
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, FromRow)]
@@ -251,13 +301,13 @@ pub trait AuthRepository: Send + Sync {
 
     async fn find_user_by_provider_subject(
         &self,
-        auth_provider: &str,
+        auth_provider: AuthProvider,
         provider_subject: &str,
     ) -> Result<Option<AuthUserRecord>, RepositoryError>;
 
     async fn get_or_create_user(
         &self,
-        auth_provider: &str,
+        auth_provider: AuthProvider,
         provider_subject: &str,
         display_name: &str,
     ) -> Result<AuthUserRecord, RepositoryError>;
@@ -345,46 +395,53 @@ impl AuthRepository for SqlxUserRepository {
         &self,
         session_id: Uuid,
     ) -> Result<Option<AuthUserRecord>, RepositoryError> {
-        sqlx::query_as::<_, AuthUserRecord>(
+        let row = sqlx::query_as::<_, AuthUserRow>(
             r#"
-            SELECT users.user_id, users.display_name
+            SELECT
+                users.user_id,
+                users.display_name,
+                users.auth_provider
             FROM demo_sessions
             INNER JOIN users ON users.user_id = demo_sessions.user_id
             WHERE demo_sessions.session_id = ?
-              AND users.auth_provider = 'demo'
+            AND users.auth_provider = 'demo'
             LIMIT 1
             "#,
         )
         .bind(session_id)
         .fetch_optional(&self.pool)
         .await
-        .map_err(RepositoryError::Database)
+        .map_err(RepositoryError::Database)?;
+
+        row.map(AuthUserRecord::try_from).transpose()
     }
 
     async fn find_user_by_provider_subject(
         &self,
-        auth_provider: &str,
+        auth_provider: AuthProvider,
         provider_subject: &str,
     ) -> Result<Option<AuthUserRecord>, RepositoryError> {
-        sqlx::query_as::<_, AuthUserRecord>(
+        let row = sqlx::query_as::<_, AuthUserRow>(
             r#"
-            SELECT user_id, display_name
+            SELECT user_id, display_name, auth_provider
             FROM users
             WHERE auth_provider = ?
-              AND provider_subject = ?
+            AND provider_subject = ?
             LIMIT 1
             "#,
         )
-        .bind(auth_provider)
+        .bind(auth_provider.as_db_str())
         .bind(provider_subject)
         .fetch_optional(&self.pool)
         .await
-        .map_err(RepositoryError::Database)
+        .map_err(RepositoryError::Database)?;
+
+        row.map(AuthUserRecord::try_from).transpose()
     }
 
     async fn get_or_create_user(
         &self,
-        auth_provider: &str,
+        auth_provider: AuthProvider,
         provider_subject: &str,
         display_name: &str,
     ) -> Result<AuthUserRecord, RepositoryError> {
@@ -403,7 +460,7 @@ impl AuthRepository for SqlxUserRepository {
             "#,
         )
         .bind(user_id)
-        .bind(auth_provider)
+        .bind(auth_provider.as_db_str())
         .bind(provider_subject)
         .bind(display_name)
         .execute(&self.pool)
@@ -1069,6 +1126,29 @@ pub(crate) async fn apply_problem_clear_in_transaction(
     }
 
     Ok(plan)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AuthProvider, RepositoryError};
+
+    #[test]
+    fn auth_provider_decodes_known_values() {
+        let demo = AuthProvider::try_from("demo").expect("demo should decode as an auth provider");
+        let neoshowcase = AuthProvider::try_from("neoshowcase")
+            .expect("neoshowcase should decode as an auth provider");
+
+        assert_eq!(demo, AuthProvider::Demo);
+        assert_eq!(neoshowcase, AuthProvider::NeoShowcase);
+    }
+
+    #[test]
+    fn auth_provider_rejects_unknown_value() {
+        assert!(matches!(
+            AuthProvider::try_from("unknown"),
+            Err(RepositoryError::InvalidAuthProvider),
+        ));
+    }
 }
 
 #[cfg(test)]

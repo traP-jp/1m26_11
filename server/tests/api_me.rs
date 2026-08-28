@@ -10,7 +10,7 @@ use http_body_util::BodyExt;
 use server::{
     AppState, app,
     config::AuthMode,
-    repository::{AuthRepository, AuthUserRecord, RepositoryError},
+    repository::{AuthProvider, AuthRepository, AuthUserRecord, RepositoryError},
 };
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -57,7 +57,7 @@ impl AuthRepository for StubAuthRepository {
 
     async fn find_user_by_provider_subject(
         &self,
-        _auth_provider: &str,
+        _auth_provider: AuthProvider,
         _provider_subject: &str,
     ) -> Result<Option<AuthUserRecord>, RepositoryError> {
         panic!("direct provider lookup was not expected");
@@ -65,7 +65,7 @@ impl AuthRepository for StubAuthRepository {
 
     async fn get_or_create_user(
         &self,
-        auth_provider: &str,
+        auth_provider: AuthProvider,
         provider_subject: &str,
         display_name: &str,
     ) -> Result<AuthUserRecord, RepositoryError> {
@@ -74,7 +74,7 @@ impl AuthRepository for StubAuthRepository {
             .clone()
             .expect("NeoShowcase user lookup was not expected");
 
-        assert_eq!(auth_provider, "neoshowcase");
+        assert_eq!(auth_provider, AuthProvider::NeoShowcase);
         assert_eq!(provider_subject, user.display_name);
         assert_eq!(display_name, user.display_name);
 
@@ -95,6 +95,7 @@ async fn demo_authenticated_response_matches_fixture() {
             user: Some(AuthUserRecord {
                 user_id,
                 display_name: "kaomojikun".to_owned(),
+                auth_provider: AuthProvider::Demo,
             }),
         },
     );
@@ -136,6 +137,7 @@ async fn neoshowcase_authenticated_response_matches_fixture() {
             user: Some(AuthUserRecord {
                 user_id,
                 display_name: "kaomojikun".to_owned(),
+                auth_provider: AuthProvider::NeoShowcase,
             }),
         },
     );

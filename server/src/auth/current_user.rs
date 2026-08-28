@@ -73,7 +73,7 @@ mod tests {
         AppState,
         config::AuthMode,
         error::AppError,
-        repository::{AuthRepository, AuthUserRecord, RepositoryError},
+        repository::{AuthProvider, AuthRepository, AuthUserRecord, RepositoryError},
     };
 
     use super::{CurrentUser, OptionalCurrentUser};
@@ -114,7 +114,7 @@ mod tests {
 
         async fn find_user_by_provider_subject(
             &self,
-            _auth_provider: &str,
+            _auth_provider: AuthProvider,
             _provider_subject: &str,
         ) -> Result<Option<AuthUserRecord>, RepositoryError> {
             panic!("direct provider lookup was not expected");
@@ -122,7 +122,7 @@ mod tests {
 
         async fn get_or_create_user(
             &self,
-            auth_provider: &str,
+            auth_provider: AuthProvider,
             provider_subject: &str,
             display_name: &str,
         ) -> Result<AuthUserRecord, RepositoryError> {
@@ -131,7 +131,7 @@ mod tests {
                     provider_subject: expected_subject,
                     user,
                 } => {
-                    assert_eq!(auth_provider, "neoshowcase");
+                    assert_eq!(auth_provider, AuthProvider::NeoShowcase);
                     assert_eq!(provider_subject, expected_subject.as_str());
                     assert_eq!(display_name, expected_subject.as_str());
 
@@ -150,6 +150,7 @@ mod tests {
         let auth_user = AuthUserRecord {
             user_id: Uuid::new_v4(),
             display_name: "demo-user".to_owned(),
+            auth_provider: AuthProvider::Demo,
         };
         let state = AppState::new(
             AuthMode::Demo,
@@ -179,6 +180,7 @@ mod tests {
         let auth_user = AuthUserRecord {
             user_id: Uuid::new_v4(),
             display_name: "alice".to_owned(),
+            auth_provider: AuthProvider::NeoShowcase,
         };
         let state = AppState::new(
             AuthMode::NeoShowcase,
