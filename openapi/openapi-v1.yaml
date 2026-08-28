@@ -140,6 +140,30 @@ paths:
           $ref: "#/components/responses/ProblemLocked"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /api/rooms/{room_id}/problems/{problem_id}/hints/{level}:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+      - $ref: "#/components/parameters/ProblemId"
+      - $ref: "#/components/parameters/HintLevel"
+    get:
+      summary: 問題のヒントを取得する
+      description: 認証済みユーザーのcurrent runで、指定されたlevelのヒントを取得します。
+      operationId: getProblemHint
+      tags:
+        - problems
+      responses:
+        "200":
+          $ref: "#/components/responses/ProblemHintSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ProblemLocked"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
   /api/rooms/{room_id}/problems/{problem_id}/queries:
     parameters:
       - $ref: "#/components/parameters/RoomId"
@@ -189,7 +213,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          $ref: "#/components/responses/ProblemLocked"
+          $ref: "#/components/responses/AnswerConflict"
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
         "500":
@@ -216,6 +240,15 @@ components:
         type: string
         format: uuid
       example: 22222222-2222-4222-8222-222222222221
+    HintLevel:
+      name: level
+      in: path
+      required: true
+      description: ヒントの段階（1以上の整数）
+      schema:
+        type: integer
+        minimum: 1
+      example: 1
   requestBodies:
     GuestLogin:
       required: true
@@ -321,6 +354,16 @@ components:
             available_problem:
               summary: 挑戦可能な小なぞ
               externalValue: ./examples/problems/available-response.json
+    ProblemHintSuccess:
+      description: ヒント本文
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProblemHintResponse"
+          examples:
+            hint_level_1:
+              summary: level 1のヒント
+              externalValue: ./examples/problems/hint-level1-response.json
     QuerySuccess:
       description: 操作列の判定結果。不正解もこの200 responseを使用します。
       content:
@@ -394,6 +437,19 @@ components:
               externalValue: ./examples/problems/error-problem-locked.json
     QueryConflict:
       description: 操作列を送信できない問題状態です。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            problem_locked:
+              summary: lockedな問題へ送信した場合
+              externalValue: ./examples/problems/error-problem-locked.json
+            problem_already_cleared:
+              summary: cleared済み問題へ送信した場合
+              externalValue: ./examples/problems/error-problem-already-cleared.json
+    AnswerConflict:
+      description: 文字列回答を送信できない問題状態です。
       content:
         application/json:
           schema:
@@ -608,6 +664,16 @@ components:
           $ref: "#/components/schemas/ProblemInputSchema"
         hint_count:
           type: integer
+    ProblemHintResponse:
+      type: object
+      required:
+        - level
+        - body_markdown
+      properties:
+        level:
+          type: integer
+        body_markdown:
+          type: string
     ProblemType:
       type: string
       enum:
@@ -820,6 +886,8 @@ components:
           $ref: "#/components/schemas/Progress"
         elapsed_ms:
           type: integer
+          format: int64
+          minimum: 0
     Progress:
       type: object
       required:

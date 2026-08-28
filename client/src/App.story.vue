@@ -1,11 +1,22 @@
 <script setup lang="ts">
-import App from './App.vue'
+import ClearPage from './ClearPage.vue'
+import PortalPage from './PortalPage.vue'
+import RoomPage from './RoomPage.vue'
+import { roomPageFixture } from './RoomPage.fixture'
 </script>
 
 <template>
-  <Story title="App">
-    <Variant title="Default">
-      <App />
+  <Story title="App/Routes">
+    <Variant title="Portal">
+      <PortalPage />
+    </Variant>
+
+    <Variant title="Room">
+      <RoomPage :view-model="roomPageFixture" />
+    </Variant>
+
+    <Variant title="Clear">
+      <ClearPage />
     </Variant>
   </Story>
 </template>

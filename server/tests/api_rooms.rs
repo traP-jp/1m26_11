@@ -440,3 +440,231 @@ async fn get_current_run_invalid_room_id_format() {
     assert_eq!(body["error"]["code"], "BAD_REQUEST");
     assert_eq!(body["error"]["message"], "invalid room_id");
 }
+
+#[tokio::test]
+async fn get_problem_hint_level1_succeeds() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_RESUME_ROOM_ID}/problems/{MOCK_CLEARED_PROBLEM_ID}/hints/1"
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let actual: serde_json::Value = body_json(response).await;
+    let expected: serde_json::Value = serde_json::from_str(include_str!(
+        "../../openapi/examples/problems/hint-level1-response.json"
+    ))
+    .unwrap();
+
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn get_problem_hint_level2_succeeds() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_RESUME_ROOM_ID}/problems/{MOCK_CLEARED_PROBLEM_ID}/hints/2"
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let actual: serde_json::Value = body_json(response).await;
+    assert_eq!(actual["level"], 2);
+    assert_eq!(actual["body_markdown"], "2番目のヒントです");
+}
+
+#[tokio::test]
+async fn get_problem_hint_unauthorized() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_RESUME_ROOM_ID}/problems/{MOCK_CLEARED_PROBLEM_ID}/hints/1"
+    ))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn get_problem_hint_problem_locked() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_RESUME_ROOM_ID}/problems/{MOCK_LOCKED_PROBLEM_ID}/hints/1"
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+
+    let actual: serde_json::Value = body_json(response).await;
+    let expected: serde_json::Value = serde_json::from_str(include_str!(
+        "../../openapi/examples/problems/error-problem-locked.json"
+    ))
+    .unwrap();
+
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn get_problem_hint_not_found_when_hint_missing() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_RESUME_ROOM_ID}/problems/{}/hints/1",
+        Uuid::nil()
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["error"]["code"], "NOT_FOUND");
+}
+
+#[tokio::test]
+async fn get_problem_hint_invalid_room_id() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::get(format!(
+        "/api/rooms/not-a-uuid/problems/{MOCK_CLEARED_PROBLEM_ID}/hints/1"
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["error"]["code"], "BAD_REQUEST");
+    assert_eq!(body["error"]["message"], "invalid room_id");
+}
+
+#[tokio::test]
+async fn get_problem_hint_invalid_problem_id() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_RESUME_ROOM_ID}/problems/not-a-uuid/hints/1"
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["error"]["code"], "BAD_REQUEST");
+    assert_eq!(body["error"]["message"], "invalid problem_id");
+}
+
+#[tokio::test]
+async fn get_problem_hint_invalid_level() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    for invalid_level in ["0", "-1", "abc"] {
+        let req = Request::get(format!(
+            "/api/rooms/{MOCK_RESUME_ROOM_ID}/problems/{MOCK_CLEARED_PROBLEM_ID}/hints/{invalid_level}"
+        ))
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+        let response = request(&app, req).await;
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let body: serde_json::Value = body_json(response).await;
+        assert_eq!(body["error"]["code"], "BAD_REQUEST");
+        assert_eq!(body["error"]["message"], "invalid hint level");
+    }
+}
+
+#[tokio::test]
+async fn get_problem_hint_not_found_when_level_exceeds_available_hints() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_RESUME_ROOM_ID}/problems/{MOCK_CLEARED_PROBLEM_ID}/hints/3"
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["error"]["code"], "NOT_FOUND");
+    assert_eq!(body["error"]["message"], "hint not found");
+}
+
+#[tokio::test]
+async fn get_problem_hint_run_not_found() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_NEW_ROOM_ID}/problems/{MOCK_CLEARED_PROBLEM_ID}/hints/1"
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let actual: serde_json::Value = body_json(response).await;
+    let expected: serde_json::Value = serde_json::from_str(include_str!(
+        "../../openapi/examples/runs/error-run-not-found.json"
+    ))
+    .unwrap();
+
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn get_problem_hint_database_error() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::get(format!(
+        "/api/rooms/{MOCK_RESUME_ROOM_ID}/problems/{MOCK_DATABASE_ERROR_PROBLEM_ID}/hints/1"
+    ))
+    .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+    .body(Body::empty())
+    .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["error"]["code"], "INTERNAL_SERVER_ERROR");
+}

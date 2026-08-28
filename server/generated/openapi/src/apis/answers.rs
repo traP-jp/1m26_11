@@ -20,7 +20,7 @@ pub enum SubmitAnswerResponse {
     Status401(models::ErrorResponse),
     /// 対象resourceが存在しないか、現在のAUTH_MODEではendpointが有効ではありません。具体的なerror.codeは未確定です。
     Status404(models::ErrorResponse),
-    /// 問題がまだ解放されていません。
+    /// 文字列回答を送信できない問題状態です。
     Status409(models::ErrorResponse),
     /// 文字数超過など入力内容が不正です。具体的なerror.codeは未確定です。
     Status422(models::ErrorResponse),
