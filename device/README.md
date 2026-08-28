@@ -4,7 +4,8 @@ Raspberry Pi Pico H（RP2040）に接続した機械式スイッチの raw GPIO 
 VS Code の MicroPico vREPL で確認するための PoC です。
 
 この PoC の表示は人が配線と bounce を確認するための一時的な診断出力です。最終シリアル
-protocol、encoding、delimiter、frame、button と game control の対応を定義するものではありません。
+protocol、encoding、delimiter、frame、controlの表現方法を定義するものではありません。物理スイッチと
+game controlの対応は「ピン割当」に記載します。
 また、本番用 debounce、連打の集約、repeat、長押し判定は実装しません。
 
 ## 現在の確認状況
@@ -17,6 +18,7 @@ protocol、encoding、delimiter、frame、button と game control の対応を�
 | GP3～GP8／スイッチ2～7 | 2026-08-27 確認済み |
 | USB抜き差し後のMicroPico再接続・再実行 | 2026-08-27 確認済み（WSLへ再attach） |
 | `Upload Project` の実機転送内容 | 2026-08-27 確認済み |
+| スイッチ1～7とgame controlの対応 | 2026-08-29 確定 |
 
 GPIOの実機確認が終わるまでは、Issue #92のdevice側PoCも完了扱いにしません。また、Issue #92全体の
 完了条件であるWeb Serial確認と入力契約確定は、このPoCの対象外です。
@@ -58,23 +60,25 @@ device/
 
 Pico HをUSB connectorが上になる向きで見たときの、board上の物理pin番号も併記します。
 
-| スイッチ | GPIO | 物理pin | もう一方の端子 |
-| --- | --- | --- | --- |
-| 1 | GP2 | 4 | 共通GND |
-| 2 | GP3 | 5 | 共通GND |
-| 3 | GP4 | 6 | 共通GND |
-| 4 | GP5 | 7 | 共通GND |
-| 5 | GP6 | 9 | 共通GND |
-| 6 | GP7 | 10 | 共通GND |
-| 7 | GP8 | 11 | 共通GND |
-| 共通GND | GND | 8 | 全スイッチで共有 |
+| スイッチ | GPIO | 物理pin | game control | サイズ | もう一方の端子 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | GP2 | 4 | `up` | — | 共通GND |
+| 2 | GP3 | 5 | `down` | — | 共通GND |
+| 3 | GP4 | 6 | `left` | — | 共通GND |
+| 4 | GP5 | 7 | `right` | — | 共通GND |
+| 5 | GP6 | 9 | `red` | small | 共通GND |
+| 6 | GP7 | 10 | `yellow` | middle | 共通GND |
+| 7 | GP8 | 11 | `green` | big | 共通GND |
+| 共通GND | GND | 8 | — | — | 全スイッチで共有 |
 
 GPIOは `Pin.IN` と内部 `Pin.PULL_UP` で初期化します。
 
 - 未押下: HIGH（`level=1`、`RELEASED`）
 - 押下: LOW（`level=0`、`PRESSED`）
 
-スイッチ番号は物理配線を識別する仮番号です。`up`、`down`などのgame controlへはまだ割り当てません。
+この物理スイッチとgame controlの対応は2026-08-29に確定しました。`button_test.py`はraw GPIO診断用の
+ため、引き続きbutton番号とGPIOだけを表示し、control名は出力しません。最終シリアルprotocolでのfield名や
+表現方法は未確定です。
 
 公式pinout: [Raspberry Pi Pico pinout](https://datasheets.raspberrypi.com/pico/Pico-R3-A4-Pinout.pdf)
 
