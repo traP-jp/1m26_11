@@ -179,6 +179,7 @@ CREATE TABLE IF NOT EXISTS problem_progress (
     problem_id BINARY(16) NOT NULL,
     status VARCHAR(16) NOT NULL,
     answer_attempt_count INT NOT NULL DEFAULT 0,
+    max_hint_level INT NOT NULL DEFAULT 0,
     cleared_at TIMESTAMP(3) NULL,
 
     PRIMARY KEY (
@@ -206,6 +207,9 @@ CREATE TABLE IF NOT EXISTS problem_progress (
 
     CONSTRAINT chk_problem_progress_answer_attempt_count
         CHECK (answer_attempt_count >= 0),
+
+    CONSTRAINT chk_problem_progress_max_hint_level
+        CHECK (max_hint_level >= 0),
 
     CONSTRAINT chk_problem_progress_cleared_at
         CHECK (
