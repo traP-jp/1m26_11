@@ -1,22 +1,82 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 export interface GameTimerProps {
   serverElapsedMs: number
+  active: boolean
 }
 
 const props = defineProps<GameTimerProps>()
 
-const totalSeconds = computed(() => Math.floor(Math.max(0, props.serverElapsedMs) / 1000))
+const TICK_INTERVAL_MS = 250
+
+const normalizeElapsedMs = (elapsedMs: number): number => Math.max(0, elapsedMs)
+
+const initialNow = Date.now()
+const synchronizedAt = ref(initialNow)
+const currentTime = ref(initialNow)
+let timerId: number | undefined
+
+const displayedElapsedMs = computed(() => {
+  const elapsedSinceSynchronization = props.active
+    ? Math.max(0, currentTime.value - synchronizedAt.value)
+    : 0
+  return normalizeElapsedMs(props.serverElapsedMs) + elapsedSinceSynchronization
+})
+const totalSeconds = computed(() => Math.floor(displayedElapsedMs.value / 1000))
 const minutes = computed(() => Math.floor(totalSeconds.value / 60))
 const seconds = computed(() => totalSeconds.value % 60)
+
+function updateCurrentTime(): void {
+  currentTime.value = Date.now()
+}
+
+function synchronizeWithServer(): void {
+  const now = Date.now()
+  synchronizedAt.value = now
+  currentTime.value = now
+}
+
+function startTimer(): void {
+  if (timerId !== undefined) return
+  timerId = window.setInterval(updateCurrentTime, TICK_INTERVAL_MS)
+}
+
+function stopTimer(): void {
+  if (timerId === undefined) return
+  window.clearInterval(timerId)
+  timerId = undefined
+}
+
+watch(
+  [() => props.serverElapsedMs, () => props.active],
+  ([, active]) => {
+    synchronizeWithServer()
+    if (active) {
+      startTimer()
+      return
+    }
+
+    stopTimer()
+  },
+  { flush: 'sync' },
+)
+
+onMounted(() => {
+  if (props.active) startTimer()
+})
+onBeforeUnmount(stopTimer)
 </script>
 
 <template>
   <div class="game-timer" role="timer" :aria-label="`経過時間 ${minutes}分${seconds}秒`">
-    <span class="game-timer__value">{{ minutes }}</span>
+    <span :class="['game-timer__value', minutes < 10 ? 'w-[1ch]' : 'w-[2ch]']">
+      {{ minutes }}
+    </span>
     <span class="game-timer__unit">m</span>
-    <span class="game-timer__value">{{ seconds }}</span>
+    <span :class="['game-timer__value', seconds < 10 ? 'w-[1ch]' : 'w-[2ch]']">
+      {{ seconds }}
+    </span>
     <span class="game-timer__unit">s</span>
   </div>
 </template>

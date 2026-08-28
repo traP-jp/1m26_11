@@ -20,11 +20,14 @@ const clearedRun = mockContract.getResponseExample(
 export const gameTimerFixtures = {
   justStarted: {
     serverElapsedMs: 0,
+    active: true,
   },
   active: {
     serverElapsedMs: activeRun.elapsed_ms,
+    active: true,
   },
   cleared: {
     serverElapsedMs: clearedRun.elapsed_ms,
+    active: false,
   },
 } satisfies Record<string, GameTimerProps>
