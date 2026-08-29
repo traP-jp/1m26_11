@@ -47,7 +47,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "422":
-          $ref: "#/components/responses/UnprocessableEntity"
+          $ref: "#/components/responses/GuestLoginValidationError"
         "500":
           $ref: "#/components/responses/InternalServerError"
   /api/auth/logout:
@@ -62,7 +62,7 @@ paths:
           description: ログアウト完了。response bodyはありません。
           headers:
             Set-Cookie:
-              description: demo session Cookieを削除するためのheader。Cookie名と具体的な属性は未確定です。
+              description: demo_session Cookieを削除します。Path=/、Max-Age=0、過去のExpiresを指定し、デプロイ環境ではSecureを付けます。
               schema:
                 type: string
         "500":
@@ -227,6 +227,13 @@ components:
             guest_login:
               summary: デモ用の名前登録
               externalValue: ./examples/auth/guest-request.json
+            guest_login_empty:
+              summary: trim後に空となる表示名
+              externalValue: ./examples/auth/guest-request-empty.json
+            guest_login_too_long:
+              summary: trim後に33 Unicode code pointとなる表示名
+              externalValue: ./examples/auth/guest-request-too-long.json
+
     SubmitQuery:
       required: true
       content:
@@ -277,7 +284,7 @@ components:
       description: デモ用ユーザーを取得または作成し、session Cookieを発行した状態
       headers:
         Set-Cookie:
-          description: HttpOnlyなdemo session Cookie。Cookie名と具体的な属性は未確定です。
+          description: demo_session Cookie。Path=/、HttpOnly、SameSite=Lax、Domainなし、有効期限なしのsession Cookieです。デプロイ環境ではSecureを付けます。
           schema:
             type: string
       content:
@@ -288,6 +295,19 @@ components:
             guest_authenticated:
               summary: デモ用ログイン成功
               externalValue: ./examples/auth/guest-response.json
+    GuestLoginValidationError:
+      description: trim後の表示名が空、または32 Unicode code pointを超えています。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            display_name_required:
+              summary: trim後の表示名が空
+              externalValue: ./examples/auth/error-display-name-required.json
+            display_name_too_long:
+              summary: trim後の表示名が32文字を超過
+              externalValue: ./examples/auth/error-display-name-too-long.json
     RunStartOrResumeSuccess:
       description: activeな挑戦状態
       content:
@@ -550,6 +570,7 @@ components:
       properties:
         display_name:
           type: string
+          description: 前後のUnicode空白をserverで除去し、除去後1〜32 Unicode code pointを許可します。
     GuestLoginResponse:
       type: object
       required:

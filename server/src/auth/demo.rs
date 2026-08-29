@@ -6,7 +6,7 @@ use crate::repository::{AuthRepository, RepositoryError};
 
 use super::current_user::CurrentUser;
 
-const SESSION_COOKIE_NAME: &str = "demo_session";
+pub(crate) const SESSION_COOKIE_NAME: &str = "demo_session";
 
 pub(crate) async fn resolve_current_user(
     headers: &HeaderMap,

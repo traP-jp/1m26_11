@@ -368,6 +368,7 @@ pub struct DemoSessionCalls {
 
 pub struct RecordingAuthRepository {
     pub user_id: Uuid,
+    pub get_or_create_user_calls: Mutex<Vec<(AuthProvider, String, String)>>,
     pub demo_session_calls: Mutex<DemoSessionCalls>,
 }
 
@@ -376,6 +377,7 @@ impl RecordingAuthRepository {
         Self {
             user_id,
             demo_session_calls: Mutex::new(DemoSessionCalls::default()),
+            get_or_create_user_calls: Mutex::new(Vec::new()),
         }
     }
 }
@@ -400,9 +402,18 @@ impl AuthRepository for RecordingAuthRepository {
     async fn get_or_create_user(
         &self,
         auth_provider: AuthProvider,
-        _provider_subject: &str,
+        provider_subject: &str,
         display_name: &str,
     ) -> Result<AuthUserRecord, RepositoryError> {
+        self.get_or_create_user_calls
+            .lock()
+            .expect("get-or-create user call log should not be poisoned")
+            .push((
+                auth_provider,
+                provider_subject.to_owned(),
+                display_name.to_owned(),
+            ));
+
         Ok(AuthUserRecord {
             user_id: self.user_id,
             display_name: display_name.to_owned(),

@@ -10,12 +10,14 @@ use common::{
     MOCK_SESSION_ID, RecordingAuthRepository, StubAuthRepository, body_bytes, body_json, request,
 };
 use serde_json::json;
-use server::{AppState, app, config::AuthMode};
+use server::{AppState, app, config::AuthMode, repository::AuthProvider};
 use uuid::Uuid;
 
 #[tokio::test]
 async fn guest_login_succeeds_in_demo_mode() {
-    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+    let app =
+        app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository))
+            .with_demo_cookie_secure(false));
 
     let request_payload = json!({
         "display_name": "hoge"
@@ -48,6 +50,140 @@ async fn guest_login_succeeds_in_demo_mode() {
     assert!(cookie_str.contains("demo_session="));
     assert!(cookie_str.contains("HttpOnly"));
     assert!(cookie_str.contains("Path=/"));
+    assert!(cookie_str.contains("SameSite=Lax"));
+    assert!(!cookie_str.contains("Secure"));
+    assert!(!cookie_str.contains("Domain="));
+    assert!(!cookie_str.contains("Max-Age="));
+    assert!(!cookie_str.contains("Expires="));
+}
+
+#[tokio::test]
+async fn guest_login_sets_secure_cookie_when_configured() {
+    let app =
+        app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository))
+            .with_demo_cookie_secure(true));
+
+    let req = Request::post("/api/auth/guest")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            serde_json::to_vec(&json!({ "display_name": "hoge" })).unwrap(),
+        ))
+        .unwrap();
+
+    let response = request(&app, req).await;
+    let cookie = response
+        .headers()
+        .get(header::SET_COOKIE)
+        .unwrap()
+        .to_str()
+        .unwrap();
+
+    assert!(cookie.contains("Secure"));
+    assert!(cookie.contains("SameSite=Lax"));
+}
+
+#[tokio::test]
+async fn guest_login_trims_unicode_whitespace_before_repository_call() {
+    let repository = Arc::new(RecordingAuthRepository::new(Uuid::new_v4()));
+    let app = app(AppState::new(AuthMode::Demo, repository.clone()).with_demo_cookie_secure(false));
+
+    let request_payload = json!({
+        "display_name": " \u{3000}hoge\t"
+    });
+
+    let req = Request::post("/api/auth/guest")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(serde_json::to_vec(&request_payload).unwrap()))
+        .unwrap();
+
+    let response = request(&app, req).await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["user"]["display_name"], "hoge");
+
+    let calls = repository
+        .get_or_create_user_calls
+        .lock()
+        .expect("get-or-create user call log should not be poisoned");
+
+    assert_eq!(
+        calls.as_slice(),
+        &[(AuthProvider::Demo, "hoge".to_owned(), "hoge".to_owned(),)],
+    );
+}
+
+#[tokio::test]
+async fn guest_login_rejects_display_name_empty_after_trim() {
+    let repository = Arc::new(RecordingAuthRepository::new(Uuid::new_v4()));
+    let app = app(AppState::new(AuthMode::Demo, repository.clone()));
+
+    let request_payload = json!({
+        "display_name": " \u{3000}\t"
+    });
+
+    let req = Request::post("/api/auth/guest")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(serde_json::to_vec(&request_payload).unwrap()))
+        .unwrap();
+
+    let response = request(&app, req).await;
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+    let actual: serde_json::Value = body_json(response).await;
+    let expected: serde_json::Value = serde_json::from_str(include_str!(
+        "../../openapi/examples/auth/error-display-name-required.json"
+    ))
+    .unwrap();
+    assert_eq!(actual, expected);
+
+    assert!(
+        repository
+            .get_or_create_user_calls
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        repository
+            .demo_session_calls
+            .lock()
+            .unwrap()
+            .created
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn guest_login_counts_unicode_code_points() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let accepted = json!({
+        "display_name": "😀".repeat(32)
+    });
+    let req = Request::post("/api/auth/guest")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(serde_json::to_vec(&accepted).unwrap()))
+        .unwrap();
+    assert_eq!(request(&app, req).await.status(), StatusCode::OK);
+
+    let rejected = json!({
+        "display_name": "😀".repeat(33)
+    });
+    let req = Request::post("/api/auth/guest")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(serde_json::to_vec(&rejected).unwrap()))
+        .unwrap();
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+    let actual: serde_json::Value = body_json(response).await;
+    let expected: serde_json::Value = serde_json::from_str(include_str!(
+        "../../openapi/examples/auth/error-display-name-too-long.json"
+    ))
+    .unwrap();
+    assert_eq!(actual, expected);
 }
 
 #[tokio::test]
@@ -92,8 +228,11 @@ async fn guest_logout_succeeds_in_demo_mode() {
         .expect("Set-Cookie header should be present");
     let cookie_str = cookie_header.to_str().unwrap();
     assert!(cookie_str.contains("demo_session="));
-    assert!(cookie_str.contains("Max-Age=0") || cookie_str.contains("expires="));
+    assert!(cookie_str.contains("Max-Age=0"));
+    assert!(cookie_str.contains("Expires="));
     assert!(cookie_str.contains("Path=/"));
+    assert!(cookie_str.contains("SameSite=Lax"));
+    assert!(!cookie_str.contains("Domain="));
 }
 
 #[tokio::test]

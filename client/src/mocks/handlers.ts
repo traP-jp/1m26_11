@@ -124,8 +124,32 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
       } catch {
         return response(400).json(errorBody(400))
       }
-      if (typeof body.display_name !== 'string' || body.display_name.trim() === '') {
+      if (typeof body.display_name !== 'string') {
         return response(422).json(errorBody(422))
+      }
+
+      const displayName = body.display_name.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, '')
+
+      const displayNameLength = Array.from(displayName).length
+
+      if (displayNameLength === 0) {
+        const result = responseFromStep<Schemas['ErrorResponse']>(
+          contract,
+          state,
+          'demo_login_display_name_required',
+          'loginGuest',
+        )
+        return HttpResponse.json(result.body, { status: result.status })
+      }
+
+      if (displayNameLength > 32) {
+        const result = responseFromStep<Schemas['ErrorResponse']>(
+          contract,
+          state,
+          'demo_login_display_name_too_long',
+          'loginGuest',
+        )
+        return HttpResponse.json(result.body, { status: result.status })
       }
 
       const result = responseFromStep<Schemas['GuestLoginResponse']>(

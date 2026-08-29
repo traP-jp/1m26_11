@@ -475,7 +475,7 @@ where
                 .unwrap()?;
                 response.body(Body::from(body_content))
             }
-            apis::auth::LoginGuestResponse::Status422(body) => {
+            apis::auth::LoginGuestResponse::Status422_Trim(body) => {
                 let mut response = Response::builder();
                 let mut response = response.status(422);
                 {

@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { setupServer } from 'msw/node'
 
 import answerCleared from '../../../../openapi/examples/answers/response-correct-cleared.json'
+import displayNameRequired from '../../../../openapi/examples/auth/error-display-name-required.json'
+import displayNameTooLong from '../../../../openapi/examples/auth/error-display-name-too-long.json'
 import guestLogin from '../../../../openapi/examples/auth/guest-request.json'
 import meAuthenticated from '../../../../openapi/examples/auth/me-demo-authenticated.json'
 import meUnauthenticated from '../../../../openapi/examples/auth/me-demo-unauthenticated.json'
@@ -80,6 +82,26 @@ describe('OpenAPI-backed MSW handlers', () => {
     expect(logoutResponse.status).toBe(204)
     expect(await logoutResponse.text()).toBe('')
     expect(await (await fetch(`${BASE_URL}/api/me`)).json()).toEqual(meUnauthenticated)
+  })
+
+  it('validates guest display names by Unicode code point count', async () => {
+    startMock()
+
+    const emptyResponse = await fetch(`${BASE_URL}/api/auth/guest`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ display_name: '　  ' }),
+    })
+    expect(emptyResponse.status).toBe(422)
+    expect(await emptyResponse.json()).toEqual(displayNameRequired)
+
+    const longResponse = await fetch(`${BASE_URL}/api/auth/guest`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ display_name: '😀'.repeat(33) }),
+    })
+    expect(longResponse.status).toBe(422)
+    expect(await longResponse.json()).toEqual(displayNameTooLong)
   })
 
   it('returns the shared unauthorized fixture for unauthenticated game requests', async () => {

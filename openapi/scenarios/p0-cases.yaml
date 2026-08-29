@@ -66,6 +66,32 @@ cases:
           status: 200
           example: demo_unauthenticated
 
+  - id: demo_login_display_name_required
+    preconditions:
+      auth_mode: demo
+      authenticated: false
+    steps:
+      - operation_id: loginGuest
+        request_example: guest_login_empty
+        response:
+          status: 422
+          example: display_name_required
+        state_after:
+          authenticated: false
+
+  - id: demo_login_display_name_too_long
+    preconditions:
+      auth_mode: demo
+      authenticated: false
+    steps:
+      - operation_id: loginGuest
+        request_example: guest_login_too_long
+        response:
+          status: 422
+          example: display_name_too_long
+        state_after:
+          authenticated: false
+
   - id: start_new_run
     preconditions:
       authenticated: true

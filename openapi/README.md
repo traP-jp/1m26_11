@@ -55,7 +55,7 @@ Rustの`rust-axum` Generator 7.24.0はOpenAPI 3.1の`type: "null"`を標準で�
 | operationId | request example | response status / example |
 |---|---|---|
 | `getMe` | なし | `200`: `neoshowcase_authenticated`, `neoshowcase_unauthenticated`, `demo_authenticated`, `demo_unauthenticated` |
-| `loginGuest` | `guest_login` | `200`: `guest_authenticated` |
+| `loginGuest` | `guest_login`, `guest_login_empty`, `guest_login_too_long` | `200`: `guest_authenticated`; `422`: `display_name_required`, `display_name_too_long` |
 | `logoutDemo` | bodyなし | `204`: bodyなし |
 | `startOrResumeRun` | bodyなし | `200`: `new_run`, `resumed_run`; `401`: `unauthorized` |
 | `getCurrentRun` | なし | `200`: `current_run`; `401`: `unauthorized`; `404`: `run_not_found` |
@@ -154,9 +154,8 @@ APIのpath、method、schema、status、example、scenarioのいずれかを変�
 
 - 開始導線へ設定する最初の`room_id`と`problem_id`
 - 部屋・問題不存在、JSON／UUID不正、入力内容不備、server内部エラーの具体的な`error.code`
-- demo表示名の前後空白、大文字小文字、最大長
+- demo表示名の大文字小文字をそのまま保持するか、正規化するか
 - queryの空配列、`count`範囲、未知control、`source`の厳密な許容範囲
 - NeoShowcase modeでlogout APIを呼んだ場合と、demo未認証でlogoutした場合の具体的なstatus
-- demo session Cookieの名前、有効期限、具体的な属性
 
 これらはOpenAPIへ推測で追加せず、確定後に更新します。

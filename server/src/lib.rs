@@ -37,6 +37,7 @@ pub const OPENAPI_DOCUMENT: &str = include_str!(concat!(env!("OUT_DIR"), "/opena
 #[derive(Clone)]
 pub struct AppState {
     pub(crate) auth_mode: AuthMode,
+    pub(crate) demo_cookie_secure: bool,
     pub(crate) auth_repository: Arc<dyn AuthRepository>,
     pub(crate) asset_url_resolver: Arc<dyn AssetUrlResolver>,
 }
@@ -46,9 +47,16 @@ impl AppState {
     pub fn new(auth_mode: AuthMode, auth_repository: Arc<dyn AuthRepository>) -> Self {
         Self {
             auth_mode,
+            demo_cookie_secure: true,
             auth_repository,
             asset_url_resolver: Arc::new(UnconfiguredAssetUrlResolver),
         }
+    }
+
+    #[must_use]
+    pub fn with_demo_cookie_secure(mut self, secure: bool) -> Self {
+        self.demo_cookie_secure = secure;
+        self
     }
 
     #[must_use]

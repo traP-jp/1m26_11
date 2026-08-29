@@ -1533,6 +1533,7 @@ impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<ErrorRespons
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
 #[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
 pub struct GuestLoginRequest {
+    /// 前後のUnicode空白をserverで除去し、除去後1〜32 Unicode code pointを許可します。
     #[serde(rename = "display_name")]
     #[validate(custom(function = "check_xss_string"))]
     pub display_name: String,
