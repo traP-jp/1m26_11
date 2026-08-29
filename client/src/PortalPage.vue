@@ -1,42 +1,75 @@
 <script setup lang="ts">
-import PortalHeader from './components/portal/PortalHeader.vue'
-import { portalHeaderFixtures } from './components/portal/PortalHeader.fixture'
-import RoomCard, { type Room } from './RoomCard.vue'
+import { computed } from 'vue'
 
+import AuthActionButton from './components/auth/AuthActionButton.vue'
+import GuestNameForm from './components/auth/GuestNameForm.vue'
+import MinimalProgressSummary from './components/portal/MinimalProgressSummary.vue'
+import PortalHeader from './components/portal/PortalHeader.vue'
+import PortalLoginPrompt from './components/portal/PortalLoginPrompt.vue'
+import type { PortalUserStatusState } from './components/portal/PortalHeader.types'
+import type { PortalPageProps } from './PortalPage.types'
+import RoomCard from './RoomCard.vue'
+
+const props = defineProps<PortalPageProps>()
 const emit = defineEmits<{
-  roomSelected: [roomId: string]
+  login: []
+  guestLogin: [displayName: string]
+  logout: []
+  showInstructions: []
+  startRoom: [roomId: string]
 }>()
 
-const rooms: Room[] = [
-  {
-    room_id: '1411824c-d357-4941-af76-c76cb827dda6',
-    number: 1,
-    name: '最初の部屋',
-    genre: 'logic',
-    description: '動作確認用の問題セットです',
-  },
-  {
-    room_id: '1411444c-d357-4941-af76-c76cb827dda6',
-    number: 2,
-    name: '2番目の部屋',
-    genre: 'logic',
-    description: '動作確認用の問題セットです',
-  },
-]
+const userStatus = computed<PortalUserStatusState>(() =>
+  props.authenticated
+    ? {
+        authenticated: true,
+        authMode: props.authMode,
+        displayName: props.displayName ?? '',
+        logoutHref: null,
+        logoutPending: props.authBusy,
+      }
+    : {
+        authenticated: false,
+        authMode: props.authMode,
+        loginHref: null,
+        loginPending: props.authBusy,
+      },
+)
 </script>
 
 <template>
-  <PortalHeader v-bind="portalHeaderFixtures.demoAuthenticated" />
+  <PortalHeader
+    home-href="/"
+    :user-status="userStatus"
+    @login="emit('login')"
+    @logout="emit('logout')"
+    @show-instructions="emit('showInstructions')"
+  />
   <main class="portal-page">
-    <h1 class="portal-page__title">Portal</h1>
-    <p class="portal-page__description">挑戦する部屋を選んでください。</p>
-    <section aria-label="部屋一覧" class="card-list">
-      <RoomCard
-        v-for="room in rooms"
-        :key="room.room_id"
-        :room="room"
-        @start="emit('roomSelected', $event)"
-      />
-    </section>
+    <PortalLoginPrompt v-if="!authenticated">
+      <template #action>
+        <GuestNameForm
+          v-if="authMode === 'demo'"
+          :submit-pending="authBusy"
+          @submit="emit('guestLogin', $event)"
+        />
+        <AuthActionButton
+          v-else
+          action="login"
+          :disabled="authBusy"
+          :label="authBusy ? '処理中…' : undefined"
+          @activate="emit('login')"
+        />
+      </template>
+    </PortalLoginPrompt>
+
+    <template v-else>
+      <h1 class="portal-page__title">Portal</h1>
+      <p class="portal-page__description">挑戦する部屋を選んでください。</p>
+      <MinimalProgressSummary :status="progressStatus" />
+      <section aria-label="必須の部屋" class="card-list">
+        <RoomCard :room="requiredRoom" :starting="authBusy" @start="emit('startRoom', $event)" />
+      </section>
+    </template>
   </main>
 </template>

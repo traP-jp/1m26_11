@@ -35,9 +35,7 @@ describe('App', () => {
   it('navigates from Portal to Room and back through semantic UI events', async () => {
     const { router, wrapper } = await mountAt('/')
 
-    wrapper
-      .getComponent(PortalPage)
-      .vm.$emit('roomSelected', '1411824c-d357-4941-af76-c76cb827dda6')
+    wrapper.getComponent(PortalPage).vm.$emit('startRoom', '1411824c-d357-4941-af76-c76cb827dda6')
     await flushPromises()
 
     expect(router.currentRoute.value.fullPath).toBe('/rooms/1411824c-d357-4941-af76-c76cb827dda6')
