@@ -26,6 +26,24 @@ pub enum GetProblemResponse {
     Status500_Server(models::ErrorResponse),
 }
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[must_use]
+#[allow(clippy::large_enum_variant)]
+pub enum GetProblemHintResponse {
+    /// ヒント本文
+    Status200(models::ProblemHintResponse),
+    /// JSON構文不正またはpath parameterのUUID形式不正。具体的なerror.codeは未確定です。
+    Status400_JSON(models::ErrorResponse),
+    /// 未ログイン
+    Status401(models::ErrorResponse),
+    /// 対象resourceが存在しないか、現在のAUTH_MODEではendpointが有効ではありません。具体的なerror.codeは未確定です。
+    Status404(models::ErrorResponse),
+    /// 問題がまだ解放されていません。
+    Status409(models::ErrorResponse),
+    /// server内部エラー。具体的なerror.codeは未確定です。
+    Status500_Server(models::ErrorResponse),
+}
+
 /// Problems
 #[async_trait]
 #[allow(clippy::ptr_arg)]
@@ -43,4 +61,16 @@ pub trait Problems<E: std::fmt::Debug + Send + Sync + 'static = ()>:
         cookies: &CookieJar,
         path_params: &models::GetProblemPathParams,
     ) -> Result<GetProblemResponse, E>;
+
+    /// 問題のヒントを取得する.
+    ///
+    /// GetProblemHint - GET /api/rooms/{room_id}/problems/{problem_id}/hints/{level}
+    async fn get_problem_hint(
+        &self,
+
+        method: &Method,
+        host: &Host,
+        cookies: &CookieJar,
+        path_params: &models::GetProblemHintPathParams,
+    ) -> Result<GetProblemHintResponse, E>;
 }

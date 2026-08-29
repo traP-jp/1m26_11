@@ -177,6 +177,12 @@ pub struct RunRecord {
     pub cleared_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HintRecord {
+    pub level: i32,
+    pub body_markdown: String,
+}
+
 #[derive(Clone, Debug, PartialEq, FromRow)]
 pub struct ProblemRecord {
     pub id: Uuid,
@@ -200,6 +206,7 @@ pub struct ProblemProgressRecord {
     pub problem_id: Uuid,
     pub status: String,
     pub answer_attempt_count: i32,
+    pub max_hint_level: i32,
     pub cleared_at: Option<DateTime<Utc>>,
 }
 
@@ -386,6 +393,16 @@ pub trait AuthRepository: Send + Sync {
 
     async fn find_cleared_problem_ids(&self, _run_id: Uuid) -> Result<Vec<Uuid>, RepositoryError> {
         unimplemented!("find_cleared_problem_ids is not implemented for this repository")
+    }
+
+    async fn find_hint_for_run(
+        &self,
+        _run_id: Uuid,
+        _room_id: Uuid,
+        _problem_id: Uuid,
+        _level: i32,
+    ) -> Result<Option<HintRecord>, RepositoryError> {
+        unimplemented!("find_hint_for_run is not implemented for this repository")
     }
 }
 
@@ -979,6 +996,99 @@ impl AuthRepository for SqlxUserRepository {
         .map_err(RepositoryError::Database)?;
 
         Ok(rows.into_iter().map(|r| r.problem_id).collect())
+    }
+
+    async fn find_hint_for_run(
+        &self,
+        run_id: Uuid,
+        room_id: Uuid,
+        problem_id: Uuid,
+        level: i32,
+    ) -> Result<Option<HintRecord>, RepositoryError> {
+        let mut tx = self.pool.begin().await.map_err(RepositoryError::Database)?;
+
+        let active_run_exists = sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT 1
+            FROM runs
+            WHERE run_id = ? AND room_id = ? AND status = 'active'
+            FOR UPDATE
+            "#,
+        )
+        .bind(run_id)
+        .bind(room_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        if active_run_exists.is_none() {
+            return Err(RepositoryError::RunNotFound);
+        }
+
+        #[derive(FromRow)]
+        struct ProblemHintRow {
+            status: String,
+            hints: sqlx::types::Json<Vec<crate::problem::Hint>>,
+        }
+
+        let row = sqlx::query_as::<_, ProblemHintRow>(
+            r#"
+            SELECT
+                problem_progress.status,
+                problems.hints
+            FROM problems
+            INNER JOIN problem_progress
+                ON problem_progress.problem_id = problems.problem_id
+               AND problem_progress.run_id = ?
+            WHERE problems.room_id = ?
+              AND problems.problem_id = ?
+            LIMIT 1
+            "#,
+        )
+        .bind(run_id)
+        .bind(room_id)
+        .bind(problem_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        if row.status == "locked" {
+            return Err(RepositoryError::ProblemLocked);
+        }
+
+        let hint_index = match level.checked_sub(1) {
+            Some(idx) if idx >= 0 => idx as usize,
+            _ => return Ok(None),
+        };
+
+        let Some(hint) = row.hints.0.get(hint_index) else {
+            return Ok(None);
+        };
+
+        sqlx::query(
+            r#"
+            UPDATE problem_progress
+            SET max_hint_level = GREATEST(max_hint_level, ?)
+            WHERE run_id = ? AND problem_id = ?
+            "#,
+        )
+        .bind(level)
+        .bind(run_id)
+        .bind(problem_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        tx.commit().await.map_err(RepositoryError::Database)?;
+
+        Ok(Some(HintRecord {
+            level,
+            body_markdown: hint.body_markdown.clone(),
+        }))
     }
 }
 
