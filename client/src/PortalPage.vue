@@ -1,11 +1,18 @@
 <script setup lang="ts">
+import { inject, onMounted } from 'vue'
+
+import GuestNameForm from './components/auth/GuestNameForm.vue'
 import PortalHeader from './components/portal/PortalHeader.vue'
-import { portalHeaderFixtures } from './components/portal/PortalHeader.fixture'
 import RoomCard, { type Room } from './RoomCard.vue'
+import { authApiClientKey, createAuthFlow } from './utils/auth'
 
 const emit = defineEmits<{
   roomSelected: [roomId: string]
 }>()
+
+const auth = createAuthFlow(inject(authApiClientKey))
+
+onMounted(() => void auth.refresh())
 
 const rooms: Room[] = [
   {
@@ -26,8 +33,27 @@ const rooms: Room[] = [
 </script>
 
 <template>
-  <PortalHeader v-bind="portalHeaderFixtures.demoAuthenticated" />
-  <main class="portal-page">
+  <p v-if="auth.state.value.status === 'loading'" role="status">認証状態を確認しています…</p>
+  <p v-else-if="auth.state.value.status === 'error'" role="alert">
+    認証状態を取得できませんでした。
+    <button type="button" @click="auth.refresh">再試行</button>
+  </p>
+  <template v-else>
+    <PortalHeader
+      v-if="auth.portalUserStatus.value"
+      home-href="/"
+      instructions-href="#instructions"
+      :user-status="auth.portalUserStatus.value"
+      @logout="auth.logout"
+    />
+    <p v-if="auth.state.value.error" role="alert">認証操作に失敗しました。再度お試しください。</p>
+    <GuestNameForm
+      v-if="auth.state.value.status === 'unauthenticated' && auth.state.value.authMode === 'demo'"
+      :submit-pending="auth.state.value.busy"
+      @submit="auth.loginGuest"
+    />
+  </template>
+  <main v-if="auth.state.value.status === 'authenticated'" class="portal-page">
     <h1 class="portal-page__title">Portal</h1>
     <p class="portal-page__description">挑戦する部屋を選んでください。</p>
     <section aria-label="部屋一覧" class="card-list">

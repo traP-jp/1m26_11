@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, type Router } from 'vue-router'
 
@@ -6,13 +6,29 @@ import App from '../App.vue'
 import PortalPage from '../PortalPage.vue'
 import RoomPage from '../RoomPage.vue'
 import { createAppRouter } from '../router'
+import meAuthenticated from '../../../openapi/examples/auth/me-demo-authenticated.json'
+import type { ApiClient, GetMeResponse } from '../api/client'
+import { authApiClientKey } from '../utils/auth'
+
+const apiClient: ApiClient = {
+  getMe: vi.fn<ApiClient['getMe']>().mockResolvedValue(meAuthenticated as GetMeResponse),
+  loginGuest: vi.fn<ApiClient['loginGuest']>(),
+  logoutDemo: vi.fn<ApiClient['logoutDemo']>(),
+  startOrResumeRun: vi.fn<ApiClient['startOrResumeRun']>(),
+  getCurrentRun: vi.fn<ApiClient['getCurrentRun']>(),
+  getProblem: vi.fn<ApiClient['getProblem']>(),
+  submitQuery: vi.fn<ApiClient['submitQuery']>(),
+  submitAnswer: vi.fn<ApiClient['submitAnswer']>(),
+}
 
 async function mountAt(
   path: string,
 ): Promise<{ router: Router; wrapper: ReturnType<typeof mount> }> {
   const router = createAppRouter(createMemoryHistory())
   await router.push(path)
-  const wrapper = mount(App, { global: { plugins: [router] } })
+  const wrapper = mount(App, {
+    global: { plugins: [router], provide: { [authApiClientKey as symbol]: apiClient } },
+  })
   await router.isReady()
   await flushPromises()
   return { router, wrapper }
