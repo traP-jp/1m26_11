@@ -1,6 +1,6 @@
 mod common;
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use axum::{
     Router,
@@ -9,13 +9,27 @@ use axum::{
 };
 use common::{body_bytes, body_json, connect_test_database, request};
 use serde_json::{Value, json};
-use server::{AppState, app, config::AuthMode, migrate, repository::SqlxUserRepository};
+use server::{
+    AppState, app,
+    config::AuthMode,
+    migrate,
+    problem::{load_problem_data, seed_problem_data},
+    repository::SqlxUserRepository,
+};
 use sqlx::MySqlPool;
 use uuid::Uuid;
 
 const AUTH_TEST_SUBJECT_PREFIX: &str = "issue79-auth-";
 const NEO_AUTH_TEST_SUBJECT_PREFIX: &str = "issue79-neo-auth-";
 const DEMO_HEADER_TEST_SUBJECT_PREFIX: &str = "issue79-demo-header-";
+const RUN_TEST_SUBJECT_PREFIX: &str = "issue79-run-";
+const GAME_ROOM_ID: &str = "1411824c-d357-4941-af76-c76cb827dda6";
+const GAME_PROBLEM_IDS: [&str; 4] = [
+    "52ed5a58-bc88-4e0f-97a4-0f64a112acd4",
+    "9ebaa649-9c28-4bed-9dc1-fd7b9fedaa9b",
+    "6853a228-0462-4413-91f4-6b8ef672cefc",
+    "9ca65619-6ad2-4e74-bf4a-4f146b238067",
+];
 
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
@@ -294,6 +308,146 @@ async fn mariadb_demo_mode_ignores_forwarded_user_header() {
     pool.close().await;
 }
 
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_run_start_resume_and_current_http_flow() {
+    let pool = connect_test_database().await;
+    migrate(&pool).await.expect("migration should succeed");
+    cleanup_game_flow_test_data(&pool).await;
+    seed_game_catalog(&pool).await;
+
+    let suffix = Uuid::new_v4().simple().to_string();
+    let display_name = format!("{RUN_TEST_SUBJECT_PREFIX}{}", &suffix[..8]);
+    let room_id = parse_uuid(GAME_ROOM_ID);
+
+    let repository = Arc::new(SqlxUserRepository::new(pool.clone()));
+    let app = app(AppState::new(AuthMode::Demo, repository).with_demo_cookie_secure(false));
+
+    let (user_id, _session_id, cookie) = login_guest(&app, &display_name).await;
+
+    let start_response = request(
+        &app,
+        Request::post(format!("/api/rooms/{room_id}/runs"))
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .expect("start run request should be valid"),
+    )
+    .await;
+
+    assert_eq!(start_response.status(), StatusCode::OK);
+    assert_eq!(
+        start_response.headers()[header::CONTENT_TYPE],
+        "application/json"
+    );
+
+    let start_body: Value = body_json(start_response).await;
+    assert_eq!(start_body["status"], "active");
+    assert!(start_body["started_at"].as_str().is_some());
+    assert!(start_body["elapsed_ms"].as_u64().is_some());
+    assert_eq!(start_body["cleared_problem_ids"], json!([]));
+    assert!(
+        start_body.get("query_count").is_none(),
+        "run response must not contain query_count",
+    );
+
+    let run_id = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT run_id
+        FROM runs
+        WHERE user_id = ?
+          AND room_id = ?
+          AND status = 'active'
+        "#,
+    )
+    .bind(user_id)
+    .bind(room_id)
+    .fetch_one(&pool)
+    .await
+    .expect("active run should be stored");
+
+    let progress_statuses = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT problem_progress.status
+        FROM problem_progress
+        INNER JOIN problems
+            ON problems.problem_id = problem_progress.problem_id
+        WHERE problem_progress.run_id = ?
+        ORDER BY problems.number
+        "#,
+    )
+    .bind(run_id)
+    .fetch_all(&pool)
+    .await
+    .expect("problem progress should be readable");
+
+    assert_eq!(
+        progress_statuses,
+        vec!["available", "locked", "locked", "available"],
+    );
+
+    let resume_response = request(
+        &app,
+        Request::post(format!("/api/rooms/{room_id}/runs"))
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .expect("resume run request should be valid"),
+    )
+    .await;
+
+    assert_eq!(resume_response.status(), StatusCode::OK);
+
+    let resume_body: Value = body_json(resume_response).await;
+    assert_eq!(resume_body["status"], "active");
+    assert_eq!(resume_body["started_at"], start_body["started_at"]);
+    assert_eq!(resume_body["cleared_problem_ids"], json!([]));
+    assert!(resume_body.get("query_count").is_none());
+
+    let active_run_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM runs
+        WHERE user_id = ?
+          AND room_id = ?
+          AND status = 'active'
+        "#,
+    )
+    .bind(user_id)
+    .bind(room_id)
+    .fetch_one(&pool)
+    .await
+    .expect("active run count should be readable");
+
+    assert_eq!(
+        active_run_count, 1,
+        "resuming must not create another active run",
+    );
+
+    let current_response = request(
+        &app,
+        Request::get(format!("/api/rooms/{room_id}/runs/current"))
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .expect("current run request should be valid"),
+    )
+    .await;
+
+    assert_eq!(current_response.status(), StatusCode::OK);
+
+    let current_body: Value = body_json(current_response).await;
+    assert_eq!(current_body["status"], "active");
+    assert_eq!(current_body["started_at"], start_body["started_at"]);
+    assert_eq!(current_body["cleared_problem_ids"], json!([]));
+    assert!(current_body["elapsed_ms"].as_u64().is_some());
+    assert!(
+        current_body.get("query_count").is_none(),
+        "current run response must not contain query_count",
+    );
+
+    logout_guest(&app, &cookie).await;
+    cleanup_game_flow_test_data(&pool).await;
+    pool.close().await;
+}
+
 async fn login_guest(app: &Router, display_name: &str) -> (Uuid, Uuid, String) {
     let response = request(
         app,
@@ -368,4 +522,43 @@ async fn cleanup_users_with_subject_prefix(pool: &MySqlPool, subject_prefix: &st
     .execute(pool)
     .await
     .expect("authentication test data cleanup should succeed");
+}
+
+async fn seed_game_catalog(pool: &MySqlPool) {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../mock-problem-data");
+    let catalog = load_problem_data(root).expect("mock problem data should be valid");
+
+    seed_problem_data(pool, &catalog)
+        .await
+        .expect("mock problem data should be seeded");
+}
+
+async fn cleanup_game_flow_test_data(pool: &MySqlPool) {
+    let room_id = parse_uuid(GAME_ROOM_ID);
+
+    sqlx::query("DELETE FROM runs WHERE room_id = ?")
+        .bind(room_id)
+        .execute(pool)
+        .await
+        .expect("game test runs should be removable");
+
+    cleanup_users_with_subject_prefix(pool, RUN_TEST_SUBJECT_PREFIX).await;
+
+    for problem_id in GAME_PROBLEM_IDS.iter().rev() {
+        sqlx::query("DELETE FROM problems WHERE problem_id = ?")
+            .bind(parse_uuid(problem_id))
+            .execute(pool)
+            .await
+            .expect("game test problem should be removable");
+    }
+
+    sqlx::query("DELETE FROM rooms WHERE room_id = ?")
+        .bind(room_id)
+        .execute(pool)
+        .await
+        .expect("game test room should be removable");
+}
+
+fn parse_uuid(value: &str) -> Uuid {
+    Uuid::parse_str(value).expect("test UUID should be valid")
 }

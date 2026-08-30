@@ -987,16 +987,27 @@ impl AuthRepository for SqlxUserRepository {
             .map_err(RepositoryError::Database)?;
         }
 
+        let run = sqlx::query_as::<_, RunRecord>(
+            r#"
+            SELECT
+                run_id AS id,
+                user_id,
+                room_id,
+                status,
+                started_at,
+                cleared_at
+            FROM runs
+            WHERE run_id = ?
+            "#,
+        )
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(RepositoryError::Database)?;
+
         tx.commit().await.map_err(RepositoryError::Database)?;
 
-        Ok(RunRecord {
-            id,
-            user_id,
-            room_id,
-            status: "active".to_owned(),
-            started_at,
-            cleared_at: None,
-        })
+        Ok(run)
     }
 
     async fn find_cleared_run(
