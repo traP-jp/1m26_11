@@ -1023,6 +1023,279 @@ async fn mariadb_final_problem_first_then_room_clear_http_flow() {
     pool.close().await;
 }
 
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_error_responses_and_query_rollback_http_flow() {
+    let (pool, app, room_id, run_id, cookie) = setup_demo_game().await;
+
+    let first_problem_id = parse_uuid(GAME_PROBLEM_IDS[0]);
+    let second_problem_id = parse_uuid(GAME_PROBLEM_IDS[1]);
+    let missing_problem_id = Uuid::new_v4();
+
+    let first_query_path = format!("/api/rooms/{room_id}/problems/{first_problem_id}/queries");
+
+    // 400: JSONの構文が壊れているrequestです。
+    let malformed_response = request(
+        &app,
+        Request::post(&first_query_path)
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::COOKIE, &cookie)
+            .body(Body::from("{"))
+            .expect("malformed JSON request should be valid HTTP"),
+    )
+    .await;
+
+    assert_eq!(malformed_response.status(), StatusCode::BAD_REQUEST);
+
+    let malformed_body: Value = body_json(malformed_response).await;
+    assert_eq!(malformed_body["error"]["code"], "BAD_REQUEST");
+    assert_eq!(stored_query_count(&pool, run_id, first_problem_id).await, 0);
+
+    // 401: Cookieなしでqueryを送信します。
+    let unauthorized_response = request(
+        &app,
+        Request::post(&first_query_path)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&json!({
+                    "source": "serial",
+                    "operations": [
+                        {
+                            "control": "down",
+                            "count": 1
+                        }
+                    ]
+                }))
+                .expect("unauthorized payload should be serializable"),
+            ))
+            .expect("unauthorized request should be valid"),
+    )
+    .await;
+
+    assert_eq!(unauthorized_response.status(), StatusCode::UNAUTHORIZED);
+
+    let unauthorized_body: Value = body_json(unauthorized_response).await;
+    assert_eq!(unauthorized_body["error"]["code"], "UNAUTHORIZED");
+    assert_eq!(stored_query_count(&pool, run_id, first_problem_id).await, 0);
+
+    // 404: 存在しないproblemを取得します。
+    let missing_response = request(
+        &app,
+        Request::get(format!(
+            "/api/rooms/{room_id}/problems/{missing_problem_id}"
+        ))
+        .header(header::COOKIE, &cookie)
+        .body(Body::empty())
+        .expect("missing problem request should be valid"),
+    )
+    .await;
+
+    assert_eq!(missing_response.status(), StatusCode::NOT_FOUND);
+
+    let missing_body: Value = body_json(missing_response).await;
+    assert_eq!(missing_body["error"]["code"], "NOT_FOUND");
+
+    // 409: まだlockedである2問目へqueryを送信します。
+    let locked_query_path = format!("/api/rooms/{room_id}/problems/{second_problem_id}/queries");
+
+    let locked_response = post_authenticated_json(
+        &app,
+        &locked_query_path,
+        &cookie,
+        json!({
+            "source": "serial",
+            "operations": [
+                {
+                    "control": "down",
+                    "count": 1
+                }
+            ]
+        }),
+    )
+    .await;
+
+    assert_eq!(locked_response.status(), StatusCode::CONFLICT);
+
+    let locked_body: Value = body_json(locked_response).await;
+    assert_eq!(locked_body["error"]["code"], "PROBLEM_LOCKED");
+    assert_eq!(
+        stored_query_count(&pool, run_id, second_problem_id).await,
+        0
+    );
+
+    // 422: 許可されていないsourceを送信します。
+    let validation_response = post_authenticated_json(
+        &app,
+        &first_query_path,
+        &cookie,
+        json!({
+            "source": "invalid-source",
+            "operations": [
+                {
+                    "control": "down",
+                    "count": 1
+                }
+            ]
+        }),
+    )
+    .await;
+
+    assert_eq!(
+        validation_response.status(),
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+
+    let validation_body: Value = body_json(validation_response).await;
+    assert_eq!(validation_body["error"]["code"], "VALIDATION_ERROR");
+    assert_eq!(stored_query_count(&pool, run_id, first_problem_id).await, 0);
+
+    // problem_progressのUPDATEだけを失敗させるtriggerを一時的に作ります。
+    // correct queryでは、queriesへのINSERT後にproblem_progressをUPDATEするため、
+    // この失敗でtransaction全体がrollbackされる必要があります。
+    sqlx::query(
+        r#"
+        CREATE TRIGGER issue79_fail_problem_progress_update
+        BEFORE UPDATE ON problem_progress
+        FOR EACH ROW
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'issue79 injected failure'
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("failure injection trigger should be created");
+
+    let database_error_response = post_authenticated_json(
+        &app,
+        &first_query_path,
+        &cookie,
+        json!({
+            "source": "serial",
+            "operations": [
+                {
+                    "control": "down",
+                    "count": 1
+                },
+                {
+                    "control": "right",
+                    "count": 2
+                }
+            ]
+        }),
+    )
+    .await;
+
+    // assertionに失敗しても後続testへtriggerを残しにくくするため、
+    // responseの確認より先にtriggerを削除します。
+    sqlx::query("DROP TRIGGER IF EXISTS issue79_fail_problem_progress_update")
+        .execute(&pool)
+        .await
+        .expect("failure injection trigger should be removed");
+
+    assert_eq!(
+        database_error_response.status(),
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
+    assert_eq!(
+        database_error_response.headers()[header::CONTENT_TYPE],
+        "application/json"
+    );
+
+    let database_error_bytes = body_bytes(database_error_response).await;
+    let database_error_text =
+        std::str::from_utf8(&database_error_bytes).expect("error response should be UTF-8");
+
+    assert!(
+        !database_error_text.contains("issue79 injected failure"),
+        "internal database error details must not be exposed",
+    );
+
+    let database_error_body: Value = serde_json::from_slice(&database_error_bytes)
+        .expect("database error response should be JSON");
+
+    assert_eq!(
+        database_error_body["error"]["code"],
+        "INTERNAL_SERVER_ERROR"
+    );
+    assert_eq!(database_error_body["error"]["details"], json!({}));
+
+    // queriesへのINSERTもrollbackされ、履歴が残っていないことを確認します。
+    assert_eq!(
+        stored_query_count(&pool, run_id, first_problem_id).await,
+        0,
+        "failed transaction must not leave query history",
+    );
+
+    let first_status = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT status
+        FROM problem_progress
+        WHERE run_id = ?
+          AND problem_id = ?
+        "#,
+    )
+    .bind(run_id)
+    .bind(first_problem_id)
+    .fetch_one(&pool)
+    .await
+    .expect("first problem status should be readable after rollback");
+
+    let second_status = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT status
+        FROM problem_progress
+        WHERE run_id = ?
+          AND problem_id = ?
+        "#,
+    )
+    .bind(run_id)
+    .bind(second_problem_id)
+    .fetch_one(&pool)
+    .await
+    .expect("second problem status should be readable after rollback");
+
+    assert_eq!(first_status, "available");
+    assert_eq!(second_status, "locked");
+
+    // trigger削除後は同じrequestが成功することも確認します。
+    let retry_response = post_authenticated_json(
+        &app,
+        &first_query_path,
+        &cookie,
+        json!({
+            "source": "serial",
+            "operations": [
+                {
+                    "control": "down",
+                    "count": 1
+                },
+                {
+                    "control": "right",
+                    "count": 2
+                }
+            ]
+        }),
+    )
+    .await;
+
+    assert_eq!(retry_response.status(), StatusCode::OK);
+
+    let retry_body: Value = body_json(retry_response).await;
+    assert_eq!(retry_body["correct"], true);
+    assert_eq!(retry_body["query_count"], 1);
+    assert_eq!(retry_body["problem_status"], "cleared");
+
+    assert_eq!(
+        stored_query_count(&pool, run_id, first_problem_id).await,
+        1,
+        "successful retry should store exactly one query",
+    );
+
+    logout_guest(&app, &cookie).await;
+    cleanup_game_flow_test_data(&pool).await;
+    pool.close().await;
+}
+
 async fn setup_demo_game() -> (MySqlPool, Router, Uuid, Uuid, String) {
     let pool = connect_test_database().await;
     migrate(&pool).await.expect("migration should succeed");
@@ -1205,6 +1478,11 @@ async fn seed_game_catalog(pool: &MySqlPool) {
 }
 
 async fn cleanup_game_flow_test_data(pool: &MySqlPool) {
+    sqlx::query("DROP TRIGGER IF EXISTS issue79_fail_problem_progress_update")
+        .execute(pool)
+        .await
+        .expect("failure injection trigger cleanup should succeed");
+
     let room_id = parse_uuid(GAME_ROOM_ID);
 
     sqlx::query("DELETE FROM runs WHERE room_id = ?")
