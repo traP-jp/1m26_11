@@ -66,6 +66,17 @@ cases:
           status: 200
           example: demo_unauthenticated
 
+  - id: neoshowcase_logout_not_found
+    preconditions:
+      auth_mode: neoshowcase
+      authenticated: true
+    steps:
+      - operation_id: logoutDemo
+        response:
+          status: 404
+        state_after:
+          authenticated: true
+
   - id: demo_login_display_name_required
     preconditions:
       auth_mode: demo

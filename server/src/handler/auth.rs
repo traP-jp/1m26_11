@@ -1,12 +1,13 @@
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{
+    Json,
+    extract::{State, rejection::JsonRejection},
+    http::StatusCode,
+};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use openapi_generated::models::{GuestLoginRequest, GuestLoginResponse, User};
 use uuid::Uuid;
 
-use crate::{
-    AppState, auth::demo::SESSION_COOKIE_NAME, config::AuthMode, error::AppError,
-    repository::AuthProvider,
-};
+use crate::{AppState, auth::demo::SESSION_COOKIE_NAME, config::AuthMode, error::AppError};
 
 const DISPLAY_NAME_MAX_LENGTH: usize = 32;
 
@@ -27,22 +28,20 @@ fn normalize_display_name(display_name: &str) -> Result<&str, AppError> {
 pub(crate) async fn login_guest(
     State(state): State<AppState>,
     mut jar: CookieJar,
-    Json(payload): Json<GuestLoginRequest>,
+    payload: Result<Json<GuestLoginRequest>, JsonRejection>,
 ) -> Result<(CookieJar, Json<GuestLoginResponse>), AppError> {
     if state.auth_mode != AuthMode::Demo {
         return Err(AppError::not_found("route not found"));
     }
 
+    let Json(payload) = payload.map_err(|_| AppError::bad_request("invalid request body"))?;
+
     let display_name = normalize_display_name(&payload.display_name)?;
+    let session_id = Uuid::new_v4();
+
     let user_record = state
         .auth_repository
-        .get_or_create_user(AuthProvider::Demo, display_name, display_name)
-        .await?;
-
-    let session_id = Uuid::new_v4();
-    state
-        .auth_repository
-        .create_demo_session(session_id, user_record.user_id)
+        .get_or_create_demo_user_and_session(session_id, display_name, display_name)
         .await?;
 
     let cookie = Cookie::build((SESSION_COOKIE_NAME, session_id.to_string()))

@@ -156,6 +156,6 @@ APIのpath、method、schema、status、example、scenarioのいずれかを変�
 - 部屋・問題不存在、JSON／UUID不正、入力内容不備、server内部エラーの具体的な`error.code`
 - demo表示名の大文字小文字をそのまま保持するか、正規化するか
 - queryの空配列、`count`範囲、未知control、`source`の厳密な許容範囲
-- NeoShowcase modeでlogout APIを呼んだ場合と、demo未認証でlogoutした場合の具体的なstatus
+- demo未認証でlogout APIを呼んだ場合の具体的なstatus
 
 これらはOpenAPIへ推測で追加せず、確定後に更新します。

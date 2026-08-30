@@ -319,12 +319,13 @@ pub trait AuthRepository: Send + Sync {
         display_name: &str,
     ) -> Result<AuthUserRecord, RepositoryError>;
 
-    async fn create_demo_session(
+    async fn get_or_create_demo_user_and_session(
         &self,
         _session_id: Uuid,
-        _user_id: Uuid,
-    ) -> Result<(), RepositoryError> {
-        unimplemented!("create_demo_session is not implemented for this repository")
+        _provider_subject: &str,
+        _display_name: &str,
+    ) -> Result<AuthUserRecord, RepositoryError> {
+        unimplemented!("get_or_create_demo_user_and_session is not implemented for this repository")
     }
 
     async fn delete_demo_session(&self, _session_id: Uuid) -> Result<(), RepositoryError> {
@@ -489,11 +490,54 @@ impl AuthRepository for SqlxUserRepository {
             .ok_or(RepositoryError::UserNotFoundAfterUpsert)
     }
 
-    async fn create_demo_session(
+    async fn get_or_create_demo_user_and_session(
         &self,
         session_id: Uuid,
-        user_id: Uuid,
-    ) -> Result<(), RepositoryError> {
+        provider_subject: &str,
+        display_name: &str,
+    ) -> Result<AuthUserRecord, RepositoryError> {
+        let mut transaction = self.pool.begin().await.map_err(RepositoryError::Database)?;
+
+        let new_user_id = Uuid::new_v4();
+
+        sqlx::query(
+            r#"
+            INSERT INTO users (
+                user_id,
+                auth_provider,
+                provider_subject,
+                display_name
+            )
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE user_id = user_id
+            "#,
+        )
+        .bind(new_user_id)
+        .bind(AuthProvider::Demo.as_db_str())
+        .bind(provider_subject)
+        .bind(display_name)
+        .execute(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        let user_record = sqlx::query_as::<_, AuthUserRow>(
+            r#"
+            SELECT user_id, display_name, auth_provider
+            FROM users
+            WHERE auth_provider = ?
+              AND provider_subject = ?
+            LIMIT 1
+            "#,
+        )
+        .bind(AuthProvider::Demo.as_db_str())
+        .bind(provider_subject)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?
+        .map(AuthUserRecord::try_from)
+        .transpose()?
+        .ok_or(RepositoryError::UserNotFoundAfterUpsert)?;
+
         sqlx::query(
             r#"
             INSERT INTO demo_sessions (session_id, user_id)
@@ -501,12 +545,17 @@ impl AuthRepository for SqlxUserRepository {
             "#,
         )
         .bind(session_id)
-        .bind(user_id)
-        .execute(&self.pool)
+        .bind(user_record.user_id)
+        .execute(&mut *transaction)
         .await
         .map_err(RepositoryError::Database)?;
 
-        Ok(())
+        transaction
+            .commit()
+            .await
+            .map_err(RepositoryError::Database)?;
+
+        Ok(user_record)
     }
 
     async fn delete_demo_session(&self, session_id: Uuid) -> Result<(), RepositoryError> {
@@ -874,7 +923,7 @@ impl AuthRepository for SqlxUserRepository {
     ) -> Result<RunRecord, RepositoryError> {
         let mut tx = self.pool.begin().await.map_err(RepositoryError::Database)?;
 
-        sqlx::query(
+        let insert_result = sqlx::query(
             r#"
             INSERT INTO runs (run_id, user_id, room_id, status, started_at, cleared_at)
             VALUES (?, ?, ?, 'active', ?, NULL)
@@ -885,8 +934,23 @@ impl AuthRepository for SqlxUserRepository {
         .bind(room_id)
         .bind(started_at)
         .execute(&mut *tx)
-        .await
-        .map_err(RepositoryError::Database)?;
+        .await;
+
+        if let Err(error) = insert_result {
+            let is_unique_violation = error
+                .as_database_error()
+                .is_some_and(|database_error| database_error.is_unique_violation());
+
+            tx.rollback().await.map_err(RepositoryError::Database)?;
+
+            if is_unique_violation {
+                if let Some(active_run) = self.find_active_run(user_id, room_id).await? {
+                    return Ok(active_run);
+                }
+            }
+
+            return Err(RepositoryError::Database(error));
+        }
 
         let problems = sqlx::query_as::<_, ProblemRecord>(
             r#"

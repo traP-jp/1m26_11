@@ -69,7 +69,7 @@ export interface paths {
     put?: never
     /**
      * デモ環境からログアウトする
-     * @description AUTH_MODE=demoのときだけ使用し、デモsessionとCookieを無効化します。
+     * @description AUTH_MODE=demoのときだけ使用し、デモsessionとCookieを無効化します。NeoShowcase modeでは404を返します。
      */
     post: operations['logoutDemo']
     delete?: never
@@ -727,6 +727,7 @@ export interface operations {
         }
         content?: never
       }
+      404: components['responses']['NotFound']
       500: components['responses']['InternalServerError']
     }
   }

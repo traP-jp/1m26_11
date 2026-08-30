@@ -84,6 +84,42 @@ describe('OpenAPI-backed MSW handlers', () => {
     expect(await (await fetch(`${BASE_URL}/api/me`)).json()).toEqual(meUnauthenticated)
   })
 
+  it('returns JSON 404 for logout in NeoShowcase mode', async () => {
+    startMock('neoshowcase_logout_not_found')
+
+    const response = await fetch(`${BASE_URL}/api/auth/logout`, {
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(404)
+    expect(response.headers.get('content-type')).toContain('application/json')
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'MOCK_UNSPECIFIED',
+        details: {},
+      },
+    })
+  })
+
+  it('returns JSON 400 when guest display_name is missing', async () => {
+    startMock()
+
+    const response = await fetch(`${BASE_URL}/api/auth/guest`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+
+    expect(response.status).toBe(400)
+    expect(response.headers.get('content-type')).toContain('application/json')
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'MOCK_UNSPECIFIED',
+        details: {},
+      },
+    })
+  })
+
   it('validates guest display names by Unicode code point count', async () => {
     startMock()
 

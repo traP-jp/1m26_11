@@ -53,7 +53,7 @@ paths:
   /api/auth/logout:
     post:
       summary: デモ環境からログアウトする
-      description: AUTH_MODE=demoのときだけ使用し、デモsessionとCookieを無効化します。
+      description: AUTH_MODE=demoのときだけ使用し、デモsessionとCookieを無効化します。NeoShowcase modeでは404を返します。
       operationId: logoutDemo
       tags:
         - auth
@@ -65,6 +65,8 @@ paths:
               description: demo_session Cookieを削除します。Path=/、Max-Age=0、過去のExpiresを指定し、デプロイ環境ではSecureを付けます。
               schema:
                 type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalServerError"
   /api/rooms/{room_id}/runs:

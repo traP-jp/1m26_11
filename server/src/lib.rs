@@ -1,7 +1,8 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use axum::{
     Router,
+    extract::MatchedPath,
     routing::{get, post},
 };
 use config::AuthMode;
@@ -9,6 +10,8 @@ use problem::{AssetUrlResolver, UnconfiguredAssetUrlResolver};
 use repository::AuthRepository;
 use sqlx::MySqlPool;
 use tower_http::trace::TraceLayer;
+use tracing::Span;
+use uuid::Uuid;
 
 #[cfg_attr(
     not(test),
@@ -116,7 +119,34 @@ pub fn app(state: AppState) -> Router {
             post(handler::submit_answer).fallback(handler::method_not_allowed),
         )
         .fallback(handler::not_found)
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|request: &axum::http::Request<_>| {
+                    let request_id = Uuid::new_v4();
+                    let matched_route = request
+                        .extensions()
+                        .get::<MatchedPath>()
+                        .map(MatchedPath::as_str)
+                        .unwrap_or("<unmatched>");
+
+                    tracing::info_span!(
+                        "http_request",
+                        request_id = %request_id,
+                        method = %request.method(),
+                        matched_route = %matched_route,
+                    )
+                })
+                .on_response(
+                    |response: &axum::http::Response<_>, duration: Duration, span: &Span| {
+                        tracing::info!(
+                            parent: span,
+                            status = response.status().as_u16(),
+                            duration_ms = duration.as_secs_f64() * 1_000.0,
+                            "request completed"
+                        );
+                    },
+                ),
+        )
         .with_state(state)
 }
 

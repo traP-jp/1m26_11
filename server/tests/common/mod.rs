@@ -156,12 +156,17 @@ impl AuthRepository for StubAuthRepository {
         })
     }
 
-    async fn create_demo_session(
+    async fn get_or_create_demo_user_and_session(
         &self,
         _session_id: Uuid,
-        _user_id: Uuid,
-    ) -> Result<(), RepositoryError> {
-        Ok(())
+        _provider_subject: &str,
+        display_name: &str,
+    ) -> Result<AuthUserRecord, RepositoryError> {
+        Ok(AuthUserRecord {
+            user_id: Uuid::new_v4(),
+            display_name: display_name.to_owned(),
+            auth_provider: AuthProvider::Demo,
+        })
     }
 
     async fn delete_demo_session(&self, _session_id: Uuid) -> Result<(), RepositoryError> {
@@ -468,18 +473,32 @@ impl AuthRepository for RecordingAuthRepository {
         })
     }
 
-    async fn create_demo_session(
+    async fn get_or_create_demo_user_and_session(
         &self,
         session_id: Uuid,
-        user_id: Uuid,
-    ) -> Result<(), RepositoryError> {
+        provider_subject: &str,
+        display_name: &str,
+    ) -> Result<AuthUserRecord, RepositoryError> {
+        self.get_or_create_user_calls
+            .lock()
+            .expect("get-or-create user call log should not be poisoned")
+            .push((
+                AuthProvider::Demo,
+                provider_subject.to_owned(),
+                display_name.to_owned(),
+            ));
+
         self.demo_session_calls
             .lock()
             .expect("demo session call log should not be poisoned")
             .created
-            .push((session_id, user_id));
+            .push((session_id, self.user_id));
 
-        Ok(())
+        Ok(AuthUserRecord {
+            user_id: self.user_id,
+            display_name: display_name.to_owned(),
+            auth_provider: AuthProvider::Demo,
+        })
     }
 
     async fn delete_demo_session(&self, session_id: Uuid) -> Result<(), RepositoryError> {

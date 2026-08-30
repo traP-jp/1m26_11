@@ -187,6 +187,58 @@ async fn guest_login_counts_unicode_code_points() {
 }
 
 #[tokio::test]
+async fn guest_login_malformed_json_returns_json_400() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::post("/api/auth/guest")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(r#"{"display_name":"hoge""#))
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .expect("Content-Type header should be present"),
+        "application/json"
+    );
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["error"]["code"], "BAD_REQUEST");
+    assert_eq!(body["error"]["message"], "invalid request body");
+    assert_eq!(body["error"]["details"], json!({}));
+}
+
+#[tokio::test]
+async fn guest_login_missing_display_name_returns_json_400() {
+    let app = app(AppState::new(AuthMode::Demo, Arc::new(StubAuthRepository)));
+
+    let req = Request::post("/api/auth/guest")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from("{}"))
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .expect("Content-Type header should be present"),
+        "application/json"
+    );
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["error"]["code"], "BAD_REQUEST");
+    assert_eq!(body["error"]["message"], "invalid request body");
+    assert_eq!(body["error"]["details"], json!({}));
+}
+
+#[tokio::test]
 async fn guest_login_returns_404_in_neoshowcase_mode() {
     let app = app(AppState::new(
         AuthMode::NeoShowcase,

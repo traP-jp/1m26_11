@@ -125,7 +125,7 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
         return response(400).json(errorBody(400))
       }
       if (typeof body.display_name !== 'string') {
-        return response(422).json(errorBody(422))
+        return response(400).json(errorBody(400))
       }
 
       const displayName = body.display_name.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, '')
@@ -162,6 +162,10 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
     }),
 
     http.post('/api/auth/logout', ({ response }) => {
+      if (state.get('auth_mode') !== 'demo') {
+        return response(404).json(errorBody(404))
+      }
+
       const step = state.applyStep('demo_login_and_logout', 'logoutDemo')
       return response.untyped(
         new HttpResponse(null, {
