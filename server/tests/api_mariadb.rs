@@ -14,13 +14,15 @@ use sqlx::MySqlPool;
 use uuid::Uuid;
 
 const AUTH_TEST_SUBJECT_PREFIX: &str = "issue79-auth-";
+const NEO_AUTH_TEST_SUBJECT_PREFIX: &str = "issue79-neo-auth-";
+const DEMO_HEADER_TEST_SUBJECT_PREFIX: &str = "issue79-demo-header-";
 
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
 async fn mariadb_demo_auth_http_flow() {
     let pool = connect_test_database().await;
     migrate(&pool).await.expect("migration should succeed");
-    cleanup_auth_test_data(&pool).await;
+    cleanup_users_with_subject_prefix(&pool, AUTH_TEST_SUBJECT_PREFIX).await;
 
     let suffix = Uuid::new_v4().simple().to_string();
     let display_name = format!("{AUTH_TEST_SUBJECT_PREFIX}{}", &suffix[..8]);
@@ -127,7 +129,168 @@ async fn mariadb_demo_auth_http_flow() {
 
     logout_guest(&app, &second_cookie).await;
 
-    cleanup_auth_test_data(&pool).await;
+    cleanup_users_with_subject_prefix(&pool, AUTH_TEST_SUBJECT_PREFIX).await;
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_neoshowcase_auth_http_flow() {
+    let pool = connect_test_database().await;
+    migrate(&pool).await.expect("migration should succeed");
+    cleanup_users_with_subject_prefix(&pool, NEO_AUTH_TEST_SUBJECT_PREFIX).await;
+
+    let suffix = Uuid::new_v4().simple().to_string();
+    let provider_subject = format!("{NEO_AUTH_TEST_SUBJECT_PREFIX}{}", &suffix[..8]);
+
+    let repository = Arc::new(SqlxUserRepository::new(pool.clone()));
+    let app = app(AppState::new(AuthMode::NeoShowcase, repository));
+
+    let unauthenticated_response = request(
+        &app,
+        Request::get("/api/me")
+            .body(Body::empty())
+            .expect("unauthenticated me request should be valid"),
+    )
+    .await;
+
+    assert_eq!(unauthenticated_response.status(), StatusCode::OK);
+
+    let unauthenticated_body: Value = body_json(unauthenticated_response).await;
+
+    assert_eq!(unauthenticated_body["authenticated"], false);
+    assert_eq!(unauthenticated_body["auth_mode"], "neoshowcase");
+    assert_eq!(unauthenticated_body["user"], Value::Null);
+    assert_eq!(
+        unauthenticated_body["login_url"],
+        "/_oauth/login?redirect=/"
+    );
+    assert_eq!(unauthenticated_body["logout_url"], Value::Null);
+
+    let authenticated_response = request(
+        &app,
+        Request::get("/api/me")
+            .header("x-forwarded-user", &provider_subject)
+            .body(Body::empty())
+            .expect("authenticated me request should be valid"),
+    )
+    .await;
+
+    assert_eq!(authenticated_response.status(), StatusCode::OK);
+
+    let authenticated_body: Value = body_json(authenticated_response).await;
+
+    assert_eq!(authenticated_body["authenticated"], true);
+    assert_eq!(authenticated_body["auth_mode"], "neoshowcase");
+    assert_eq!(authenticated_body["user"]["display_name"], provider_subject);
+    assert_eq!(authenticated_body["login_url"], Value::Null);
+    assert_eq!(
+        authenticated_body["logout_url"],
+        "/_oauth/logout?redirect=/"
+    );
+
+    let first_user_id = authenticated_body["user"]["id"]
+        .as_str()
+        .and_then(|value| Uuid::parse_str(value).ok())
+        .expect("authenticated response should contain a user UUID");
+
+    let stored_user_id = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT user_id
+        FROM users
+        WHERE auth_provider = 'neoshowcase'
+          AND provider_subject = ?
+        "#,
+    )
+    .bind(&provider_subject)
+    .fetch_one(&pool)
+    .await
+    .expect("NeoShowcase user should be stored");
+
+    assert_eq!(stored_user_id, first_user_id);
+
+    let repeated_response = request(
+        &app,
+        Request::get("/api/me")
+            .header("x-forwarded-user", &provider_subject)
+            .body(Body::empty())
+            .expect("repeated me request should be valid"),
+    )
+    .await;
+
+    assert_eq!(repeated_response.status(), StatusCode::OK);
+
+    let repeated_body: Value = body_json(repeated_response).await;
+    assert_eq!(repeated_body["user"]["id"], first_user_id.to_string());
+
+    let matching_user_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM users
+        WHERE auth_provider = 'neoshowcase'
+          AND provider_subject = ?
+        "#,
+    )
+    .bind(&provider_subject)
+    .fetch_one(&pool)
+    .await
+    .expect("matching NeoShowcase user count should be readable");
+
+    assert_eq!(matching_user_count, 1);
+
+    cleanup_users_with_subject_prefix(&pool, NEO_AUTH_TEST_SUBJECT_PREFIX).await;
+
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_demo_mode_ignores_forwarded_user_header() {
+    let pool = connect_test_database().await;
+    migrate(&pool).await.expect("migration should succeed");
+    cleanup_users_with_subject_prefix(&pool, DEMO_HEADER_TEST_SUBJECT_PREFIX).await;
+
+    let suffix = Uuid::new_v4().simple().to_string();
+    let forged_subject = format!("{DEMO_HEADER_TEST_SUBJECT_PREFIX}{}", &suffix[..8]);
+
+    let repository = Arc::new(SqlxUserRepository::new(pool.clone()));
+    let app = app(AppState::new(AuthMode::Demo, repository));
+
+    let response = request(
+        &app,
+        Request::get("/api/me")
+            .header("x-forwarded-user", &forged_subject)
+            .body(Body::empty())
+            .expect("demo me request should be valid"),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body: Value = body_json(response).await;
+    assert_eq!(body["authenticated"], false);
+    assert_eq!(body["auth_mode"], "demo");
+    assert_eq!(body["user"], Value::Null);
+
+    let matching_user_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM users
+        WHERE provider_subject = ?
+        "#,
+    )
+    .bind(&forged_subject)
+    .fetch_one(&pool)
+    .await
+    .expect("matching user count should be readable");
+
+    assert_eq!(
+        matching_user_count, 0,
+        "forwarded user header must not create a user in demo mode",
+    );
+
+    cleanup_users_with_subject_prefix(&pool, DEMO_HEADER_TEST_SUBJECT_PREFIX).await;
+
     pool.close().await;
 }
 
@@ -192,15 +355,17 @@ async fn logout_guest(app: &Router, cookie: &str) {
     assert!(body_bytes(response).await.is_empty());
 }
 
-async fn cleanup_auth_test_data(pool: &MySqlPool) {
+async fn cleanup_users_with_subject_prefix(pool: &MySqlPool, subject_prefix: &str) {
+    let pattern = format!("{subject_prefix}%");
+
     sqlx::query(
         r#"
         DELETE FROM users
-        WHERE auth_provider = 'demo'
-          AND provider_subject LIKE 'issue79-auth-%'
+        WHERE provider_subject LIKE ?
         "#,
     )
+    .bind(pattern)
     .execute(pool)
     .await
-    .expect("auth test data cleanup should succeed");
+    .expect("authentication test data cleanup should succeed");
 }
