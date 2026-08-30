@@ -160,7 +160,7 @@ async fn request_log_contains_metadata_without_sensitive_values() {
     ] {
         assert!(
             !logs.contains(secret),
-            "request log must not contain sensitive value: {secret}"
+            "request log must not contain sensitive value"
         );
     }
 }
