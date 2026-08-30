@@ -11,7 +11,6 @@ use std::{
     io::{self, Write},
     sync::{Arc, Mutex},
 };
-use tracing::instrument::WithSubscriber;
 use uuid::Uuid;
 
 #[derive(Clone, Default)]
@@ -130,7 +129,10 @@ async fn request_log_contains_metadata_without_sensitive_values() {
         ))
         .unwrap();
 
-    let response = request(&app, req).with_subscriber(subscriber).await;
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("request log test subscriber should be installed once");
+
+    let response = request(&app, req).await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
