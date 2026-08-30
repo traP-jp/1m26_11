@@ -448,6 +448,363 @@ async fn mariadb_run_start_resume_and_current_http_flow() {
     pool.close().await;
 }
 
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_problem_query_and_answer_http_flow() {
+    let pool = connect_test_database().await;
+    migrate(&pool).await.expect("migration should succeed");
+    cleanup_game_flow_test_data(&pool).await;
+    seed_game_catalog(&pool).await;
+
+    let suffix = Uuid::new_v4().simple().to_string();
+    let display_name = format!("{RUN_TEST_SUBJECT_PREFIX}{}", &suffix[..8]);
+    let room_id = parse_uuid(GAME_ROOM_ID);
+    let first_problem_id = parse_uuid(GAME_PROBLEM_IDS[0]);
+    let second_problem_id = parse_uuid(GAME_PROBLEM_IDS[1]);
+    let third_problem_id = parse_uuid(GAME_PROBLEM_IDS[2]);
+
+    let repository = Arc::new(SqlxUserRepository::new(pool.clone()));
+    let app = app(AppState::new(AuthMode::Demo, repository).with_demo_cookie_secure(false));
+
+    let (user_id, _session_id, cookie) = login_guest(&app, &display_name).await;
+
+    let start_response = request(
+        &app,
+        Request::post(format!("/api/rooms/{room_id}/runs"))
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .expect("start run request should be valid"),
+    )
+    .await;
+
+    assert_eq!(start_response.status(), StatusCode::OK);
+    let _start_body: Value = body_json(start_response).await;
+
+    let run_id = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT run_id
+        FROM runs
+        WHERE user_id = ?
+          AND room_id = ?
+          AND status = 'active'
+        "#,
+    )
+    .bind(user_id)
+    .bind(room_id)
+    .fetch_one(&pool)
+    .await
+    .expect("active run should be stored");
+
+    // 2問目は1問目へ依存しているため、開始直後はlockedです。
+    let locked_response = request(
+        &app,
+        Request::get(format!("/api/rooms/{room_id}/problems/{second_problem_id}"))
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .expect("locked problem request should be valid"),
+    )
+    .await;
+
+    assert_eq!(locked_response.status(), StatusCode::CONFLICT);
+
+    let locked_body: Value = body_json(locked_response).await;
+    assert_eq!(locked_body["error"]["code"], "PROBLEM_LOCKED");
+
+    // 1問目へ不正解のqueryを送ります。
+    let incorrect_query_response = request(
+        &app,
+        Request::post(format!(
+            "/api/rooms/{room_id}/problems/{first_problem_id}/queries"
+        ))
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::COOKIE, &cookie)
+        .body(Body::from(
+            serde_json::to_vec(&json!({
+                "source": "serial",
+                "operations": [
+                    {
+                        "control": "down",
+                        "count": 1
+                    }
+                ]
+            }))
+            .expect("incorrect query payload should be serializable"),
+        ))
+        .expect("incorrect query request should be valid"),
+    )
+    .await;
+
+    assert_eq!(incorrect_query_response.status(), StatusCode::OK);
+
+    let incorrect_query_body: Value = body_json(incorrect_query_response).await;
+    assert_eq!(incorrect_query_body["correct"], false);
+    assert_eq!(incorrect_query_body["query_count"], 1);
+    assert_eq!(incorrect_query_body["remaining_pattern_count"], 2);
+    assert_eq!(incorrect_query_body["problem_status"], "available");
+
+    let incorrect_query_id = incorrect_query_body["query_id"]
+        .as_str()
+        .and_then(|value| Uuid::parse_str(value).ok())
+        .expect("incorrect query response should contain a query UUID");
+
+    // 続いて1問目の正解queryを送ります。
+    let correct_query_response = request(
+        &app,
+        Request::post(format!(
+            "/api/rooms/{room_id}/problems/{first_problem_id}/queries"
+        ))
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::COOKIE, &cookie)
+        .body(Body::from(
+            serde_json::to_vec(&json!({
+                "source": "serial",
+                "operations": [
+                    {
+                        "control": "down",
+                        "count": 1
+                    },
+                    {
+                        "control": "right",
+                        "count": 2
+                    }
+                ]
+            }))
+            .expect("correct query payload should be serializable"),
+        ))
+        .expect("correct query request should be valid"),
+    )
+    .await;
+
+    assert_eq!(correct_query_response.status(), StatusCode::OK);
+
+    let correct_query_body: Value = body_json(correct_query_response).await;
+    assert_eq!(correct_query_body["correct"], true);
+    assert_eq!(correct_query_body["query_count"], 2);
+    assert_eq!(correct_query_body["remaining_pattern_count"], 1);
+    assert_eq!(correct_query_body["problem_status"], "cleared");
+
+    let correct_query_id = correct_query_body["query_id"]
+        .as_str()
+        .and_then(|value| Uuid::parse_str(value).ok())
+        .expect("correct query response should contain a query UUID");
+
+    assert_ne!(incorrect_query_id, correct_query_id);
+
+    // queryが2件ともMariaDBへ保存されたことを確認します。
+    let query_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM queries
+        WHERE run_id = ?
+          AND problem_id = ?
+        "#,
+    )
+    .bind(run_id)
+    .bind(first_problem_id)
+    .fetch_one(&pool)
+    .await
+    .expect("query history count should be readable");
+
+    assert_eq!(query_count, 2);
+
+    let incorrect_query_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM queries
+        WHERE run_id = ?
+          AND problem_id = ?
+          AND is_correct = 0
+        "#,
+    )
+    .bind(run_id)
+    .bind(first_problem_id)
+    .fetch_one(&pool)
+    .await
+    .expect("incorrect query count should be readable");
+
+    let correct_query_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM queries
+        WHERE run_id = ?
+          AND problem_id = ?
+          AND is_correct = 1
+        "#,
+    )
+    .bind(run_id)
+    .bind(first_problem_id)
+    .fetch_one(&pool)
+    .await
+    .expect("correct query count should be readable");
+
+    assert_eq!(incorrect_query_count, 1);
+    assert_eq!(correct_query_count, 1);
+
+    // 正解queryによって1問目がcleared、2問目がavailableになります。
+    let first_status = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT status
+        FROM problem_progress
+        WHERE run_id = ?
+          AND problem_id = ?
+        "#,
+    )
+    .bind(run_id)
+    .bind(first_problem_id)
+    .fetch_one(&pool)
+    .await
+    .expect("first problem status should be readable");
+
+    let second_status = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT status
+        FROM problem_progress
+        WHERE run_id = ?
+          AND problem_id = ?
+        "#,
+    )
+    .bind(run_id)
+    .bind(second_problem_id)
+    .fetch_one(&pool)
+    .await
+    .expect("second problem status should be readable");
+
+    assert_eq!(first_status, "cleared");
+    assert_eq!(second_status, "available");
+
+    // unlockされた2問目をAPIから取得します。
+    let problem_response = request(
+        &app,
+        Request::get(format!("/api/rooms/{room_id}/problems/{second_problem_id}"))
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .expect("available problem request should be valid"),
+    )
+    .await;
+
+    assert_eq!(problem_response.status(), StatusCode::OK);
+
+    let problem_body: Value = body_json(problem_response).await;
+    assert_eq!(problem_body["id"], second_problem_id.to_string());
+    assert_eq!(problem_body["number"], 2);
+    assert_eq!(problem_body["type"], "small");
+    assert_eq!(problem_body["title"], "合言葉");
+    assert_eq!(problem_body["submission_type"], "string");
+    assert_eq!(problem_body["status"], "available");
+    assert_eq!(problem_body["hint_count"], 0);
+    assert!(
+        problem_body.get("judge_config").is_none(),
+        "problem response must not expose judge_config",
+    );
+    assert!(
+        problem_body.get("hints").is_none(),
+        "problem response must not expose hint bodies",
+    );
+
+    // 2問目へ不正解answerを送り、試行回数を増やします。
+    let incorrect_answer_response = request(
+        &app,
+        Request::post(format!(
+            "/api/rooms/{room_id}/problems/{second_problem_id}/answers"
+        ))
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::COOKIE, &cookie)
+        .body(Body::from(
+            serde_json::to_vec(&json!({
+                "answer": "違います"
+            }))
+            .expect("incorrect answer payload should be serializable"),
+        ))
+        .expect("incorrect answer request should be valid"),
+    )
+    .await;
+
+    assert_eq!(incorrect_answer_response.status(), StatusCode::OK);
+
+    let incorrect_answer_body: Value = body_json(incorrect_answer_response).await;
+    assert_eq!(incorrect_answer_body["correct"], false);
+    assert_eq!(incorrect_answer_body["answer_attempt_count"], 1);
+    assert_eq!(incorrect_answer_body["problem_status"], "available");
+    assert_eq!(incorrect_answer_body["run_status"], "active");
+
+    let answer_attempt_count = sqlx::query_scalar::<_, i32>(
+        r#"
+        SELECT answer_attempt_count
+        FROM problem_progress
+        WHERE run_id = ?
+          AND problem_id = ?
+        "#,
+    )
+    .bind(run_id)
+    .bind(second_problem_id)
+    .fetch_one(&pool)
+    .await
+    .expect("answer attempt count should be readable");
+
+    assert_eq!(answer_attempt_count, 1);
+
+    // 正解answerを送り、3問目がunlockされることを確認します。
+    let correct_answer_response = request(
+        &app,
+        Request::post(format!(
+            "/api/rooms/{room_id}/problems/{second_problem_id}/answers"
+        ))
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::COOKIE, &cookie)
+        .body(Body::from(
+            serde_json::to_vec(&json!({
+                "answer": " 顔文字くん "
+            }))
+            .expect("correct answer payload should be serializable"),
+        ))
+        .expect("correct answer request should be valid"),
+    )
+    .await;
+
+    assert_eq!(correct_answer_response.status(), StatusCode::OK);
+
+    let correct_answer_body: Value = body_json(correct_answer_response).await;
+    assert_eq!(correct_answer_body["correct"], true);
+    assert_eq!(correct_answer_body["problem_status"], "cleared");
+    assert_eq!(
+        correct_answer_body["unlocked_problem_ids"],
+        json!([third_problem_id])
+    );
+    assert_eq!(correct_answer_body["run_status"], "active");
+    assert_eq!(
+        correct_answer_body["progress"],
+        json!({
+            "cleared_problem_count": 2,
+            "total_problem_count": 4
+        })
+    );
+    assert!(correct_answer_body["elapsed_ms"].as_u64().is_some());
+
+    let final_statuses = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT problem_progress.status
+        FROM problem_progress
+        INNER JOIN problems
+            ON problems.problem_id = problem_progress.problem_id
+        WHERE problem_progress.run_id = ?
+        ORDER BY problems.number
+        "#,
+    )
+    .bind(run_id)
+    .fetch_all(&pool)
+    .await
+    .expect("final problem statuses should be readable");
+
+    assert_eq!(
+        final_statuses,
+        vec!["cleared", "cleared", "available", "available"],
+    );
+
+    logout_guest(&app, &cookie).await;
+    cleanup_game_flow_test_data(&pool).await;
+    pool.close().await;
+}
+
 async fn login_guest(app: &Router, display_name: &str) -> (Uuid, Uuid, String) {
     let response = request(
         app,
