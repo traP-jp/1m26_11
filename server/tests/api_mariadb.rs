@@ -7,6 +7,7 @@ use axum::{
     body::Body,
     http::{Request, StatusCode, header},
 };
+use chrono::{DateTime, Utc};
 use common::{body_bytes, body_json, connect_test_database, request};
 use serde_json::{Value, json};
 use server::{
@@ -803,6 +804,319 @@ async fn mariadb_problem_query_and_answer_http_flow() {
     logout_guest(&app, &cookie).await;
     cleanup_game_flow_test_data(&pool).await;
     pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_final_problem_first_then_room_clear_http_flow() {
+    let (pool, app, room_id, run_id, cookie) = setup_demo_game().await;
+
+    let first_problem_id = parse_uuid(GAME_PROBLEM_IDS[0]);
+    let second_problem_id = parse_uuid(GAME_PROBLEM_IDS[1]);
+    let third_problem_id = parse_uuid(GAME_PROBLEM_IDS[2]);
+    let final_problem_id = parse_uuid(GAME_PROBLEM_IDS[3]);
+
+    // 大なぞは最初からavailableなので、先に正解させます。
+    let final_answer_path = format!("/api/rooms/{room_id}/problems/{final_problem_id}/answers");
+
+    let final_answer_response = post_authenticated_json(
+        &app,
+        &final_answer_path,
+        &cookie,
+        json!({
+            "answer": " ワンマンソン "
+        }),
+    )
+    .await;
+
+    assert_eq!(final_answer_response.status(), StatusCode::OK);
+
+    let final_answer_body: Value = body_json(final_answer_response).await;
+    assert_eq!(final_answer_body["correct"], true);
+    assert_eq!(final_answer_body["problem_status"], "cleared");
+    assert_eq!(final_answer_body["unlocked_problem_ids"], json!([]));
+    assert_eq!(final_answer_body["run_status"], "active");
+    assert_eq!(
+        final_answer_body["progress"],
+        json!({
+            "cleared_problem_count": 1,
+            "total_problem_count": 4
+        })
+    );
+
+    // 1問目をqueryで正解します。
+    let first_query_path = format!("/api/rooms/{room_id}/problems/{first_problem_id}/queries");
+
+    let first_query_response = post_authenticated_json(
+        &app,
+        &first_query_path,
+        &cookie,
+        json!({
+            "source": "serial",
+            "operations": [
+                {
+                    "control": "down",
+                    "count": 1
+                },
+                {
+                    "control": "right",
+                    "count": 2
+                }
+            ]
+        }),
+    )
+    .await;
+
+    assert_eq!(first_query_response.status(), StatusCode::OK);
+
+    let first_query_body: Value = body_json(first_query_response).await;
+    assert_eq!(first_query_body["correct"], true);
+    assert_eq!(first_query_body["query_count"], 1);
+    assert_eq!(first_query_body["problem_status"], "cleared");
+
+    // unlockされた2問目をanswerで正解します。
+    let second_answer_path = format!("/api/rooms/{room_id}/problems/{second_problem_id}/answers");
+
+    let second_answer_response = post_authenticated_json(
+        &app,
+        &second_answer_path,
+        &cookie,
+        json!({
+            "answer": "かおもじくん"
+        }),
+    )
+    .await;
+
+    assert_eq!(second_answer_response.status(), StatusCode::OK);
+
+    let second_answer_body: Value = body_json(second_answer_response).await;
+    assert_eq!(second_answer_body["correct"], true);
+    assert_eq!(second_answer_body["problem_status"], "cleared");
+    assert_eq!(
+        second_answer_body["unlocked_problem_ids"],
+        json!([third_problem_id])
+    );
+    assert_eq!(second_answer_body["run_status"], "active");
+    assert_eq!(
+        second_answer_body["progress"],
+        json!({
+            "cleared_problem_count": 3,
+            "total_problem_count": 4
+        })
+    );
+
+    // 最後に3問目をqueryで正解します。
+    let third_query_path = format!("/api/rooms/{room_id}/problems/{third_problem_id}/queries");
+
+    let third_query_response = post_authenticated_json(
+        &app,
+        &third_query_path,
+        &cookie,
+        json!({
+            "source": "serial",
+            "operations": [
+                {
+                    "control": "left",
+                    "count": 1
+                },
+                {
+                    "control": "up",
+                    "count": 1
+                }
+            ]
+        }),
+    )
+    .await;
+
+    assert_eq!(third_query_response.status(), StatusCode::OK);
+
+    let third_query_body: Value = body_json(third_query_response).await;
+    assert_eq!(third_query_body["correct"], true);
+    assert_eq!(third_query_body["query_count"], 1);
+    assert_eq!(third_query_body["problem_status"], "cleared");
+
+    let statuses = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT problem_progress.status
+        FROM problem_progress
+        INNER JOIN problems
+            ON problems.problem_id = problem_progress.problem_id
+        WHERE problem_progress.run_id = ?
+        ORDER BY problems.number
+        "#,
+    )
+    .bind(run_id)
+    .fetch_all(&pool)
+    .await
+    .expect("cleared problem statuses should be readable");
+
+    assert_eq!(statuses, vec!["cleared", "cleared", "cleared", "cleared"],);
+
+    // query型の1問目と3問目だけがqueriesへ保存されます。
+    let first_query_count = stored_query_count(&pool, run_id, first_problem_id).await;
+    let second_query_count = stored_query_count(&pool, run_id, second_problem_id).await;
+    let third_query_count = stored_query_count(&pool, run_id, third_problem_id).await;
+    let final_query_count = stored_query_count(&pool, run_id, final_problem_id).await;
+
+    assert_eq!(first_query_count, 1);
+    assert_eq!(second_query_count, 0);
+    assert_eq!(third_query_count, 1);
+    assert_eq!(final_query_count, 0);
+
+    // answer型問題を正解しただけでは誤答counterは増えません。
+    let second_answer_attempt_count =
+        stored_answer_attempt_count(&pool, run_id, second_problem_id).await;
+    let final_answer_attempt_count =
+        stored_answer_attempt_count(&pool, run_id, final_problem_id).await;
+
+    assert_eq!(second_answer_attempt_count, 0);
+    assert_eq!(final_answer_attempt_count, 0);
+
+    let (run_status, cleared_at) = sqlx::query_as::<_, (String, Option<DateTime<Utc>>)>(
+        r#"
+            SELECT status, cleared_at
+            FROM runs
+            WHERE run_id = ?
+            "#,
+    )
+    .bind(run_id)
+    .fetch_one(&pool)
+    .await
+    .expect("cleared run should be readable");
+
+    assert_eq!(run_status, "cleared");
+    assert!(cleared_at.is_some());
+
+    // clear後はactive runがないためcurrentはRUN_NOT_FOUNDになります。
+    let current_response = request(
+        &app,
+        Request::get(format!("/api/rooms/{room_id}/runs/current"))
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .expect("cleared current run request should be valid"),
+    )
+    .await;
+
+    assert_eq!(current_response.status(), StatusCode::NOT_FOUND);
+
+    let current_body: Value = body_json(current_response).await;
+    assert_eq!(current_body["error"]["code"], "RUN_NOT_FOUND");
+
+    // clear済みroomでは新しいrunを開始できません。
+    let restart_response = request(
+        &app,
+        Request::post(format!("/api/rooms/{room_id}/runs"))
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .expect("restart request should be valid"),
+    )
+    .await;
+
+    assert_eq!(restart_response.status(), StatusCode::CONFLICT);
+
+    let restart_body: Value = body_json(restart_response).await;
+    assert_eq!(restart_body["error"]["code"], "CONFLICT");
+    assert_eq!(restart_body["error"]["message"], "room already cleared");
+
+    logout_guest(&app, &cookie).await;
+    cleanup_game_flow_test_data(&pool).await;
+    pool.close().await;
+}
+
+async fn setup_demo_game() -> (MySqlPool, Router, Uuid, Uuid, String) {
+    let pool = connect_test_database().await;
+    migrate(&pool).await.expect("migration should succeed");
+    cleanup_game_flow_test_data(&pool).await;
+    seed_game_catalog(&pool).await;
+
+    let suffix = Uuid::new_v4().simple().to_string();
+    let display_name = format!("{RUN_TEST_SUBJECT_PREFIX}{}", &suffix[..8]);
+    let room_id = parse_uuid(GAME_ROOM_ID);
+
+    let repository = Arc::new(SqlxUserRepository::new(pool.clone()));
+    let app = app(AppState::new(AuthMode::Demo, repository).with_demo_cookie_secure(false));
+
+    let (user_id, _session_id, cookie) = login_guest(&app, &display_name).await;
+
+    let start_response = request(
+        &app,
+        Request::post(format!("/api/rooms/{room_id}/runs"))
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .expect("start run request should be valid"),
+    )
+    .await;
+
+    assert_eq!(start_response.status(), StatusCode::OK);
+    let _start_body: Value = body_json(start_response).await;
+
+    let run_id = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT run_id
+        FROM runs
+        WHERE user_id = ?
+          AND room_id = ?
+          AND status = 'active'
+        "#,
+    )
+    .bind(user_id)
+    .bind(room_id)
+    .fetch_one(&pool)
+    .await
+    .expect("active run should be stored");
+
+    (pool, app, room_id, run_id, cookie)
+}
+
+async fn post_authenticated_json(
+    app: &Router,
+    path: &str,
+    cookie: &str,
+    payload: Value,
+) -> axum::response::Response {
+    request(
+        app,
+        Request::post(path)
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::COOKIE, cookie)
+            .body(Body::from(
+                serde_json::to_vec(&payload).expect("request payload should be serializable"),
+            ))
+            .expect("authenticated JSON request should be valid"),
+    )
+    .await
+}
+
+async fn stored_query_count(pool: &MySqlPool, run_id: Uuid, problem_id: Uuid) -> i64 {
+    sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM queries
+        WHERE run_id = ?
+          AND problem_id = ?
+        "#,
+    )
+    .bind(run_id)
+    .bind(problem_id)
+    .fetch_one(pool)
+    .await
+    .expect("stored query count should be readable")
+}
+
+async fn stored_answer_attempt_count(pool: &MySqlPool, run_id: Uuid, problem_id: Uuid) -> i32 {
+    sqlx::query_scalar::<_, i32>(
+        r#"
+        SELECT answer_attempt_count
+        FROM problem_progress
+        WHERE run_id = ?
+          AND problem_id = ?
+        "#,
+    )
+    .bind(run_id)
+    .bind(problem_id)
+    .fetch_one(pool)
+    .await
+    .expect("stored answer attempt count should be readable")
 }
 
 async fn login_guest(app: &Router, display_name: &str) -> (Uuid, Uuid, String) {
