@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, onMounted } from 'vue'
+import { inject, onMounted, ref } from 'vue'
 
 import GuestNameForm from './components/auth/GuestNameForm.vue'
 import PortalHeader from './components/portal/PortalHeader.vue'
@@ -11,6 +11,11 @@ const emit = defineEmits<{
 }>()
 
 const auth = createAuthFlow(inject(authApiClientKey))
+const guestNameForm = ref<InstanceType<typeof GuestNameForm> | null>(null)
+
+function focusGuestNameForm(): void {
+  guestNameForm.value?.focus()
+}
 
 onMounted(() => void auth.refresh())
 
@@ -44,11 +49,13 @@ const rooms: Room[] = [
       home-href="/"
       instructions-href="#instructions"
       :user-status="auth.portalUserStatus.value"
+      @login="focusGuestNameForm"
       @logout="auth.logout"
     />
     <p v-if="auth.state.value.error" role="alert">認証操作に失敗しました。再度お試しください。</p>
     <GuestNameForm
       v-if="auth.state.value.status === 'unauthenticated' && auth.state.value.authMode === 'demo'"
+      ref="guestNameForm"
       :submit-pending="auth.state.value.busy"
       @submit="auth.loginGuest"
     />

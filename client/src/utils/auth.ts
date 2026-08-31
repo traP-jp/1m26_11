@@ -134,14 +134,16 @@ export function createAuthFlow(client: ApiClient = apiClient): AuthFlow {
     state.value = { ...current, busy: true, error: null }
     try {
       await operation()
+    } catch (error) {
+      state.value = { ...current, busy: false, error }
+      operationPending = false
+      return
+    }
+
+    try {
       await fetchMe()
     } catch (error) {
-      const latest = state.value
-      if (latest.status === 'authenticated' || latest.status === 'unauthenticated') {
-        state.value = { ...latest, busy: false, error }
-      } else {
-        state.value = { status: 'error', error }
-      }
+      state.value = { status: 'error', error }
     } finally {
       operationPending = false
     }

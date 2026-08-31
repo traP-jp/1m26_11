@@ -5,6 +5,7 @@ import PortalHeader from '../components/portal/PortalHeader.vue'
 import PortalPage from '../PortalPage.vue'
 import RoomCard from '../RoomCard.vue'
 import meAuthenticated from '../../../openapi/examples/auth/me-demo-authenticated.json'
+import meUnauthenticated from '../../../openapi/examples/auth/me-demo-unauthenticated.json'
 import type { ApiClient, GetMeResponse } from '../api/client'
 import { authApiClientKey } from '../utils/auth'
 
@@ -56,5 +57,22 @@ describe('PortalPage', () => {
     await firstRoom?.vm.$emit('start', '1411824c-d357-4941-af76-c76cb827dda6')
 
     expect(wrapper.emitted('roomSelected')).toEqual([['1411824c-d357-4941-af76-c76cb827dda6']])
+  })
+
+  it('focuses the guest name input from the Demo login button', async () => {
+    const guestApiClient = {
+      ...apiClient,
+      getMe: vi.fn<ApiClient['getMe']>().mockResolvedValue(meUnauthenticated as GetMeResponse),
+    }
+    const wrapper = mount(PortalPage, {
+      attachTo: document.body,
+      global: { provide: { [authApiClientKey as symbol]: guestApiClient } },
+    })
+    await new Promise((resolve) => setTimeout(resolve))
+
+    await wrapper.get('header button').trigger('click')
+
+    expect(document.activeElement).toBe(wrapper.get('#displayNameInput').element)
+    wrapper.unmount()
   })
 })

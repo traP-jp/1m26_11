@@ -120,6 +120,48 @@ describe('auth state', () => {
     expect(client.getMe).toHaveBeenCalledOnce()
   })
 
+  it('retries only me when refreshing after a successful guest login', async () => {
+    const refreshError = new Error('me failed after login')
+    const client = createClient({
+      getMe: vi
+        .fn<ApiClient['getMe']>()
+        .mockResolvedValueOnce(unauthenticatedFixture)
+        .mockRejectedValueOnce(refreshError)
+        .mockResolvedValueOnce(authenticatedFixture),
+    })
+    const auth = createAuthFlow(client)
+    await auth.refresh()
+
+    await auth.loginGuest('kaomojikun')
+
+    expect(auth.state.value).toEqual({ status: 'error', error: refreshError })
+    await auth.refresh()
+    expect(auth.state.value.status).toBe('authenticated')
+    expect(client.loginGuest).toHaveBeenCalledOnce()
+    expect(client.getMe).toHaveBeenCalledTimes(3)
+  })
+
+  it('retries only me when refreshing after a successful logout', async () => {
+    const refreshError = new Error('me failed after logout')
+    const client = createClient({
+      getMe: vi
+        .fn<ApiClient['getMe']>()
+        .mockResolvedValueOnce(authenticatedFixture)
+        .mockRejectedValueOnce(refreshError)
+        .mockResolvedValueOnce(unauthenticatedFixture),
+    })
+    const auth = createAuthFlow(client)
+    await auth.refresh()
+
+    await auth.logout()
+
+    expect(auth.state.value).toEqual({ status: 'error', error: refreshError })
+    await auth.refresh()
+    expect(auth.state.value.status).toBe('unauthenticated')
+    expect(client.logoutDemo).toHaveBeenCalledOnce()
+    expect(client.getMe).toHaveBeenCalledTimes(3)
+  })
+
   it('moves to error when the initial me request fails', async () => {
     const error = new Error('me failed')
     const auth = createAuthFlow(
