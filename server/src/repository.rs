@@ -779,22 +779,8 @@ impl AuthRepository for SqlxUserRepository {
             "available".to_owned()
         };
 
-        let query_count = sqlx::query_scalar::<_, i64>(
-            r#"
-            SELECT COUNT(*)
-            FROM queries
-            WHERE run_id = ?
-              AND problem_id = ?
-            "#,
-        )
-        .bind(submission.run_id)
-        .bind(submission.problem_id)
-        .fetch_one(&mut *transaction)
-        .await
-        .map_err(RepositoryError::Database)?;
-
-        let query_count =
-            u64::try_from(query_count).map_err(|_| RepositoryError::InvalidQueryCount)?;
+        let query_count = u64::try_from(next_answer_attempt_count)
+            .map_err(|_| RepositoryError::InvalidQueryCount)?;
 
         transaction
             .commit()
