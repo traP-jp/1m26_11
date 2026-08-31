@@ -542,6 +542,11 @@ async fn mariadb_problem_query_and_answer_http_flow() {
     assert_eq!(incorrect_query_body["query_count"], 1);
     assert_eq!(incorrect_query_body["remaining_pattern_count"], 2);
     assert_eq!(incorrect_query_body["problem_status"], "available");
+    assert_eq!(stored_query_count(&pool, run_id, first_problem_id).await, 1);
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        1
+    );
 
     let incorrect_query_id = incorrect_query_body["query_id"]
         .as_str()
@@ -583,6 +588,11 @@ async fn mariadb_problem_query_and_answer_http_flow() {
     assert_eq!(correct_query_body["query_count"], 2);
     assert_eq!(correct_query_body["remaining_pattern_count"], 1);
     assert_eq!(correct_query_body["problem_status"], "cleared");
+    assert_eq!(stored_query_count(&pool, run_id, first_problem_id).await, 2);
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        2
+    );
 
     let correct_query_id = correct_query_body["query_id"]
         .as_str()
@@ -1050,6 +1060,10 @@ async fn mariadb_error_responses_and_query_rollback_http_flow() {
     let malformed_body: Value = body_json(malformed_response).await;
     assert_eq!(malformed_body["error"]["code"], "BAD_REQUEST");
     assert_eq!(stored_query_count(&pool, run_id, first_problem_id).await, 0);
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        0
+    );
 
     // 401: Cookieなしでqueryを送信します。
     let unauthorized_response = request(
@@ -1077,6 +1091,10 @@ async fn mariadb_error_responses_and_query_rollback_http_flow() {
     let unauthorized_body: Value = body_json(unauthorized_response).await;
     assert_eq!(unauthorized_body["error"]["code"], "UNAUTHORIZED");
     assert_eq!(stored_query_count(&pool, run_id, first_problem_id).await, 0);
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        0
+    );
 
     // 404: 存在しないproblemを取得します。
     let missing_response = request(
@@ -1122,6 +1140,10 @@ async fn mariadb_error_responses_and_query_rollback_http_flow() {
         stored_query_count(&pool, run_id, second_problem_id).await,
         0
     );
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, second_problem_id).await,
+        0
+    );
 
     // 422: 許可されていないsourceを送信します。
     let validation_response = post_authenticated_json(
@@ -1148,6 +1170,10 @@ async fn mariadb_error_responses_and_query_rollback_http_flow() {
     let validation_body: Value = body_json(validation_response).await;
     assert_eq!(validation_body["error"]["code"], "VALIDATION_ERROR");
     assert_eq!(stored_query_count(&pool, run_id, first_problem_id).await, 0);
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        0
+    );
 
     // problem_progressのUPDATEだけを失敗させるtriggerを一時的に作ります。
     // correct queryでは、queriesへのINSERT後にproblem_progressをUPDATEするため、
@@ -1225,6 +1251,11 @@ async fn mariadb_error_responses_and_query_rollback_http_flow() {
         0,
         "failed transaction must not leave query history",
     );
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        0,
+        "failed transaction must not increment the shared attempt counter",
+    );
 
     let first_status = sqlx::query_scalar::<_, String>(
         r#"
@@ -1289,6 +1320,11 @@ async fn mariadb_error_responses_and_query_rollback_http_flow() {
         stored_query_count(&pool, run_id, first_problem_id).await,
         1,
         "successful retry should store exactly one query",
+    );
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        1,
+        "successful retry should increment the shared attempt counter",
     );
 
     logout_guest(&app, &cookie).await;
