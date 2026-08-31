@@ -140,6 +140,24 @@ describe('OpenAPI-backed MSW handlers', () => {
     expect(await longResponse.json()).toEqual(displayNameTooLong)
   })
 
+  it('keeps authenticated state after guest display name validation errors', async () => {
+    startMock()
+
+    for (const displayName of ['　  ', '😀'.repeat(33)]) {
+      const loginResponse = await fetch(`${BASE_URL}/api/auth/guest`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ display_name: displayName }),
+      })
+
+      expect(loginResponse.status).toBe(422)
+
+      const meResponse = await fetch(`${BASE_URL}/api/me`)
+      expect(meResponse.status).toBe(200)
+      expect(await meResponse.json()).toEqual(meAuthenticated)
+    }
+  })
+
   it('returns the shared unauthorized fixture for unauthenticated game requests', async () => {
     startMock('game_api_unauthorized')
 

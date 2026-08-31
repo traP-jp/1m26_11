@@ -87,8 +87,6 @@ cases:
         response:
           status: 422
           example: display_name_required
-        state_after:
-          authenticated: false
 
   - id: demo_login_display_name_too_long
     preconditions:
@@ -100,8 +98,6 @@ cases:
         response:
           status: 422
           example: display_name_too_long
-        state_after:
-          authenticated: false
 
   - id: start_new_run
     preconditions:
