@@ -1197,7 +1197,7 @@ async fn mariadb_leaderboard_selects_user_best_runs_and_competition_ranks() {
         query_problem_id,
         string_problem_id,
         leaderboard_timestamp("2026-08-06T10:05:00Z"),
-        leaderboard_timestamp("2026-08-06T10:06:10Z"),
+        leaderboard_timestamp("2026-08-06T10:06:10.123Z"),
         1,
         77,
     )
@@ -1251,7 +1251,7 @@ async fn mariadb_leaderboard_selects_user_best_runs_and_competition_ranks() {
     assert_eq!(leaderboard[2].rank, 3);
     assert_eq!(leaderboard[2].user_id, carol_id);
     assert_eq!(leaderboard[2].display_name, "Carol");
-    assert_eq!(leaderboard[2].elapsed_ms, 70_000);
+    assert_eq!(leaderboard[2].elapsed_ms, 70_123);
     assert_eq!(leaderboard[2].query_count, 1);
 
     let empty = repository

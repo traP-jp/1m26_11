@@ -301,6 +301,32 @@ async fn missing_room_returns_404() {
 }
 
 #[tokio::test]
+async fn unpublished_room_returns_404() {
+    let mut room = room_record();
+    room.is_published = false;
+
+    let app = test_app(StubAuthRepository {
+        user: None,
+        room: Some(room),
+        leaderboard: ranked_records(),
+        fail_leaderboard: false,
+    });
+
+    let req = Request::get(leaderboard_url())
+        .body(Body::empty())
+        .expect("request should be valid");
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["error"]["code"], "NOT_FOUND");
+    assert_eq!(body["error"]["message"], "room not found");
+    assert_eq!(body["error"]["details"], json!({}));
+}
+
+#[tokio::test]
 async fn repository_error_returns_500_without_details() {
     let app = test_app(StubAuthRepository {
         user: None,

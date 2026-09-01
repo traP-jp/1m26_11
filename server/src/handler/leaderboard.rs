@@ -18,8 +18,11 @@ pub(crate) async fn get_room_leaderboard(
     let room_id =
         Uuid::parse_str(&room_id).map_err(|_| AppError::bad_request("invalid room_id"))?;
 
-    let room = state.auth_repository.find_room_by_id(room_id).await?;
-    if room.is_none() {
+    let Some(room) = state.auth_repository.find_room_by_id(room_id).await? else {
+        return Err(AppError::not_found("room not found"));
+    };
+
+    if !room.is_published {
         return Err(AppError::not_found("room not found"));
     }
 

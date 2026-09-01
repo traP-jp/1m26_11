@@ -195,7 +195,7 @@ struct LeaderboardRow {
     rank: i64,
     user_id: Uuid,
     display_name: String,
-    elapsed_ms: i64,
+    started_at: DateTime<Utc>,
     query_count: i64,
     cleared_at: DateTime<Utc>,
 }
@@ -205,8 +205,8 @@ impl TryFrom<LeaderboardRow> for LeaderboardRecord {
 
     fn try_from(row: LeaderboardRow) -> Result<Self, Self::Error> {
         let rank = u32::try_from(row.rank).map_err(|_| RepositoryError::InvalidLeaderboardRank)?;
-        let elapsed_ms =
-            u64::try_from(row.elapsed_ms).map_err(|_| RepositoryError::InvalidElapsed)?;
+        let elapsed = row.cleared_at.signed_duration_since(row.started_at);
+        let elapsed_ms = duration_to_elapsed_ms(elapsed)?;
         let query_count =
             u64::try_from(row.query_count).map_err(|_| RepositoryError::InvalidQueryCount)?;
 
@@ -1110,6 +1110,7 @@ impl AuthRepository for SqlxUserRepository {
                     runs.run_id,
                     runs.user_id,
                     users.display_name,
+                    runs.started_at,
                     CAST(
                         TIMESTAMPDIFF(
                             MICROSECOND,
@@ -1154,6 +1155,7 @@ impl AuthRepository for SqlxUserRepository {
                     run_id,
                     user_id,
                     display_name,
+                    started_at,
                     elapsed_ms,
                     query_count,
                     cleared_at,
@@ -1172,6 +1174,7 @@ impl AuthRepository for SqlxUserRepository {
                     run_id,
                     user_id,
                     display_name,
+                    started_at,
                     elapsed_ms,
                     query_count,
                     cleared_at
@@ -1182,6 +1185,7 @@ impl AuthRepository for SqlxUserRepository {
                 SELECT
                     user_id,
                     display_name,
+                    started_at,
                     elapsed_ms,
                     query_count,
                     cleared_at,
@@ -1200,7 +1204,7 @@ impl AuthRepository for SqlxUserRepository {
                 leaderboard_rank AS `rank`,
                 user_id,
                 display_name,
-                elapsed_ms,
+                started_at,
                 query_count,
                 cleared_at
             FROM ranked_best_runs
