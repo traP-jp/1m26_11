@@ -46,19 +46,14 @@ describe('ConditionBoxList', () => {
     expect(wrapper.emitted('clear')).toBeUndefined()
   })
 
-  it('guards every operation immediately after becoming disabled', async () => {
-    const wrapper = mount(ConditionBoxList, { props: defaultProps })
-    const addButton = wrapper.get<HTMLButtonElement>('button:nth-of-type(1)')
-    const clearButton = wrapper.get<HTMLButtonElement>('button:nth-of-type(2)')
-    const removeButton = wrapper.get<HTMLButtonElement>(
-      `button[aria-label="${firstConditionBoxItem.label}を削除"]`,
-    )
+  it('guards every operation even when click events are dispatched to disabled controls', async () => {
+    const wrapper = mount(ConditionBoxList, {
+      props: { ...defaultProps, disabled: true },
+    })
 
-    const disabling = wrapper.setProps({ disabled: true })
-    addButton.element.click()
-    clearButton.element.click()
-    removeButton.element.click()
-    await disabling
+    for (const button of wrapper.findAll('button')) {
+      button.element.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    }
 
     expect(wrapper.emitted('add')).toBeUndefined()
     expect(wrapper.emitted('remove')).toBeUndefined()
