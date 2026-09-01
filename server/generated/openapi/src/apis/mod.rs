@@ -2,6 +2,7 @@ pub mod answers;
 pub mod auth;
 pub mod problems;
 pub mod queries;
+pub mod rooms;
 pub mod runs;
 pub mod tooling;
 

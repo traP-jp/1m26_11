@@ -147,6 +147,37 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
       )
     }),
 
+    http.get('/api/rooms', () => {
+      if (!state.get('room_exists')) {
+        const result = responseFromStep<Schemas['RoomsResponse']>(
+          contract,
+          state,
+          'rooms_empty',
+          'getRooms',
+        )
+        return HttpResponse.json(result.body, { status: result.status })
+      }
+      if (!state.get('authenticated')) {
+        const result = responseFromStep<Schemas['RoomsResponse']>(
+          contract,
+          state,
+          'rooms_unauthenticated',
+          'getRooms',
+        )
+        return HttpResponse.json(result.body, { status: result.status })
+      }
+      const scenarioId = state.get('active_run_exists')
+        ? 'rooms_authenticated_active'
+        : 'rooms_authenticated_cleared'
+      const result = responseFromStep<Schemas['RoomsResponse']>(
+        contract,
+        state,
+        scenarioId,
+        'getRooms',
+      )
+      return HttpResponse.json(result.body, { status: result.status })
+    }),
+
     http.post('/api/rooms/{room_id}/runs', ({ params, response }) => {
       if (!requestHasValidResourceIds(params)) return response(400).json(errorBody(400))
       if (!state.get('authenticated')) {

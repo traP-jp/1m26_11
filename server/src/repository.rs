@@ -207,6 +207,27 @@ pub enum AnswerRunStatus {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoomBestRecordRecord {
+    pub elapsed_ms: u64,
+    pub rank: u32,
+    pub query_count: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoomSummaryRecord {
+    pub room_id: Uuid,
+    pub number: i32,
+    pub name: String,
+    pub genre: String,
+    pub description: String,
+    pub problem_count: u32,
+    pub progress_status: String,
+    pub cleared_count: u32,
+    pub required_count: u32,
+    pub best_record: Option<RoomBestRecordRecord>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AnswerSubmissionResult {
     Incorrect {
         answer_attempt_count: i32,
@@ -214,8 +235,8 @@ pub enum AnswerSubmissionResult {
     Correct {
         unlocked_problem_ids: Vec<Uuid>,
         run_status: AnswerRunStatus,
-        cleared_problem_count: i32,
-        total_problem_count: i32,
+        cleared_count: u32,
+        required_count: u32,
         elapsed_ms: u64,
     },
 }
@@ -279,6 +300,13 @@ pub trait AuthRepository: Send + Sync {
 
     async fn delete_demo_session(&self, _session_id: Uuid) -> Result<(), RepositoryError> {
         unimplemented!("delete_demo_session is not implemented for this repository")
+    }
+
+    async fn find_published_rooms_with_progress(
+        &self,
+        _user_id: Option<Uuid>,
+    ) -> Result<Vec<RoomSummaryRecord>, RepositoryError> {
+        unimplemented!("find_published_rooms_with_progress is not implemented for this repository")
     }
 
     async fn find_room_by_id(&self, _room_id: Uuid) -> Result<Option<RoomRecord>, RepositoryError> {
@@ -465,6 +493,332 @@ impl AuthRepository for SqlxUserRepository {
         .map_err(RepositoryError::Database)?;
 
         Ok(())
+    }
+
+    async fn find_published_rooms_with_progress(
+        &self,
+        user_id: Option<Uuid>,
+    ) -> Result<Vec<RoomSummaryRecord>, RepositoryError> {
+        #[derive(FromRow)]
+        struct RoomRow {
+            room_id: Uuid,
+            number: i32,
+            name: String,
+            genre: String,
+            description: String,
+            problem_count: i64,
+            required_count: i64,
+        }
+
+        let room_rows = sqlx::query_as::<_, RoomRow>(
+            r#"
+            SELECT
+                rooms.room_id,
+                rooms.number,
+                rooms.name,
+                rooms.genre,
+                rooms.description,
+                COUNT(problems.problem_id) AS problem_count,
+                COALESCE(SUM(CASE WHEN problems.is_required = 1 THEN 1 ELSE 0 END), 0) AS required_count
+            FROM rooms
+            LEFT JOIN problems ON problems.room_id = rooms.room_id
+            WHERE rooms.is_published = 1
+            GROUP BY rooms.room_id, rooms.number, rooms.name, rooms.genre, rooms.description
+            ORDER BY rooms.number ASC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        if room_rows.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let user_id = match user_id {
+            Some(uid) => uid,
+            None => {
+                return room_rows
+                    .into_iter()
+                    .map(|row| {
+                        Ok(RoomSummaryRecord {
+                            room_id: row.room_id,
+                            number: row.number,
+                            name: row.name,
+                            genre: row.genre,
+                            description: row.description,
+                            problem_count: u32::try_from(row.problem_count)
+                                .map_err(|_| RepositoryError::InvalidProgressCount)?,
+                            progress_status: "not_started".to_owned(),
+                            cleared_count: 0,
+                            required_count: u32::try_from(row.required_count)
+                                .map_err(|_| RepositoryError::InvalidProgressCount)?,
+                            best_record: None,
+                        })
+                    })
+                    .collect();
+            }
+        };
+
+        #[derive(FromRow)]
+        struct UserRunRow {
+            run_id: Uuid,
+            room_id: Uuid,
+            status: String,
+        }
+
+        let user_runs = sqlx::query_as::<_, UserRunRow>(
+            r#"
+            SELECT
+                runs.run_id,
+                runs.room_id,
+                runs.status
+            FROM runs
+            INNER JOIN rooms ON rooms.room_id = runs.room_id
+            WHERE runs.user_id = ?
+              AND rooms.is_published = 1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        let mut user_active_rooms: std::collections::HashMap<Uuid, Uuid> =
+            std::collections::HashMap::new();
+        let mut user_cleared_rooms: std::collections::HashSet<Uuid> =
+            std::collections::HashSet::new();
+
+        for run in &user_runs {
+            match run.status.as_str() {
+                "active" => {
+                    if user_cleared_rooms.contains(&run.room_id) {
+                        return Err(RepositoryError::InvalidProblemStatus {
+                            status: "active and cleared run conflict".to_owned(),
+                        });
+                    }
+                    user_active_rooms.insert(run.room_id, run.run_id);
+                }
+                "cleared" => {
+                    if user_active_rooms.contains_key(&run.room_id) {
+                        return Err(RepositoryError::InvalidProblemStatus {
+                            status: "active and cleared run conflict".to_owned(),
+                        });
+                    }
+                    user_cleared_rooms.insert(run.room_id);
+                }
+                _ => {}
+            }
+        }
+
+        #[derive(FromRow)]
+        struct ActiveProgressRow {
+            room_id: Uuid,
+            cleared_count: i64,
+        }
+
+        let active_progress_rows = sqlx::query_as::<_, ActiveProgressRow>(
+            r#"
+            SELECT
+                runs.room_id,
+                COUNT(problem_progress.problem_id) AS cleared_count
+            FROM runs
+            INNER JOIN problem_progress ON problem_progress.run_id = runs.run_id
+            INNER JOIN problems ON problems.problem_id = problem_progress.problem_id
+            WHERE runs.user_id = ?
+              AND runs.status = 'active'
+              AND problem_progress.status = 'cleared'
+              AND problems.is_required = 1
+            GROUP BY runs.room_id
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        let active_cleared_counts: std::collections::HashMap<Uuid, u32> = active_progress_rows
+            .into_iter()
+            .map(|r| {
+                let count = u32::try_from(r.cleared_count)
+                    .map_err(|_| RepositoryError::InvalidProgressCount)?;
+                Ok((r.room_id, count))
+            })
+            .collect::<Result<_, RepositoryError>>()?;
+
+        #[derive(FromRow)]
+        struct ClearedRunRow {
+            user_id: Uuid,
+            room_id: Uuid,
+            started_at: DateTime<Utc>,
+            cleared_at: Option<DateTime<Utc>>,
+            query_count: i64,
+        }
+
+        let cleared_run_rows = if !user_cleared_rooms.is_empty() {
+            sqlx::query_as::<_, ClearedRunRow>(
+                r#"
+                SELECT
+                    runs.user_id,
+                    runs.room_id,
+                    runs.started_at,
+                    runs.cleared_at,
+                    COALESCE(SUM(
+                        CASE
+                            WHEN problems.submission_type = 'operation_sequence'
+                            THEN problem_progress.answer_attempt_count
+                            ELSE 0
+                        END
+                    ), 0) AS query_count
+                FROM runs
+                INNER JOIN rooms ON rooms.room_id = runs.room_id
+                LEFT JOIN problem_progress ON problem_progress.run_id = runs.run_id
+                LEFT JOIN problems ON problems.problem_id = problem_progress.problem_id
+                WHERE rooms.is_published = 1
+                  AND runs.status = 'cleared'
+                  AND runs.cleared_at IS NOT NULL
+                GROUP BY runs.run_id, runs.user_id, runs.room_id, runs.started_at, runs.cleared_at
+                "#,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(RepositoryError::Database)?
+        } else {
+            Vec::new()
+        };
+
+        #[derive(Clone)]
+        struct UserBest {
+            user_id: Uuid,
+            elapsed_ms: u64,
+            query_count: u64,
+            cleared_at: DateTime<Utc>,
+        }
+
+        let mut room_user_bests: std::collections::HashMap<
+            Uuid,
+            std::collections::HashMap<Uuid, UserBest>,
+        > = std::collections::HashMap::new();
+
+        for run in cleared_run_rows {
+            let cleared_at = run.cleared_at.ok_or(RepositoryError::InvalidElapsed)?;
+            let elapsed = cleared_at.signed_duration_since(run.started_at);
+            if elapsed < chrono::Duration::zero() {
+                return Err(RepositoryError::InvalidElapsed);
+            }
+            let elapsed_ms = duration_to_elapsed_ms(elapsed)?;
+            let query_count =
+                u64::try_from(run.query_count).map_err(|_| RepositoryError::InvalidQueryCount)?;
+
+            let current_best = UserBest {
+                user_id: run.user_id,
+                elapsed_ms,
+                query_count,
+                cleared_at,
+            };
+
+            let users_map = room_user_bests.entry(run.room_id).or_default();
+            match users_map.get_mut(&run.user_id) {
+                Some(existing) => {
+                    let is_better = (
+                        current_best.elapsed_ms,
+                        current_best.query_count,
+                        current_best.cleared_at,
+                    ) < (
+                        existing.elapsed_ms,
+                        existing.query_count,
+                        existing.cleared_at,
+                    );
+                    if is_better {
+                        *existing = current_best;
+                    }
+                }
+                None => {
+                    users_map.insert(run.user_id, current_best);
+                }
+            }
+        }
+
+        let mut user_room_best_records: std::collections::HashMap<Uuid, RoomBestRecordRecord> =
+            std::collections::HashMap::new();
+
+        for (room_id, users_map) in room_user_bests {
+            if !user_cleared_rooms.contains(&room_id) {
+                continue;
+            }
+
+            let mut sorted_bests: Vec<UserBest> = users_map.into_values().collect();
+            sorted_bests.sort_by(|a, b| {
+                (a.elapsed_ms, a.query_count, a.cleared_at).cmp(&(
+                    b.elapsed_ms,
+                    b.query_count,
+                    b.cleared_at,
+                ))
+            });
+
+            let mut rank = 1u32;
+            for (i, item) in sorted_bests.iter().enumerate() {
+                if i > 0 {
+                    let prev = &sorted_bests[i - 1];
+                    if item.elapsed_ms == prev.elapsed_ms
+                        && item.query_count == prev.query_count
+                        && item.cleared_at == prev.cleared_at
+                    {
+                        // Same rank for tie
+                    } else {
+                        rank = (i + 1) as u32;
+                    }
+                }
+                if item.user_id == user_id {
+                    user_room_best_records.insert(
+                        room_id,
+                        RoomBestRecordRecord {
+                            elapsed_ms: item.elapsed_ms,
+                            rank,
+                            query_count: item.query_count,
+                        },
+                    );
+                    break;
+                }
+            }
+        }
+
+        room_rows
+            .into_iter()
+            .map(|row| {
+                let problem_count = u32::try_from(row.problem_count)
+                    .map_err(|_| RepositoryError::InvalidProgressCount)?;
+                let required_count = u32::try_from(row.required_count)
+                    .map_err(|_| RepositoryError::InvalidProgressCount)?;
+
+                let (progress_status, cleared_count, best_record) =
+                    if user_cleared_rooms.contains(&row.room_id) {
+                        let best = user_room_best_records.get(&row.room_id).cloned();
+                        ("cleared".to_owned(), required_count, best)
+                    } else if user_active_rooms.contains_key(&row.room_id) {
+                        let cleared = active_cleared_counts
+                            .get(&row.room_id)
+                            .copied()
+                            .unwrap_or(0);
+                        ("active".to_owned(), cleared, None)
+                    } else {
+                        ("not_started".to_owned(), 0, None)
+                    };
+
+                Ok(RoomSummaryRecord {
+                    room_id: row.room_id,
+                    number: row.number,
+                    name: row.name,
+                    genre: row.genre,
+                    description: row.description,
+                    problem_count,
+                    progress_status,
+                    cleared_count,
+                    required_count,
+                    best_record,
+                })
+            })
+            .collect()
     }
 
     async fn find_room_by_id(&self, room_id: Uuid) -> Result<Option<RoomRecord>, RepositoryError> {
@@ -757,10 +1111,10 @@ impl AuthRepository for SqlxUserRepository {
             )
             .await?;
 
-            let cleared_problem_count = i32::try_from(plan.progress.cleared_problem_count)
+            let cleared_count = u32::try_from(plan.progress.cleared_count)
                 .map_err(|_| RepositoryError::InvalidProgressCount)?;
 
-            let total_problem_count = i32::try_from(plan.progress.total_problem_count)
+            let required_count = u32::try_from(plan.progress.required_count)
                 .map_err(|_| RepositoryError::InvalidProgressCount)?;
 
             let elapsed_ms = duration_to_elapsed_ms(plan.elapsed)?;
@@ -773,8 +1127,8 @@ impl AuthRepository for SqlxUserRepository {
             AnswerSubmissionResult::Correct {
                 unlocked_problem_ids: plan.unlocked_problem_ids,
                 run_status,
-                cleared_problem_count,
-                total_problem_count,
+                cleared_count,
+                required_count,
                 elapsed_ms,
             }
         } else {

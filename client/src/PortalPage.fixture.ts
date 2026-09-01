@@ -30,7 +30,7 @@ export const portalPageFixtures = {
     authenticated: true,
     authMode: 'demo',
     displayName: 'kaomojikun',
-    progressStatus: 'in_progress',
+    progressStatus: 'active',
   },
   cleared: {
     ...common,
