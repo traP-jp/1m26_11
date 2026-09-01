@@ -4,6 +4,7 @@ use sqlx::mysql::MySqlConnectOptions;
 use thiserror::Error;
 
 const DEFAULT_APP_ADDR: &str = "0.0.0.0:8080";
+const DEFAULT_DEMO_COOKIE_SECURE: bool = true;
 const DEFAULT_DB_USER: &str = "root";
 const DEFAULT_DB_PASS: &str = "pass";
 const DEFAULT_DB_HOST: &str = "localhost";
@@ -14,6 +15,7 @@ const DEFAULT_DB_NAME: &str = "app";
 pub struct Config {
     pub app_addr: SocketAddr,
     pub auth_mode: AuthMode,
+    pub demo_cookie_secure: bool,
     database_url: Option<String>,
     db_user: String,
     db_pass: String,
@@ -35,6 +37,7 @@ impl Config {
                 ));
             }
         };
+        let demo_cookie_secure = env_bool("DEMO_COOKIE_SECURE", DEFAULT_DEMO_COOKIE_SECURE)?;
         let app_addr = normalize_app_addr(&env_or("APP_ADDR", DEFAULT_APP_ADDR))
             .parse()
             .map_err(ConfigError::InvalidAppAddr)?;
@@ -46,6 +49,7 @@ impl Config {
         Ok(Self {
             app_addr,
             auth_mode,
+            demo_cookie_secure,
             database_url: env::var("DATABASE_URL")
                 .ok()
                 .filter(|value| !value.trim().is_empty()),
@@ -79,12 +83,35 @@ pub enum ConfigError {
     InvalidAuthMode(String),
     #[error("APP_ADDR is not a valid socket address")]
     InvalidAppAddr(#[source] std::net::AddrParseError),
+    #[error("{key} must be `true` or `false`, got `{value}`")]
+    InvalidBooleanEnvironmentValue { key: &'static str, value: String },
     #[error("DB_PORT is not a valid port number")]
     InvalidDbPort(#[source] ParseIntError),
 }
 
 fn env_or(key: &str, default: &str) -> String {
     env::var(key).unwrap_or_else(|_| default.to_owned())
+}
+
+fn env_bool(key: &'static str, default: bool) -> Result<bool, ConfigError> {
+    match env::var(key) {
+        Ok(value) => {
+            parse_bool(&value).ok_or(ConfigError::InvalidBooleanEnvironmentValue { key, value })
+        }
+        Err(env::VarError::NotPresent) => Ok(default),
+        Err(env::VarError::NotUnicode(_)) => Err(ConfigError::InvalidBooleanEnvironmentValue {
+            key,
+            value: "<non-Unicode value>".to_owned(),
+        }),
+    }
+}
+
+fn parse_bool(value: &str) -> Option<bool> {
+    match value {
+        "true" => Some(true),
+        "false" => Some(false),
+        _ => None,
+    }
 }
 
 fn normalize_app_addr(value: &str) -> String {
@@ -117,7 +144,7 @@ impl FromStr for AuthMode {
 mod tests {
     use std::str::FromStr;
 
-    use super::AuthMode;
+    use super::{AuthMode, parse_bool};
 
     #[test]
     fn parses_auth_mode() {
@@ -130,5 +157,14 @@ mod tests {
         assert_eq!(AuthMode::from_str("local"), Err("local".to_owned()));
         assert!(AuthMode::from_str("Demo").is_err());
         assert!(AuthMode::from_str("").is_err());
+    }
+
+    #[test]
+    fn parses_boolean_environment_values() {
+        assert_eq!(parse_bool("true"), Some(true));
+        assert_eq!(parse_bool("false"), Some(false));
+        assert_eq!(parse_bool("TRUE"), None);
+        assert_eq!(parse_bool("1"), None);
+        assert_eq!(parse_bool(""), None);
     }
 }

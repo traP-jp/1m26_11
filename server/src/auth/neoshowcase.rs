@@ -1,11 +1,11 @@
 use axum::http::HeaderMap;
 
-use crate::repository::{AuthRepository, RepositoryError};
+use crate::repository::{AuthProvider, AuthRepository, RepositoryError};
 
 use super::current_user::CurrentUser;
 
 const X_FORWARDED_USER_HEADER: &str = "x-forwarded-user";
-const AUTH_PROVIDER: &str = "neoshowcase";
+const AUTH_PROVIDER: AuthProvider = AuthProvider::NeoShowcase;
 
 pub(crate) async fn resolve_current_user(
     headers: &HeaderMap,
@@ -36,7 +36,7 @@ mod tests {
     use axum::http::{HeaderMap, HeaderValue};
     use uuid::Uuid;
 
-    use crate::repository::{AuthRepository, AuthUserRecord, RepositoryError};
+    use crate::repository::{AuthProvider, AuthRepository, AuthUserRecord, RepositoryError};
 
     use super::{AUTH_PROVIDER, resolve_current_user};
 
@@ -55,7 +55,7 @@ mod tests {
 
         async fn find_user_by_provider_subject(
             &self,
-            _auth_provider: &str,
+            _auth_provider: AuthProvider,
             _provider_subject: &str,
         ) -> Result<Option<AuthUserRecord>, RepositoryError> {
             Ok(None)
@@ -63,7 +63,7 @@ mod tests {
 
         async fn get_or_create_user(
             &self,
-            auth_provider: &str,
+            auth_provider: AuthProvider,
             provider_subject: &str,
             display_name: &str,
         ) -> Result<AuthUserRecord, RepositoryError> {
@@ -74,6 +74,7 @@ mod tests {
             Ok(AuthUserRecord {
                 user_id: self.user_id,
                 display_name: display_name.to_owned(),
+                auth_provider,
             })
         }
     }

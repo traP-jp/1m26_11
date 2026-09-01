@@ -4,7 +4,7 @@ use common::{connect_test_database, foreign_key_delete_rule, index_columns, prim
 use serde_json::json;
 use server::{
     migrate,
-    repository::{AuthRepository, AuthUserRecord, SqlxUserRepository},
+    repository::{AuthProvider, AuthRepository, RepositoryError, SqlxUserRepository},
 };
 use sqlx::types::Json;
 use uuid::Uuid;
@@ -18,41 +18,15 @@ async fn mariadb_auth_repository_flow() {
 
     let repository = SqlxUserRepository::new(pool.clone());
 
-    let demo_user_id = Uuid::new_v4();
     let session_id = Uuid::new_v4();
-    let demo_subject = format!("integration-demo-{demo_user_id}");
+    let demo_subject = format!("integration-demo-{}", Uuid::new_v4());
 
-    sqlx::query(
-        r#"
-        INSERT INTO users (
-            user_id,
-            auth_provider,
-            provider_subject,
-            display_name
-        )
-        VALUES (?, 'demo', ?, ?)
-        "#,
-    )
-    .bind(demo_user_id)
-    .bind(&demo_subject)
-    .bind("demo-user")
-    .execute(&pool)
-    .await
-    .expect("demo user insertion should succeed");
+    let created_demo_user = repository
+        .get_or_create_demo_user_and_session(session_id, &demo_subject, "demo-user")
+        .await
+        .expect("demo login creation should succeed");
 
-    sqlx::query(
-        r#"
-        INSERT INTO demo_sessions (session_id, user_id)
-        VALUES (?, ?)
-        "#,
-    )
-    .bind(session_id)
-    .bind(demo_user_id)
-    .execute(&pool)
-    .await
-    .expect("demo session insertion should succeed");
-
-    let demo_user = repository
+    let resolved_demo_user = repository
         .find_user_by_demo_session(session_id)
         .await
         .expect("demo session lookup should succeed")
@@ -61,12 +35,12 @@ async fn mariadb_auth_repository_flow() {
     let neo_subject = format!("integration-neoshowcase-{}", Uuid::new_v4());
 
     let first_neo_user = repository
-        .get_or_create_user("neoshowcase", &neo_subject, "neo-user")
+        .get_or_create_user(AuthProvider::NeoShowcase, &neo_subject, "neo-user")
         .await
         .expect("first NeoShowcase lookup should succeed");
 
     let second_neo_user = repository
-        .get_or_create_user("neoshowcase", &neo_subject, "neo-user")
+        .get_or_create_user(AuthProvider::NeoShowcase, &neo_subject, "neo-user")
         .await
         .expect("second NeoShowcase lookup should succeed");
 
@@ -77,7 +51,7 @@ async fn mariadb_auth_repository_flow() {
         .expect("demo session cleanup should succeed");
 
     sqlx::query("DELETE FROM users WHERE user_id = ?")
-        .bind(demo_user_id)
+        .bind(created_demo_user.user_id)
         .execute(&pool)
         .await
         .expect("demo user cleanup should succeed");
@@ -96,16 +70,94 @@ async fn mariadb_auth_repository_flow() {
 
     pool.close().await;
 
-    assert_eq!(
-        demo_user,
-        AuthUserRecord {
-            user_id: demo_user_id,
-            display_name: "demo-user".to_owned(),
-        }
-    );
-
+    assert_eq!(created_demo_user, resolved_demo_user);
+    assert_eq!(created_demo_user.display_name, "demo-user");
+    assert_eq!(created_demo_user.auth_provider, AuthProvider::Demo);
     assert_eq!(first_neo_user, second_neo_user);
     assert_eq!(first_neo_user.display_name, "neo-user");
+    assert_eq!(first_neo_user.auth_provider, AuthProvider::NeoShowcase,);
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_demo_login_rolls_back_user_when_session_creation_fails() {
+    let pool = connect_test_database().await;
+    migrate(&pool).await.expect("migration should succeed");
+
+    let repository = SqlxUserRepository::new(pool.clone());
+
+    let existing_user_id = Uuid::new_v4();
+    let occupied_session_id = Uuid::new_v4();
+    let existing_subject = format!("integration-existing-demo-{}", Uuid::new_v4());
+    let failed_subject = format!("integration-rollback-demo-{}", Uuid::new_v4());
+
+    sqlx::query(
+        r#"
+        INSERT INTO users (
+            user_id,
+            auth_provider,
+            provider_subject,
+            display_name
+        )
+        VALUES (?, 'demo', ?, 'existing-demo-user')
+        "#,
+    )
+    .bind(existing_user_id)
+    .bind(&existing_subject)
+    .execute(&pool)
+    .await
+    .expect("existing demo user insertion should succeed");
+
+    sqlx::query(
+        r#"
+        INSERT INTO demo_sessions (session_id, user_id)
+        VALUES (?, ?)
+        "#,
+    )
+    .bind(occupied_session_id)
+    .bind(existing_user_id)
+    .execute(&pool)
+    .await
+    .expect("existing demo session insertion should succeed");
+
+    let result = repository
+        .get_or_create_demo_user_and_session(
+            occupied_session_id,
+            &failed_subject,
+            "must-be-rolled-back",
+        )
+        .await;
+
+    assert!(matches!(result, Err(RepositoryError::Database(_))));
+
+    let failed_user_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM users
+        WHERE auth_provider = 'demo'
+          AND provider_subject = ?
+        "#,
+    )
+    .bind(&failed_subject)
+    .fetch_one(&pool)
+    .await
+    .expect("rolled-back user lookup should succeed");
+
+    assert_eq!(failed_user_count, 0);
+
+    sqlx::query("DELETE FROM demo_sessions WHERE session_id = ?")
+        .bind(occupied_session_id)
+        .execute(&pool)
+        .await
+        .expect("existing demo session cleanup should succeed");
+
+    sqlx::query("DELETE FROM users WHERE user_id = ?")
+        .bind(existing_user_id)
+        .execute(&pool)
+        .await
+        .expect("existing demo user cleanup should succeed");
+
+    pool.close().await;
 }
 
 #[tokio::test]
@@ -235,6 +287,23 @@ async fn mariadb_game_schema_matches_contract() {
             "unexpected delete rule for {constraint_name}"
         );
     }
+
+    let query_count_column_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+          AND column_name = 'query_count'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query_count column lookup should succeed");
+
+    assert_eq!(
+        query_count_column_count, 0,
+        "query_count must be derived from query history, not stored in a dedicated column",
+    );
 
     pool.close().await;
 }

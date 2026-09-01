@@ -31,8 +31,8 @@ pub enum LoginGuestResponse {
     Status400_JSON(models::ErrorResponse),
     /// 対象resourceが存在しないか、現在のAUTH_MODEではendpointが有効ではありません。具体的なerror.codeは未確定です。
     Status404(models::ErrorResponse),
-    /// 文字数超過など入力内容が不正です。具体的なerror.codeは未確定です。
-    Status422(models::ErrorResponse),
+    /// trim後の表示名が空、または32 Unicode code pointを超えています。
+    Status422_Trim(models::ErrorResponse),
     /// server内部エラー。具体的なerror.codeは未確定です。
     Status500_Server(models::ErrorResponse),
 }
@@ -43,6 +43,8 @@ pub enum LoginGuestResponse {
 pub enum LogoutDemoResponse {
     /// ログアウト完了。response bodyはありません。
     Status204 { set_cookie: Option<String> },
+    /// 対象resourceが存在しないか、現在のAUTH_MODEではendpointが有効ではありません。具体的なerror.codeは未確定です。
+    Status404(models::ErrorResponse),
     /// server内部エラー。具体的なerror.codeは未確定です。
     Status500_Server(models::ErrorResponse),
 }
