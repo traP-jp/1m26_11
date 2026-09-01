@@ -1289,3 +1289,205 @@ async fn mariadb_leaderboard_selects_user_best_runs_and_competition_ranks() {
 
     pool.close().await;
 }
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_user_progress_counts_public_rooms_by_genre_without_duplicate_clears() {
+    let pool = connect_test_database().await;
+    migrate(&pool).await.expect("migration should succeed");
+
+    let user_id = Uuid::new_v4();
+    let no_clear_user_id = Uuid::new_v4();
+
+    for (id, display_name) in [
+        (user_id, "progress-user"),
+        (no_clear_user_id, "progress-no-clear-user"),
+    ] {
+        sqlx::query(
+            r#"
+            INSERT INTO users (
+                user_id,
+                auth_provider,
+                provider_subject,
+                display_name
+            )
+            VALUES (?, 'demo', ?, ?)
+            "#,
+        )
+        .bind(id)
+        .bind(format!("progress-test-{id}"))
+        .bind(display_name)
+        .execute(&pool)
+        .await
+        .expect("progress test user should be inserted");
+    }
+
+    let public_osint_cleared = Uuid::new_v4();
+    let public_osint_active = Uuid::new_v4();
+    let public_web_cleared = Uuid::new_v4();
+    let private_osint_cleared = Uuid::new_v4();
+
+    let room_number_base = (Uuid::new_v4().as_u128() % 1_900_000_000) as i32 + 1;
+
+    for (index, room_id, genre, is_published) in [
+        (0, public_osint_cleared, "OSINT", true),
+        (1, public_osint_active, "OSINT", true),
+        (2, public_web_cleared, "Web", true),
+        (3, private_osint_cleared, "OSINT", false),
+    ] {
+        sqlx::query(
+            r#"
+            INSERT INTO rooms (
+                room_id,
+                number,
+                name,
+                genre,
+                description,
+                is_published
+            )
+            VALUES (?, ?, ?, ?, 'progress repository test', ?)
+            "#,
+        )
+        .bind(room_id)
+        .bind(room_number_base + index)
+        .bind(format!("progress-room-{room_id}"))
+        .bind(genre)
+        .bind(is_published)
+        .execute(&pool)
+        .await
+        .expect("progress test room should be inserted");
+    }
+
+    let started_at = DateTime::parse_from_rfc3339("2026-08-06T10:00:00Z")
+        .expect("started_at should be valid")
+        .with_timezone(&Utc);
+
+    let cleared_at = DateTime::parse_from_rfc3339("2026-08-06T10:01:00Z")
+        .expect("cleared_at should be valid")
+        .with_timezone(&Utc);
+
+    // 同じ公開OSINT roomを2回clearしても1件として数える。
+    for room_id in [
+        public_osint_cleared,
+        public_osint_cleared,
+        public_web_cleared,
+        private_osint_cleared,
+    ] {
+        sqlx::query(
+            r#"
+            INSERT INTO runs (
+                run_id,
+                user_id,
+                room_id,
+                status,
+                started_at,
+                cleared_at
+            )
+            VALUES (?, ?, ?, 'cleared', ?, ?)
+            "#,
+        )
+        .bind(Uuid::new_v4())
+        .bind(user_id)
+        .bind(room_id)
+        .bind(started_at)
+        .bind(cleared_at)
+        .execute(&pool)
+        .await
+        .expect("cleared progress run should be inserted");
+    }
+
+    // active runはclear数へ含めない。
+    sqlx::query(
+        r#"
+        INSERT INTO runs (
+            run_id,
+            user_id,
+            room_id,
+            status,
+            started_at,
+            cleared_at
+        )
+        VALUES (?, ?, ?, 'active', ?, NULL)
+        "#,
+    )
+    .bind(Uuid::new_v4())
+    .bind(user_id)
+    .bind(public_osint_active)
+    .bind(started_at)
+    .execute(&pool)
+    .await
+    .expect("active progress run should be inserted");
+
+    let repository = SqlxUserRepository::new(pool.clone());
+
+    let progress = repository
+        .find_user_progress(user_id)
+        .await
+        .expect("user progress lookup should succeed");
+
+    assert_eq!(progress.cleared_room_count, 2);
+    assert_eq!(progress.total_room_count, 3);
+    assert_eq!(progress.by_genre.len(), 2);
+
+    assert_eq!(progress.by_genre[0].genre, "OSINT");
+    assert_eq!(progress.by_genre[0].cleared_room_count, 1);
+    assert_eq!(progress.by_genre[0].total_room_count, 2);
+
+    assert_eq!(progress.by_genre[1].genre, "Web");
+    assert_eq!(progress.by_genre[1].cleared_room_count, 1);
+    assert_eq!(progress.by_genre[1].total_room_count, 1);
+
+    let no_clear_progress = repository
+        .find_user_progress(no_clear_user_id)
+        .await
+        .expect("no-clear user progress lookup should succeed");
+
+    assert_eq!(no_clear_progress.cleared_room_count, 0);
+    assert_eq!(no_clear_progress.total_room_count, 3);
+    assert_eq!(
+        no_clear_progress
+            .by_genre
+            .iter()
+            .map(|progress| progress.cleared_room_count)
+            .collect::<Vec<_>>(),
+        vec![0, 0]
+    );
+
+    sqlx::query("DELETE FROM runs WHERE user_id = ?")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("progress runs should be removed");
+
+    for room_id in [
+        public_osint_cleared,
+        public_osint_active,
+        public_web_cleared,
+        private_osint_cleared,
+    ] {
+        sqlx::query("DELETE FROM rooms WHERE room_id = ?")
+            .bind(room_id)
+            .execute(&pool)
+            .await
+            .expect("progress room should be removed");
+    }
+
+    let empty_progress = repository
+        .find_user_progress(user_id)
+        .await
+        .expect("empty progress lookup should succeed");
+
+    assert_eq!(empty_progress.cleared_room_count, 0);
+    assert_eq!(empty_progress.total_room_count, 0);
+    assert!(empty_progress.by_genre.is_empty());
+
+    for id in [user_id, no_clear_user_id] {
+        sqlx::query("DELETE FROM users WHERE user_id = ?")
+            .bind(id)
+            .execute(&pool)
+            .await
+            .expect("progress test user should be removed");
+    }
+
+    pool.close().await;
+}
