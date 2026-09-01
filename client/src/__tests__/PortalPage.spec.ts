@@ -1,76 +1,87 @@
-import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { describe, expect, it } from 'vitest'
 
+import AuthActionButton from '../components/auth/AuthActionButton.vue'
+import GuestNameForm from '../components/auth/GuestNameForm.vue'
+import MinimalProgressSummary from '../components/portal/MinimalProgressSummary.vue'
 import PortalHeader from '../components/portal/PortalHeader.vue'
+import PortalLoginPrompt from '../components/portal/PortalLoginPrompt.vue'
+import { portalPageFixtures } from '../PortalPage.fixture'
 import PortalPage from '../PortalPage.vue'
 import RoomCard from '../RoomCard.vue'
-import meAuthenticated from '../../../openapi/examples/auth/me-demo-authenticated.json'
-import meUnauthenticated from '../../../openapi/examples/auth/me-demo-unauthenticated.json'
-import type { ApiClient, GetMeResponse } from '../api/client'
-import { authApiClientKey } from '../utils/auth'
-
-const apiClient: ApiClient = {
-  getMe: vi.fn<ApiClient['getMe']>().mockResolvedValue(meAuthenticated as GetMeResponse),
-  loginGuest: vi.fn<ApiClient['loginGuest']>(),
-  logoutDemo: vi.fn<ApiClient['logoutDemo']>(),
-  startOrResumeRun: vi.fn<ApiClient['startOrResumeRun']>(),
-  getCurrentRun: vi.fn<ApiClient['getCurrentRun']>(),
-  getProblem: vi.fn<ApiClient['getProblem']>(),
-  submitQuery: vi.fn<ApiClient['submitQuery']>(),
-  submitAnswer: vi.fn<ApiClient['submitAnswer']>(),
-}
-
-async function mountPortal() {
-  const wrapper = mount(PortalPage, {
-    global: { provide: { [authApiClientKey as symbol]: apiClient } },
-  })
-  await new Promise((resolve) => setTimeout(resolve))
-  return wrapper
-}
 
 describe('PortalPage', () => {
-  it('renders PortalHeader above the portal content', async () => {
-    const wrapper = await mountPortal()
+  it('shows the Demo guest form and hides room progress before authentication', () => {
+    const wrapper = mount(PortalPage, { props: portalPageFixtures.demoUnauthenticated })
 
     expect(wrapper.findComponent(PortalHeader).exists()).toBe(true)
     expect(wrapper.element.firstElementChild?.tagName).toBe('HEADER')
+    expect(wrapper.findComponent(PortalLoginPrompt).exists()).toBe(true)
+    expect(wrapper.findComponent(GuestNameForm).exists()).toBe(true)
+    expect(wrapper.findComponent(RoomCard).exists()).toBe(false)
+    expect(wrapper.findComponent(MinimalProgressSummary).exists()).toBe(false)
   })
 
-  it('renders RoomCard instances from the mock room list', async () => {
-    const wrapper = await mountPortal()
-    const roomCards = wrapper.findAllComponents(RoomCard)
+  it('shows the NeoShowcase login URL in the header and prompt', () => {
+    const fixture = portalPageFixtures.neoshowcaseUnauthenticated
+    const wrapper = mount(PortalPage, { props: fixture })
 
-    expect(roomCards).toHaveLength(2)
-    expect(roomCards[0]?.props('room')).toEqual({
-      room_id: '1411824c-d357-4941-af76-c76cb827dda6',
-      number: 1,
-      name: '最初の部屋',
-      genre: 'logic',
-      description: '動作確認用の問題セットです',
+    expect(wrapper.getComponent(PortalHeader).props('userStatus')).toMatchObject({
+      authenticated: false,
+      loginHref: fixture.loginHref,
     })
+    expect(wrapper.getComponent(AuthActionButton).element.tagName).toBe('A')
+    expect(wrapper.getComponent(AuthActionButton).attributes('href')).toBe(fixture.loginHref)
   })
 
-  it('notifies its parent when a room is selected', async () => {
-    const wrapper = await mountPortal()
-    const firstRoom = wrapper.findAllComponents(RoomCard)[0]
-
-    await firstRoom?.vm.$emit('start', '1411824c-d357-4941-af76-c76cb827dda6')
-
-    expect(wrapper.emitted('roomSelected')).toEqual([['1411824c-d357-4941-af76-c76cb827dda6']])
-  })
-
-  it('focuses the guest name input from the Demo login button', async () => {
-    const guestApiClient = {
-      ...apiClient,
-      getMe: vi.fn<ApiClient['getMe']>().mockResolvedValue(meUnauthenticated as GetMeResponse),
-    }
+  it('forwards the NeoShowcase login action when no login URL is available', async () => {
     const wrapper = mount(PortalPage, {
-      attachTo: document.body,
-      global: { provide: { [authApiClientKey as symbol]: guestApiClient } },
+      props: { ...portalPageFixtures.neoshowcaseUnauthenticated, loginHref: null },
     })
-    await new Promise((resolve) => setTimeout(resolve))
 
-    await wrapper.get('header button').trigger('click')
+    await wrapper.getComponent(AuthActionButton).trigger('click')
+
+    expect(wrapper.emitted('login')).toHaveLength(1)
+  })
+
+  it('forwards the guest name without transforming it', () => {
+    const wrapper = mount(PortalPage, { props: portalPageFixtures.demoUnauthenticated })
+
+    wrapper.getComponent(GuestNameForm).vm.$emit('submit', 'kaomojikun')
+
+    expect(wrapper.emitted('guestLogin')).toEqual([['kaomojikun']])
+  })
+
+  it('shows one required room and progress after authentication', () => {
+    const fixture = portalPageFixtures.demoAuthenticated
+    const wrapper = mount(PortalPage, { props: fixture })
+
+    expect(wrapper.findComponent(PortalLoginPrompt).exists()).toBe(false)
+    expect(wrapper.getComponent(RoomCard).props('room')).toEqual(fixture.requiredRoom)
+    expect(wrapper.getComponent(MinimalProgressSummary).props('status')).toBe(
+      fixture.progressStatus,
+    )
+  })
+
+  it('forwards header and required-room events', () => {
+    const wrapper = mount(PortalPage, { props: portalPageFixtures.demoAuthenticated })
+
+    wrapper.getComponent(PortalHeader).vm.$emit('logout')
+    wrapper.getComponent(PortalHeader).vm.$emit('showInstructions')
+    wrapper.getComponent(RoomCard).vm.$emit('start', 'room-1')
+
+    expect(wrapper.emitted('logout')).toHaveLength(1)
+    expect(wrapper.emitted('showInstructions')).toHaveLength(1)
+    expect(wrapper.emitted('startRoom')).toEqual([['room-1']])
+  })
+
+  it('focuses the guest name input when Demo login is requested from the header', () => {
+    const wrapper = mount(PortalPage, {
+      props: portalPageFixtures.demoUnauthenticated,
+      attachTo: document.body,
+    })
+
+    wrapper.getComponent(PortalHeader).vm.$emit('login')
 
     expect(document.activeElement).toBe(wrapper.get('#displayNameInput').element)
     wrapper.unmount()

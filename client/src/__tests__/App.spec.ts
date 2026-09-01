@@ -6,8 +6,10 @@ import App from '../App.vue'
 import PortalPage from '../PortalPage.vue'
 import RoomPage from '../RoomPage.vue'
 import { createAppRouter } from '../router'
+import guestResponse from '../../../openapi/examples/auth/guest-response.json'
 import meAuthenticated from '../../../openapi/examples/auth/me-demo-authenticated.json'
-import type { ApiClient, GetMeResponse } from '../api/client'
+import meUnauthenticated from '../../../openapi/examples/auth/me-demo-unauthenticated.json'
+import type { ApiClient, GetMeResponse, LoginGuestResponse } from '../api/client'
 import { authApiClientKey } from '../utils/auth'
 
 const apiClient: ApiClient = {
@@ -23,11 +25,12 @@ const apiClient: ApiClient = {
 
 async function mountAt(
   path: string,
+  client: ApiClient = apiClient,
 ): Promise<{ router: Router; wrapper: ReturnType<typeof mount> }> {
   const router = createAppRouter(createMemoryHistory())
   await router.push(path)
   const wrapper = mount(App, {
-    global: { plugins: [router], provide: { [authApiClientKey as symbol]: apiClient } },
+    global: { plugins: [router], provide: { [authApiClientKey as symbol]: client } },
   })
   await router.isReady()
   await flushPromises()
@@ -51,9 +54,7 @@ describe('App', () => {
   it('navigates from Portal to Room and back through semantic UI events', async () => {
     const { router, wrapper } = await mountAt('/')
 
-    wrapper
-      .getComponent(PortalPage)
-      .vm.$emit('roomSelected', '1411824c-d357-4941-af76-c76cb827dda6')
+    wrapper.getComponent(PortalPage).vm.$emit('startRoom', '1411824c-d357-4941-af76-c76cb827dda6')
     await flushPromises()
 
     expect(router.currentRoute.value.fullPath).toBe('/rooms/1411824c-d357-4941-af76-c76cb827dda6')
@@ -64,6 +65,47 @@ describe('App', () => {
 
     expect(router.currentRoute.value.fullPath).toBe('/')
     expect(wrapper.findComponent(PortalPage).exists()).toBe(true)
+  })
+
+  it('connects Demo guest login to the auth flow', async () => {
+    const guestClient: ApiClient = {
+      ...apiClient,
+      getMe: vi
+        .fn<ApiClient['getMe']>()
+        .mockResolvedValueOnce(meUnauthenticated as GetMeResponse)
+        .mockResolvedValueOnce(meAuthenticated as GetMeResponse),
+      loginGuest: vi
+        .fn<ApiClient['loginGuest']>()
+        .mockResolvedValue(guestResponse as LoginGuestResponse),
+    }
+    const { wrapper } = await mountAt('/', guestClient)
+
+    wrapper.getComponent(PortalPage).vm.$emit('guestLogin', 'kaomojikun')
+    await flushPromises()
+
+    expect(guestClient.loginGuest).toHaveBeenCalledExactlyOnceWith({
+      display_name: 'kaomojikun',
+    })
+    expect(guestClient.getMe).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('h1').text()).toBe('Portal')
+  })
+
+  it('retries the initial auth request after an error', async () => {
+    const retryClient: ApiClient = {
+      ...apiClient,
+      getMe: vi
+        .fn<ApiClient['getMe']>()
+        .mockRejectedValueOnce(new Error('me failed'))
+        .mockResolvedValueOnce(meAuthenticated as GetMeResponse),
+    }
+    const { wrapper } = await mountAt('/', retryClient)
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('認証状態を取得できませんでした。')
+    await wrapper.get('[role="alert"] button').trigger('click')
+    await flushPromises()
+
+    expect(retryClient.getMe).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('h1').text()).toBe('Portal')
   })
 
   it('renders the Clear page route', async () => {

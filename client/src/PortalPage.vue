@@ -1,75 +1,87 @@
 <script setup lang="ts">
-import { inject, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 
+import AuthActionButton from './components/auth/AuthActionButton.vue'
 import GuestNameForm from './components/auth/GuestNameForm.vue'
+import MinimalProgressSummary from './components/portal/MinimalProgressSummary.vue'
 import PortalHeader from './components/portal/PortalHeader.vue'
-import RoomCard, { type Room } from './RoomCard.vue'
-import { authApiClientKey, createAuthFlow } from './utils/auth'
+import PortalLoginPrompt from './components/portal/PortalLoginPrompt.vue'
+import type { PortalUserStatusState } from './components/portal/PortalHeader.types'
+import type { PortalPageProps } from './PortalPage.types'
+import RoomCard from './RoomCard.vue'
 
+const props = defineProps<PortalPageProps>()
 const emit = defineEmits<{
-  roomSelected: [roomId: string]
+  login: []
+  guestLogin: [displayName: string]
+  logout: []
+  showInstructions: []
+  startRoom: [roomId: string]
 }>()
 
-const auth = createAuthFlow(inject(authApiClientKey))
 const guestNameForm = ref<InstanceType<typeof GuestNameForm> | null>(null)
 
-function focusGuestNameForm(): void {
-  guestNameForm.value?.focus()
+const userStatus = computed<PortalUserStatusState>(() =>
+  props.authenticated
+    ? {
+        authenticated: true,
+        authMode: props.authMode,
+        displayName: props.displayName ?? '',
+        logoutHref: props.logoutHref,
+        logoutPending: props.authBusy,
+      }
+    : {
+        authenticated: false,
+        authMode: props.authMode,
+        loginHref: props.loginHref,
+        loginPending: props.authBusy,
+      },
+)
+
+function handleLogin(): void {
+  if (!props.authenticated && props.authMode === 'demo') {
+    guestNameForm.value?.focus()
+    return
+  }
+  emit('login')
 }
-
-onMounted(() => void auth.refresh())
-
-const rooms: Room[] = [
-  {
-    room_id: '1411824c-d357-4941-af76-c76cb827dda6',
-    number: 1,
-    name: '最初の部屋',
-    genre: 'logic',
-    description: '動作確認用の問題セットです',
-  },
-  {
-    room_id: '1411444c-d357-4941-af76-c76cb827dda6',
-    number: 2,
-    name: '2番目の部屋',
-    genre: 'logic',
-    description: '動作確認用の問題セットです',
-  },
-]
 </script>
 
 <template>
-  <p v-if="auth.state.value.status === 'loading'" role="status">認証状態を確認しています…</p>
-  <p v-else-if="auth.state.value.status === 'error'" role="alert">
-    認証状態を取得できませんでした。
-    <button type="button" @click="auth.refresh">再試行</button>
-  </p>
-  <template v-else>
-    <PortalHeader
-      v-if="auth.portalUserStatus.value"
-      home-href="/"
-      instructions-href="#instructions"
-      :user-status="auth.portalUserStatus.value"
-      @login="focusGuestNameForm"
-      @logout="auth.logout"
-    />
-    <p v-if="auth.state.value.error" role="alert">認証操作に失敗しました。再度お試しください。</p>
-    <GuestNameForm
-      v-if="auth.state.value.status === 'unauthenticated' && auth.state.value.authMode === 'demo'"
-      ref="guestNameForm"
-      :submit-pending="auth.state.value.busy"
-      @submit="auth.loginGuest"
-    />
-  </template>
-  <main v-if="auth.state.value.status === 'authenticated'" class="portal-page">
-    <h1 class="portal-page__title">Portal</h1>
-    <p class="portal-page__description">挑戦する部屋を選んでください。</p>
-    <section aria-label="部屋一覧" class="card-list">
-      <RoomCard
-        v-for="room in rooms"
-        :key="room.room_id"
-        :room="room"
-        @start="emit('roomSelected', $event)"
-      />
-    </section>
+  <PortalHeader
+    home-href="/"
+    :user-status="userStatus"
+    @login="handleLogin"
+    @logout="emit('logout')"
+    @show-instructions="emit('showInstructions')"
+  />
+  <main class="portal-page">
+    <PortalLoginPrompt v-if="!authenticated">
+      <template #action>
+        <GuestNameForm
+          v-if="authMode === 'demo'"
+          ref="guestNameForm"
+          :submit-pending="authBusy"
+          @submit="emit('guestLogin', $event)"
+        />
+        <AuthActionButton
+          v-else
+          action="login"
+          :disabled="authBusy"
+          :href="loginHref"
+          :label="authBusy ? '処理中…' : undefined"
+          @activate="emit('login')"
+        />
+      </template>
+    </PortalLoginPrompt>
+
+    <template v-else>
+      <h1 class="portal-page__title">Portal</h1>
+      <p class="portal-page__description">挑戦する部屋を選んでください。</p>
+      <MinimalProgressSummary :status="progressStatus" />
+      <section aria-label="必須の部屋" class="card-list">
+        <RoomCard :room="requiredRoom" :starting="authBusy" @start="emit('startRoom', $event)" />
+      </section>
+    </template>
   </main>
 </template>
