@@ -1,2 +1,2 @@
 * text=auto eol=lf
-samples/web-serial/**/*.bin -text
+samples/web-serial/**/*.bin binary
