@@ -51,6 +51,10 @@ pub(crate) enum AppError {
     ProblemAlreadyCleared,
     #[error("query validation failed")]
     ValidationError,
+    #[error("display name is required")]
+    DisplayNameRequired,
+    #[error("display name is too long")]
+    DisplayNameTooLong,
 }
 
 impl AppError {
@@ -157,6 +161,16 @@ impl IntoResponse for AppError {
                 "VALIDATION_ERROR",
                 "入力内容が正しくありませんわ".to_owned(),
             ),
+            Self::DisplayNameRequired => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "DISPLAY_NAME_REQUIRED",
+                "表示名を入力してください".to_owned(),
+            ),
+            Self::DisplayNameTooLong => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "DISPLAY_NAME_TOO_LONG",
+                "表示名は32文字以内で入力してください".to_owned(),
+            ),
         };
 
         let body = ErrorResponse::new(ErrorResponseError::new(
@@ -237,6 +251,26 @@ mod tests {
             AppError::ValidationError,
             StatusCode::UNPROCESSABLE_ENTITY,
             include_str!("../../openapi/examples/queries/error-validation.json"),
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn display_name_required_response_matches_openapi_fixture() {
+        assert_response_matches_fixture(
+            AppError::DisplayNameRequired,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            include_str!("../../openapi/examples/auth/error-display-name-required.json"),
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn display_name_too_long_response_matches_openapi_fixture() {
+        assert_response_matches_fixture(
+            AppError::DisplayNameTooLong,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            include_str!("../../openapi/examples/auth/error-display-name-too-long.json"),
         )
         .await;
     }

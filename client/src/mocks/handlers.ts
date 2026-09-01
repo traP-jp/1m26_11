@@ -124,8 +124,32 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
       } catch {
         return response(400).json(errorBody(400))
       }
-      if (typeof body.display_name !== 'string' || body.display_name.trim() === '') {
-        return response(422).json(errorBody(422))
+      if (typeof body.display_name !== 'string') {
+        return response(400).json(errorBody(400))
+      }
+
+      const displayName = body.display_name.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, '')
+
+      const displayNameLength = Array.from(displayName).length
+
+      if (displayNameLength === 0) {
+        const result = responseFromStep<Schemas['ErrorResponse']>(
+          contract,
+          state,
+          'demo_login_display_name_required',
+          'loginGuest',
+        )
+        return HttpResponse.json(result.body, { status: result.status })
+      }
+
+      if (displayNameLength > 32) {
+        const result = responseFromStep<Schemas['ErrorResponse']>(
+          contract,
+          state,
+          'demo_login_display_name_too_long',
+          'loginGuest',
+        )
+        return HttpResponse.json(result.body, { status: result.status })
       }
 
       const result = responseFromStep<Schemas['GuestLoginResponse']>(
@@ -138,6 +162,10 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
     }),
 
     http.post('/api/auth/logout', ({ response }) => {
+      if (state.get('auth_mode') !== 'demo') {
+        return response(404).json(errorBody(404))
+      }
+
       const step = state.applyStep('demo_login_and_logout', 'logoutDemo')
       return response.untyped(
         new HttpResponse(null, {

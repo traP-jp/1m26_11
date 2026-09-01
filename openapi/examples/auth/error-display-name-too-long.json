@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "DISPLAY_NAME_TOO_LONG",
+    "message": "表示名は32文字以内で入力してください",
+    "details": {}
+  }
+}
