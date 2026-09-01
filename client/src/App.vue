@@ -12,7 +12,9 @@ function handleRoomSelected(roomId: string): void {
 }
 
 function handleRoomUiEvent(event: RoomUiEvent): void {
-  if (event.type === 'room-exited') void router.push({ name: 'portal' })
+  if (event.type === 'room-exited' || event.type === 'portal-returned') {
+    void router.push({ name: 'portal' })
+  }
 }
 </script>
 
