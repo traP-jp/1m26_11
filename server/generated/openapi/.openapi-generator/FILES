@@ -6,6 +6,7 @@ src/apis/auth.rs
 src/apis/leaderboard.rs
 src/apis/mod.rs
 src/apis/problems.rs
+src/apis/progress.rs
 src/apis/queries.rs
 src/apis/rooms.rs
 src/apis/runs.rs

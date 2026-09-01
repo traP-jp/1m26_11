@@ -1722,6 +1722,177 @@ impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<ErrorRespons
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
 #[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct GenreProgress {
+    #[serde(rename = "genre")]
+    #[validate(custom(function = "check_xss_string"))]
+    pub genre: String,
+
+    #[serde(rename = "cleared_room_count")]
+    #[validate(range(min = 0u32))]
+    pub cleared_room_count: u32,
+
+    #[serde(rename = "total_room_count")]
+    #[validate(range(min = 0u32))]
+    pub total_room_count: u32,
+}
+
+impl GenreProgress {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(genre: String, cleared_room_count: u32, total_room_count: u32) -> GenreProgress {
+        GenreProgress {
+            genre,
+            cleared_room_count,
+            total_room_count,
+        }
+    }
+}
+
+/// Converts the GenreProgress value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for GenreProgress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            Some("genre".to_string()),
+            Some(self.genre.to_string()),
+            Some("cleared_room_count".to_string()),
+            Some(self.cleared_room_count.to_string()),
+            Some("total_room_count".to_string()),
+            Some(self.total_room_count.to_string()),
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a GenreProgress value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for GenreProgress {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub genre: Vec<String>,
+            pub cleared_room_count: Vec<u32>,
+            pub total_room_count: Vec<u32>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing GenreProgress".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "genre" => intermediate_rep.genre.push(
+                        <String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "cleared_room_count" => intermediate_rep.cleared_room_count.push(
+                        <u32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "total_room_count" => intermediate_rep.total_room_count.push(
+                        <u32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    _ => {
+                        return std::result::Result::Err(
+                            "Unexpected key while parsing GenreProgress".to_string(),
+                        );
+                    }
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(GenreProgress {
+            genre: intermediate_rep
+                .genre
+                .into_iter()
+                .next()
+                .ok_or_else(|| "genre missing in GenreProgress".to_string())?,
+            cleared_room_count: intermediate_rep
+                .cleared_room_count
+                .into_iter()
+                .next()
+                .ok_or_else(|| "cleared_room_count missing in GenreProgress".to_string())?,
+            total_room_count: intermediate_rep
+                .total_room_count
+                .into_iter()
+                .next()
+                .ok_or_else(|| "total_room_count missing in GenreProgress".to_string())?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<GenreProgress> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<GenreProgress>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<GenreProgress>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for GenreProgress - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<GenreProgress> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <GenreProgress as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into GenreProgress - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
 pub struct GuestLoginRequest {
     /// 前後のUnicode空白をserverで除去し、除去後1〜32 Unicode code pointを許可します。
     #[serde(rename = "display_name")]
@@ -3796,6 +3967,180 @@ impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<MeNeoshowcas
                     }
                     std::result::Result::Err(err) => std::result::Result::Err(format!(
                         r#"Unable to convert header value '{value}' into MeNeoshowcaseUnauthenticated - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct MeProgressResponse {
+    #[serde(rename = "cleared_room_count")]
+    #[validate(range(min = 0u32))]
+    pub cleared_room_count: u32,
+
+    #[serde(rename = "total_room_count")]
+    #[validate(range(min = 0u32))]
+    pub total_room_count: u32,
+
+    #[serde(rename = "by_genre")]
+    #[validate(nested)]
+    pub by_genre: Vec<models::GenreProgress>,
+}
+
+impl MeProgressResponse {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(
+        cleared_room_count: u32,
+        total_room_count: u32,
+        by_genre: Vec<models::GenreProgress>,
+    ) -> MeProgressResponse {
+        MeProgressResponse {
+            cleared_room_count,
+            total_room_count,
+            by_genre,
+        }
+    }
+}
+
+/// Converts the MeProgressResponse value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for MeProgressResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            Some("cleared_room_count".to_string()),
+            Some(self.cleared_room_count.to_string()),
+            Some("total_room_count".to_string()),
+            Some(self.total_room_count.to_string()),
+            // Skipping by_genre in query parameter serialization
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a MeProgressResponse value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for MeProgressResponse {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub cleared_room_count: Vec<u32>,
+            pub total_room_count: Vec<u32>,
+            pub by_genre: Vec<Vec<models::GenreProgress>>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing MeProgressResponse".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "cleared_room_count" => intermediate_rep.cleared_room_count.push(
+                        <u32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "total_room_count" => intermediate_rep.total_room_count.push(
+                        <u32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    "by_genre" => return std::result::Result::Err(
+                        "Parsing a container in this style is not supported in MeProgressResponse"
+                            .to_string(),
+                    ),
+                    _ => {
+                        return std::result::Result::Err(
+                            "Unexpected key while parsing MeProgressResponse".to_string(),
+                        );
+                    }
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(MeProgressResponse {
+            cleared_room_count: intermediate_rep
+                .cleared_room_count
+                .into_iter()
+                .next()
+                .ok_or_else(|| "cleared_room_count missing in MeProgressResponse".to_string())?,
+            total_room_count: intermediate_rep
+                .total_room_count
+                .into_iter()
+                .next()
+                .ok_or_else(|| "total_room_count missing in MeProgressResponse".to_string())?,
+            by_genre: intermediate_rep
+                .by_genre
+                .into_iter()
+                .next()
+                .ok_or_else(|| "by_genre missing in MeProgressResponse".to_string())?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<MeProgressResponse> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<MeProgressResponse>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<MeProgressResponse>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for MeProgressResponse - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<MeProgressResponse> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <MeProgressResponse as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into MeProgressResponse - {err}"#
                     )),
                 }
             }

@@ -222,6 +222,45 @@ impl TryFrom<LeaderboardRow> for LeaderboardRecord {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UserProgressRecord {
+    pub cleared_room_count: u32,
+    pub total_room_count: u32,
+    pub by_genre: Vec<GenreProgressRecord>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GenreProgressRecord {
+    pub genre: String,
+    pub cleared_room_count: u32,
+    pub total_room_count: u32,
+}
+
+#[derive(FromRow)]
+struct GenreProgressRow {
+    genre: String,
+    cleared_room_count: i64,
+    total_room_count: i64,
+}
+
+impl TryFrom<GenreProgressRow> for GenreProgressRecord {
+    type Error = RepositoryError;
+
+    fn try_from(row: GenreProgressRow) -> Result<Self, Self::Error> {
+        let cleared_room_count = u32::try_from(row.cleared_room_count)
+            .map_err(|_| RepositoryError::InvalidProgressCount)?;
+
+        let total_room_count = u32::try_from(row.total_room_count)
+            .map_err(|_| RepositoryError::InvalidProgressCount)?;
+
+        Ok(Self {
+            genre: row.genre,
+            cleared_room_count,
+            total_room_count,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HintRecord {
     pub level: i32,
     pub body_markdown: String,
@@ -462,6 +501,13 @@ pub trait AuthRepository: Send + Sync {
         _room_id: Uuid,
     ) -> Result<Vec<LeaderboardRecord>, RepositoryError> {
         unimplemented!("find_leaderboard_by_room_id is not implemented for this repository")
+    }
+
+    async fn find_user_progress(
+        &self,
+        _user_id: Uuid,
+    ) -> Result<UserProgressRecord, RepositoryError> {
+        unimplemented!("find_user_progress is not implemented for this repository")
     }
 
     async fn find_problems_by_room_id(
@@ -1574,6 +1620,60 @@ impl AuthRepository for SqlxUserRepository {
         .map_err(RepositoryError::Database)?;
 
         rows.into_iter().map(LeaderboardRecord::try_from).collect()
+    }
+
+    async fn find_user_progress(
+        &self,
+        user_id: Uuid,
+    ) -> Result<UserProgressRecord, RepositoryError> {
+        let rows = sqlx::query_as::<_, GenreProgressRow>(
+            r#"
+            SELECT
+                rooms.genre,
+                CAST(COUNT(cleared_rooms.room_id) AS SIGNED)
+                    AS cleared_room_count,
+                CAST(COUNT(*) AS SIGNED)
+                    AS total_room_count
+            FROM rooms
+            LEFT JOIN (
+                SELECT DISTINCT room_id
+                FROM runs
+                WHERE user_id = ?
+                  AND status = 'cleared'
+            ) AS cleared_rooms
+                ON cleared_rooms.room_id = rooms.room_id
+            WHERE rooms.is_published = 1
+            GROUP BY rooms.genre
+            ORDER BY rooms.genre ASC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        let by_genre = rows
+            .into_iter()
+            .map(GenreProgressRecord::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let cleared_room_count = by_genre.iter().try_fold(0_u32, |total, progress| {
+            total
+                .checked_add(progress.cleared_room_count)
+                .ok_or(RepositoryError::InvalidProgressCount)
+        })?;
+
+        let total_room_count = by_genre.iter().try_fold(0_u32, |total, progress| {
+            total
+                .checked_add(progress.total_room_count)
+                .ok_or(RepositoryError::InvalidProgressCount)
+        })?;
+
+        Ok(UserProgressRecord {
+            cleared_room_count,
+            total_room_count,
+            by_genre,
+        })
     }
 
     async fn find_problems_by_room_id(

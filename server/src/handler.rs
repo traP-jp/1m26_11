@@ -2,6 +2,7 @@ mod answers;
 mod auth;
 mod leaderboard;
 mod me;
+mod progress;
 mod queries;
 mod rooms;
 
@@ -9,6 +10,7 @@ pub(crate) use answers::submit_answer;
 pub(crate) use auth::{login_guest, logout_demo};
 pub(crate) use leaderboard::get_room_leaderboard;
 pub(crate) use me::get_me;
+pub(crate) use progress::get_me_progress;
 pub(crate) use queries::submit_query;
 pub(crate) use rooms::{
     get_current_run, get_problem, get_problem_hint, get_rooms, start_or_resume_run,

@@ -30,6 +30,24 @@ paths:
           $ref: "#/components/responses/MeSuccess"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /api/me/progress:
+    get:
+      summary: ログイン中のユーザーの全体進捗を取得する
+      description: |
+        公開room全体のclear数、総数、genre別内訳を返します。
+        同じroomを複数回clearしていても、clear数には1回だけ加算します。
+        非公開roomは全体とgenre別のどちらにも含めません。
+        by_genreはgenreの昇順で返します。
+      operationId: getMeProgress
+      tags:
+        - progress
+      responses:
+        "200":
+          $ref: "#/components/responses/MeProgressSuccess"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
   /api/auth/guest:
     post:
       summary: デモ環境で名前を登録する
@@ -373,6 +391,19 @@ components:
             empty:
               summary: 公開部屋が0件
               externalValue: ./examples/rooms/response-empty.json
+    MeProgressSuccess:
+      description: ログイン中のユーザーの公開room全体に対する進捗
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/MeProgressResponse"
+          examples:
+            summary:
+              summary: 複数genreのroomをclearしている場合
+              externalValue: ./examples/progress/response-summary.json
+            empty:
+              summary: 公開roomが存在しない場合
+              externalValue: ./examples/progress/response-empty.json
     GuestLoginSuccess:
       description: デモ用ユーザーを取得または作成し、session Cookieを発行した状態
       headers:
@@ -598,6 +629,43 @@ components:
         - $ref: "#/components/schemas/MeNeoshowcaseUnauthenticated"
         - $ref: "#/components/schemas/MeDemoAuthenticated"
         - $ref: "#/components/schemas/MeDemoUnauthenticated"
+    MeProgressResponse:
+      type: object
+      required:
+        - cleared_room_count
+        - total_room_count
+        - by_genre
+      properties:
+        cleared_room_count:
+          type: integer
+          format: int32
+          minimum: 0
+        total_room_count:
+          type: integer
+          format: int32
+          minimum: 0
+        by_genre:
+          type: array
+          items:
+            $ref: "#/components/schemas/GenreProgress"
+
+    GenreProgress:
+      type: object
+      required:
+        - genre
+        - cleared_room_count
+        - total_room_count
+      properties:
+        genre:
+          type: string
+        cleared_room_count:
+          type: integer
+          format: int32
+          minimum: 0
+        total_room_count:
+          type: integer
+          format: int32
+          minimum: 0
     MeNeoshowcaseAuthenticated:
       type: object
       required:

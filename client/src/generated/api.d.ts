@@ -38,6 +38,29 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/me/progress': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * ログイン中のユーザーの全体進捗を取得する
+     * @description 公開room全体のclear数、総数、genre別内訳を返します。
+     *     同じroomを複数回clearしていても、clear数には1回だけ加算します。
+     *     非公開roomは全体とgenre別のどちらにも含めません。
+     *     by_genreはgenreの昇順で返します。
+     */
+    get: operations['getMeProgress']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/auth/guest': {
     parameters: {
       query?: never
@@ -327,6 +350,20 @@ export interface components {
       | components['schemas']['MeNeoshowcaseUnauthenticated']
       | components['schemas']['MeDemoAuthenticated']
       | components['schemas']['MeDemoUnauthenticated']
+    MeProgressResponse: {
+      /** Format: int32 */
+      cleared_room_count: number
+      /** Format: int32 */
+      total_room_count: number
+      by_genre: components['schemas']['GenreProgress'][]
+    }
+    GenreProgress: {
+      genre: string
+      /** Format: int32 */
+      cleared_room_count: number
+      /** Format: int32 */
+      total_room_count: number
+    }
     MeNeoshowcaseAuthenticated: {
       /** @constant */
       authenticated: true
@@ -565,6 +602,15 @@ export interface components {
       }
       content: {
         'application/json': components['schemas']['RoomsResponse']
+      }
+    }
+    /** @description ログイン中のユーザーの公開room全体に対する進捗 */
+    MeProgressSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['MeProgressResponse']
       }
     }
     /** @description デモ用ユーザーを取得または作成し、session Cookieを発行した状態 */
@@ -810,6 +856,20 @@ export interface operations {
     requestBody?: never
     responses: {
       200: components['responses']['MeSuccess']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  getMeProgress: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['MeProgressSuccess']
+      401: components['responses']['Unauthorized']
       500: components['responses']['InternalServerError']
     }
   }
