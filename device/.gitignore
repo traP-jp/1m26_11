@@ -3,6 +3,10 @@ device.code-workspace
 .vscode/Pico-W-Stub/
 .picowgo
 
+# Host-side Python test cache
+__pycache__/
+*.py[cod]
+
 # Ignore ordinary logs, but retain measured hardware logs
 *.log
 !samples/*.log

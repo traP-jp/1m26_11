@@ -42,6 +42,7 @@ interface ParsedChunk {
 
 interface ParsedConnection {
   connectionId: number
+  payloadBytes: Uint8Array
   chunks: ParsedChunk[]
   events: SerialProtocolV1Event[]
 }
@@ -55,6 +56,9 @@ const sampleDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../../../samples/web-serial/protocol-v1',
 )
+const LF = 0x0a
+const CR = 0x0d
+const asciiDecoder = new TextDecoder('utf-8', { fatal: true })
 
 function loadHardwareCapture(stem: string): HardwareCapture {
   const metadata = JSON.parse(
@@ -97,6 +101,7 @@ function parseConnections(
     }
 
     parser.resetSession()
+    const payloadBytes = capture.rawBytes.slice(payloadStart, payloadEnd)
     const chunks = capture.metadata.chunks
       .filter(
         (chunk) =>
@@ -114,10 +119,56 @@ function parseConnections(
 
     return {
       connectionId,
+      payloadBytes,
       chunks,
       events: chunks.flatMap(({ events }) => events),
     }
   })
+}
+
+function expectCanonicalPayload(connection: ParsedConnection): void {
+  const { connectionId, events, payloadBytes } = connection
+
+  expect(
+    payloadBytes.every((byte) => byte <= 0x7f),
+    `connection ${connectionId} payload must contain only ASCII bytes`,
+  ).toBe(true)
+
+  expect(
+    payloadBytes.length === 0 || payloadBytes[payloadBytes.length - 1] === LF,
+    `connection ${connectionId} non-empty payload must end with LF`,
+  ).toBe(true)
+
+  const lines: string[] = []
+  let lineStart = 0
+
+  for (let index = 0; index < payloadBytes.length; index += 1) {
+    if (payloadBytes[index] !== LF) continue
+
+    const hasCrTerminator = index > lineStart && payloadBytes[index - 1] === CR
+    const lineEnd = hasCrTerminator ? index - 1 : index
+    const lineBytes = payloadBytes.slice(lineStart, lineEnd)
+
+    expect(
+      lineBytes.length,
+      `connection ${connectionId} payload must not contain empty lines`,
+    ).toBeGreaterThan(0)
+    lines.push(asciiDecoder.decode(lineBytes))
+    lineStart = index + 1
+  }
+
+  expect(lineStart, `connection ${connectionId} payload must not end with a partial line`).toBe(
+    payloadBytes.length,
+  )
+
+  const canonicalLines = events.map((event) => JSON.stringify(event))
+  expect(lines, `connection ${connectionId} line count must equal its event count`).toHaveLength(
+    events.length,
+  )
+  expect(
+    lines,
+    `connection ${connectionId} payload must contain only canonical event JSON lines`,
+  ).toEqual(canonicalLines)
 }
 
 const normalCaptureStem = 'web-serial-raw-2026-09-01T15-46-21-325Z'
@@ -126,6 +177,19 @@ const disconnectCaptureStem = 'web-serial-raw-2026-09-01T15-55-41-921Z'
 const upShort: SerialProtocolV1Event = { v: 1, control: 'up', gesture: 'short_press' }
 
 describe('SerialProtocolPocParser hardware-derived capture', () => {
+  it('全captureの各payload範囲がcanonical JSON lineだけで構成される', () => {
+    const connections = [normalCaptureStem, disconnectCaptureStem].flatMap((stem) => {
+      const capture = loadHardwareCapture(stem)
+      return parseConnections(
+        capture,
+        capture.metadata.connections.map(({ id }) => id),
+      )
+    })
+
+    for (const connection of connections) expectCanonicalPayload(connection)
+    expect(connections.length).toBeGreaterThan(0)
+  })
+
   it('normal captureのconnection 3を実測chunk境界のままactual sequenceへ復元する', () => {
     const [connection] = parseConnections(loadHardwareCapture(normalCaptureStem), [3])
 

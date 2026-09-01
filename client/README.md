@@ -42,7 +42,8 @@ http://localhost:<Viteが表示したport>/device-poc
 - Web Serial対応のdesktop Chromium browserを使用します。
 - HTTPSまたは`localhost`のsecure contextから開きます。
 - `device/`をMicroPico projectとして開き、先に`Upload Project`を完了させます。
-- Pico上のrootに`serial_protocol_poc.py`があることを確認します。`Run current file on Pico`は実行しません。
+- Pico上のrootに`button_firmware.py`、`main.py`、`serial_protocol_poc.py`があることを確認します。
+  `Run current file on Pico`は実行しません。
 - MicroPico vREPLを閉じるだけでなく、`MicroPico: Disconnect`でserial portを解放します。
 - 同じserial portをMicroPicoとbrowserから同時に開きません。
 
@@ -63,8 +64,9 @@ usbipd detach --busid <BUSID>
 5. `Stop & disconnect`で`serial_protocol_poc.py`を停止し、portを解放します。
 6. `Download capture.bin`と`Download capture.json`を順に押してcaptureを保存します。
 
-画面は接続後にMicroPython raw REPLへ入り、Upload済み`/serial_protocol_poc.py`をPoC専用commandで
-起動します。
+画面は接続後に自動実行中の`main.py`を停止してMicroPython raw REPLへ入り、Upload済み
+`/serial_protocol_poc.py`をPoC専用commandで起動します。このentrypointはproduction `main.py`と同じ
+`button_firmware.py`を使用しますが、電源投入時の自動起動そのものはdevice側の手順で確認します。
 `capture.bin`にはscript出力だけでなくraw REPLの受信応答も含まれます。`capture.json`は接続ごとの
 script path、bootstrap／script起動要求／起動継続観測時のoffset、read chunk境界、環境、総byte数、
 SHA-256を記録します。

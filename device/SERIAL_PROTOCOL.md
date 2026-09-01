@@ -2,11 +2,15 @@
 
 ## 位置付け
 
-この文書は、Issue #92で定めるRaspberry Pi Pico Hとfrontend間のSerial Protocol v1の規範です。
+この文書は、Issue #92で定めたRaspberry Pi Pico Hとfrontend間のSerial Protocol v1の規範です。
 deviceが生成するbutton操作eventと、frontendが受信してdevice event列へ追加するまでの契約を定めます。
+Issue #81のproduction firmwareは`firmware/button_firmware.py`、自動起動は`firmware/main.py`でこの規範を
+実装します。Issue #92の契約変更とIssue #81の実装変更を同一視せず、実装が規範へ適合することをtestと
+実機sampleで追跡します。
 
 この文書で「必須」とする事項がv1の契約です。現在のraw GPIO診断用`button_test.py`の出力仕様では
-ありません。診断PoCとの違いは「実測根拠とsampleの区別」を参照してください。
+ありません。`poc/`はIssue #92を確定した時点の調査履歴で、production entrypointではありません。
+診断PoCとの違いは「実測根拠とsampleの区別」を参照してください。
 
 ## Wire format
 
@@ -29,15 +33,21 @@ deviceが送るcanonical JSONは空白を含めず、keyを`v`、`control`、`ge
 JSON objectのkey順とJSON上許される空白は意味を持たないため、frontendは順序や空白だけが異なる
 schema適合frameも受理します。ただし、deviceは再現可能なsampleを作るため上記canonical形式で送信します。
 
-Serial portのopen設定やUSBの接続手順はpayload／framing契約とは分離します。現在のPoC設定と手順は
+Serial portのopen設定やUSBの接続手順はpayload／framing契約とは分離します。production firmwareの
+書込み・起動・確認手順は[device README](README.md)、過去のPoC viewer設定は
 [client README](../client/README.md)を参照してください。
 
-### Raw REPLを使うPoCのstream境界
+### Productionの直接readとRaw REPL PoCのstream境界
+
+Issue #81のproduction firmwareはPico起動時に`/main.py`から自動起動します。Issue #27の製品frontendは、
+利用者のgestureでportをopenした後、このbyte streamを直接readします。raw REPLへの切替え、script起動／停止
+command、capture offsetによるWire区間の切出しは行いません。接続中にdeviceが送るapplication出力はWire v1
+frameだけでなければなりません。
 
 raw REPLのbanner、command受付応答、停止応答はtransport制御であり、Wire v1 streamではありません。
-現在の開発用raw viewerのようにraw REPLからscriptを起動する場合、capture自体には全byteを残します。
-Wire v1 parserを製品frontendへ統合するときは、parserへ渡す範囲を接続ごとに次のように限定します。
-現raw viewerはこの切出しやparser処理をまだ行いません。
+過去の開発用raw viewerのようにraw REPLからPoC scriptを起動する場合、capture自体には全byteを残します。
+PoC sampleをparserへ入力するときだけ、parserへ渡す範囲を接続ごとに次のように限定します。現raw viewerは
+この切出しやparser処理をまだ行いません。
 
 - 開始: metadataの`scriptActiveObservedOffset`。raw REPLの`OK`を確認し、専用scriptの起動継続を確認した後
 - 終了: 正常停止時は`stopRequestedOffset`、切断またはread error時は`endedOffset`
@@ -48,7 +58,8 @@ frontendはこの開始offsetでframe bufferを空にしてからv1の処理を�
 破棄します。開始offsetより前と終了offset以後のbyteをv1 parserへ渡しません。offsetの意味とraw captureの
 保存方法は[Web Serial sample README](../client/samples/web-serial/README.md)も参照してください。
 
-製品用firmwareがraw REPLを介さずWire v1だけを送る構成では、このPoC固有のoffset境界は不要です。
+production firmwareでは、このPoC固有のoffset境界は不要です。production sampleへraw REPL制御byteが
+含まれていた場合は、offsetで除外して合格にせず、確認手順または接続方法の誤りとして扱います。
 
 ## Frame schema
 
@@ -101,6 +112,8 @@ frontendは追加のdebounceや保持時間の再計算を行わず、valid fram
 device起動時または入力監視開始時にGPIOがLOWだったbuttonは、開始前から押されていたものとして無視
 します。そのbuttonが20 ms以上連続してHIGHとなった最初のreleaseではframeを送らず、以後の押下から
 受付を開始します。これにより、USB再接続時に押したままのbuttonを1操作として誤送信しません。
+起動時にHIGHだったbuttonはその時点で受付可能とし、起動後のLOW遷移に通常の20 ms debounceを
+適用します。HIGH入力のみを理由に別の起動待ち時間は設けません。
 
 複数buttonは、debounce状態、押下開始時刻、gestureを相互に影響させず独立して管理します。同時または
 重なって操作された場合も、各releaseからframeを1個ずつ生成します。deviceがserial streamへ書き込んだ
@@ -153,16 +166,31 @@ portを自動で再openせず、切断状態を表示して利用者の再接続
 再接続後のvalid frameは既存event列の末尾へ追加します。event列を消去するのは、利用者が明示的に入力を
 clearまたは新しい入力sessionを開始した場合だけです。そのUIや送信後の画面遷移はこのprotocolの対象外です。
 
+ここでfrontendの「再接続」とdeviceの「再起動」を区別します。
+
+- hostがserial portをcloseして同じ給電中のPicoを再openしても、deviceの状態機械はresetされません。
+- Issue #81の電源再投入／USB再接続試験は、PicoがUSBだけで給電されている状態でcableを物理的に抜き差し
+  するpower cycle／hard resetです。再接続後は`main.py`が状態機械を新しく作って自動起動します。
+- 給電中のhost close／openの間に開始または完了した操作がhostへ必ず届くことはv1では保証しません。v1には
+  offline queue、ack、再送がありません。
+- host close／open後も、押下中のbuttonなどdevice側の状態は継続し得ます。frontendはopenをdevice resetと
+  みなさず、connectionごとのparser bufferだけを新しくします。
+
+hard reset時にLOWだったbuttonは「Debounceとgesture判定」の起動時規則に従い、最初の安定したreleaseを
+eventにしません。host close／openだけでは、この起動時規則をもう一度適用しません。
+
 ## 責任境界
 
 ### Device
 
+- power cycle／hard reset後に`main.py`から監視を自動起動し、状態を新しく作る
 - GP2～GP8を内部pull-up付き入力として読み取る
 - buttonごとに20 ms debounceを行う
 - 700 ms thresholdで`short_press`または`long_press`をrelease時に1回だけ確定する
 - button／GPIOをcontrolへ対応付ける
 - Frame schemaに一致するUTF-8 JSON lineをstream順に送る
-- repeat、ack、再送を行わない
+- Wire v1 streamへbanner、debug log、raw REPL応答を混在させない
+- repeat、offline queue、ack、再送を行わない
 
 ### Frontend
 
@@ -178,6 +206,10 @@ deviceが確定したgestureだけを扱います。Wire v1 eventをOpenAPIの`O
 製品Adapter、とくに`long_press`を`count`や別の画面動作へどう対応させるかはこの契約では定めません。
 未確定の変換を推測してWire v1 eventをquery APIへ直接送らないでください。
 
+Issue #27はこのFrontend責任のうちport lifecycle、接続状態、切断復帰、cleanup、代替入力への導線を扱います。
+production firmwareの起動commandを送ることや、hostのport close／openでdevice状態をresetすることは
+Issue #27の責任に含めません。
+
 ## 実測根拠とsampleの区別
 
 2026-09-01の[Web Serial diagnostic captures](../client/samples/web-serial/diagnostic/)では、Raspberry Pi
@@ -187,8 +219,8 @@ Pico Hの全7入力、CRLFを含む診断出力、読取り中のUSB切断と利
 この診断captureはJSON Frame schema、20 ms debounce、700 ms threshold、short／long gestureを送るWire v1
 の実測記録ではなく、protocol parserのcanonical sampleとして流用しません。
 
-2026-09-02の[Wire v1 captures](../client/samples/web-serial/protocol-v1/)では、専用PoCを実機で実行し、
-次を確認しました。
+2026-09-02の[Wire v1 captures](../client/samples/web-serial/protocol-v1/)では、`poc/serial_protocol_poc.py`を
+raw REPLから実機で実行し、次を確認しました。
 
 - 全7 controlの`short_press`と、`up`の`long_press`
 - 起動時LOWの最初のreleaseを無視し、次のgestureから出力する動作
@@ -205,11 +237,22 @@ contract-synthetic fixtureで検証し、実機由来のcaseとは明示的に�
 
 [device vREPL samples](samples/)もraw GPIO診断の実測記録であり、canonical protocol sampleではありません。
 
+Issue #81の`firmware/`はhardware非依存の状態機械testを`mise run device-test`で検証します。このtestは
+19／20 ms、699／700 ms、bounce、連打、長押し、起動時LOW、複数button、tick wrapなどを決定的に確認する
+synthetic入力であり、production実機sampleではありません。
+
+production `main.py`をPicoへ書き込んだ後の直接read、canonical frame以外がないこと、物理的な電源再投入、
+押下中再投入、別担当による再現は未実施です。完了後は[device README](README.md)の手動matrixと記録templateに
+従い、無加工raw byte、期待event列、SHA-256を対応付けます。2026-09-02のPoC captureをproduction実機確認の
+代わりにしません。
+
 ## 対象外
 
 - 製品版の画面や操作UI
 - 製品版parser／Adapterの実装
-- firmware完成版の実装と配布
+- Issue #27のport管理、切断復帰、代替入力UI
+- custom UF2やfirmware updaterとしての配布
 - backend処理、HTTP API、query送信処理
 
-この文書は上記の実装完了を主張せず、それらが従うdevice／frontend間のWire v1契約だけを定義します。
+この文書はIssue #92のWire v1規範とIssue #81実装の責任境界を定義します。対象外の製品frontendやbackendの
+実装完了、および未実施のproduction実機確認を主張しません。
