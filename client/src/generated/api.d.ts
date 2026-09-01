@@ -69,7 +69,7 @@ export interface paths {
         put?: never;
         /**
          * デモ環境からログアウトする
-         * @description AUTH_MODE=demoのときだけ使用し、デモsessionとCookieを無効化します。
+         * @description AUTH_MODE=demoのときだけ使用し、デモsessionとCookieを無効化します。NeoShowcase modeでは404を返します。
          */
         post: operations["logoutDemo"];
         delete?: never;
@@ -145,6 +145,37 @@ export interface paths {
         };
         /** 現在の挑戦状態を取得する */
         get: operations["getCurrentRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rooms/{room_id}/leaderboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+                 * @example 11111111-1111-4111-8111-111111111111
+                 */
+                room_id: components["parameters"]["RoomId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 部屋別leaderboardを取得する
+         * @description roomごとに、clear済みrunからユーザーごとのbest recordを1件ずつ返します。
+         *     同一ユーザーのbest recordはelapsed_ms、query_count、cleared_atの昇順で選びます。
+         *     leaderboardもelapsed_ms、query_count、cleared_atの昇順で並べます。
+         *     3項目がすべて同じrecordには同じrankを付け、次のrankを飛ばします（1, 1, 3）。
+         *     query_countにはoperation_sequence型問題の試行回数だけを含めます。
+         *     未認証、または現在のユーザーにclear recordがない場合はmeをnullにします。
+         */
+        get: operations["getRoomLeaderboard"];
         put?: never;
         post?: never;
         delete?: never;
@@ -329,6 +360,7 @@ export interface components {
             logout_url: null;
         };
         GuestLoginRequest: {
+            /** @description 前後のUnicode空白をserverで除去し、除去後1〜32 Unicode code pointを許可します。 */
             display_name: string;
         };
         GuestLoginResponse: {
@@ -344,6 +376,31 @@ export interface components {
             /** Format: int64 */
             elapsed_ms: number;
             cleared_problem_ids: string[];
+        };
+        LeaderboardResponse: {
+            /** Format: uuid */
+            room_id: string;
+            entries: components["schemas"]["LeaderboardEntry"][];
+            me: components["schemas"]["LeaderboardMe"] | null;
+        };
+        LeaderboardEntry: {
+            /** Format: int32 */
+            rank: number;
+            user: components["schemas"]["User"];
+            /** Format: int64 */
+            elapsed_ms: number;
+            /** Format: int64 */
+            query_count: number;
+            /** Format: date-time */
+            cleared_at: string;
+        };
+        LeaderboardMe: {
+            /** Format: int32 */
+            rank: number;
+            /** Format: int64 */
+            elapsed_ms: number;
+            /** Format: int64 */
+            query_count: number;
         };
         ProblemResponse: {
             /** Format: uuid */
@@ -505,12 +562,21 @@ export interface components {
         /** @description デモ用ユーザーを取得または作成し、session Cookieを発行した状態 */
         GuestLoginSuccess: {
             headers: {
-                /** @description HttpOnlyなdemo session Cookie。Cookie名と具体的な属性は未確定です。 */
+                /** @description demo_session Cookie。Path=/、HttpOnly、SameSite=Lax、Domainなし、有効期限なしのsession Cookieです。デプロイ環境ではSecureを付けます。 */
                 "Set-Cookie"?: string;
                 [name: string]: unknown;
             };
             content: {
                 "application/json": components["schemas"]["GuestLoginResponse"];
+            };
+        };
+        /** @description trim後の表示名が空、または32 Unicode code pointを超えています。 */
+        GuestLoginValidationError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
             };
         };
         /** @description activeな挑戦状態 */
@@ -529,6 +595,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["ActiveRunResponse"];
+            };
+        };
+        /** @description 部屋別leaderboard */
+        LeaderboardSuccess: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["LeaderboardResponse"];
             };
         };
         /** @description 公開可能な問題データ */
@@ -742,7 +817,7 @@ export interface operations {
             200: components["responses"]["GuestLoginSuccess"];
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
+            422: components["responses"]["GuestLoginValidationError"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -758,12 +833,13 @@ export interface operations {
             /** @description ログアウト完了。response bodyはありません。 */
             204: {
                 headers: {
-                    /** @description demo session Cookieを削除するためのheader。Cookie名と具体的な属性は未確定です。 */
+                    /** @description demo_session Cookieを削除します。Path=/、Max-Age=0、過去のExpiresを指定し、デプロイ環境ではSecureを付けます。 */
                     "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -830,6 +906,27 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["RunNotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getRoomLeaderboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+                 * @example 11111111-1111-4111-8111-111111111111
+                 */
+                room_id: components["parameters"]["RoomId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["LeaderboardSuccess"];
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
     };

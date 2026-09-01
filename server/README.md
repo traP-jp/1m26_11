@@ -65,5 +65,6 @@ mise run docker-build
 | `DB_NAME` | `app` | MariaDB database |
 | `RUST_LOG` | `server=info,tower_http=info` | tracing filter |
 | `AUTH_MODE` | 既定値なし | `demo`または`neoshowcase`。起動時に必須 |
+| `DEMO_COOKIE_SECURE` | `true` | demo session Cookieへ`Secure`属性を付けるか。localhostのHTTP開発時だけ`false` |
 
 起動時に `migrations/` の SQLx migration を自動適用します。

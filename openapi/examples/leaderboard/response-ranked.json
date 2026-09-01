@@ -1,0 +1,40 @@
+{
+  "room_id": "11111111-1111-4111-8111-111111111111",
+  "entries": [
+    {
+      "rank": 1,
+      "user": {
+        "id": "44444444-4444-4444-8444-444444444444",
+        "display_name": "Alice"
+      },
+      "elapsed_ms": 72340,
+      "query_count": 21,
+      "cleared_at": "2026-08-06T10:05:00Z"
+    },
+    {
+      "rank": 1,
+      "user": {
+        "id": "55555555-5555-4555-8555-555555555555",
+        "display_name": "Bob"
+      },
+      "elapsed_ms": 72340,
+      "query_count": 21,
+      "cleared_at": "2026-08-06T10:05:00Z"
+    },
+    {
+      "rank": 3,
+      "user": {
+        "id": "66666666-6666-4666-8666-666666666666",
+        "display_name": "Carol"
+      },
+      "elapsed_ms": 80000,
+      "query_count": 18,
+      "cleared_at": "2026-08-06T10:07:00Z"
+    }
+  ],
+  "me": {
+    "rank": 3,
+    "elapsed_ms": 80000,
+    "query_count": 18
+  }
+}

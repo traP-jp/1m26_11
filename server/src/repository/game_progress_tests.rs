@@ -31,6 +31,82 @@ const PROBLEM_IDS: [&str; 4] = [
 
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_concurrent_run_creation_returns_existing_active_run() {
+    let pool = connect_test_database().await;
+
+    migrate(&pool).await.expect("migration should succeed");
+    cleanup_test_data(&pool).await;
+    seed_room_and_problems(&pool).await;
+    insert_test_user(&pool).await;
+
+    let repository = SqlxUserRepository::new(pool.clone());
+    let user_id = parse_uuid(USER_ID);
+    let room_id = parse_uuid(ROOM_ID);
+    let first_run_id = Uuid::new_v4();
+    let second_run_id = Uuid::new_v4();
+
+    let (first_result, second_result) = tokio::join!(
+        repository.create_run(first_run_id, user_id, room_id, test_time(0)),
+        repository.create_run(second_run_id, user_id, room_id, test_time(1)),
+    );
+
+    let first_run = first_result.expect("first run request should succeed");
+    let second_run = second_result.expect("second run request should succeed");
+
+    assert_eq!(
+        first_run.id, second_run.id,
+        "both requests should return the same active run"
+    );
+    assert_eq!(
+        first_run.started_at, second_run.started_at,
+        "the resumed response should preserve the original started_at"
+    );
+    assert!(
+        first_run.id == first_run_id || first_run.id == second_run_id,
+        "one of the requested run IDs should become the active run"
+    );
+
+    let active_run_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM runs
+        WHERE user_id = ?
+          AND room_id = ?
+          AND status = 'active'
+        "#,
+    )
+    .bind(user_id)
+    .bind(room_id)
+    .fetch_one(&pool)
+    .await
+    .expect("active run count should be readable");
+
+    assert_eq!(active_run_count, 1, "only one active run should be stored");
+
+    let progress_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM problem_progress
+        WHERE run_id = ?
+        "#,
+    )
+    .bind(first_run.id)
+    .fetch_one(&pool)
+    .await
+    .expect("problem progress count should be readable");
+
+    assert_eq!(
+        progress_count,
+        PROBLEM_IDS.len() as i64,
+        "problem progress should be created exactly once"
+    );
+
+    cleanup_test_data(&pool).await;
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
 async fn mariadb_problem_clear_flow_is_transactional() {
     let pool = connect_test_database().await;
 
@@ -380,6 +456,10 @@ async fn mariadb_query_judgement_is_recorded_transactionally() {
         stored_query_count(&pool, run_id, second_problem_id).await,
         0
     );
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, second_problem_id).await,
+        0
+    );
 
     let first_query_id = Uuid::new_v4();
 
@@ -395,6 +475,10 @@ async fn mariadb_query_judgement_is_recorded_transactionally() {
 
     assert_eq!(first_result.query_count, 1);
     assert_eq!(first_result.problem_status, "available");
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        1
+    );
 
     let stored = sqlx::query_as::<
         _,
@@ -440,6 +524,10 @@ async fn mariadb_query_judgement_is_recorded_transactionally() {
 
     assert_eq!(second_result.query_count, 2);
     assert_eq!(second_result.problem_status, "available");
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        2
+    );
 
     let correct_result = repository
         .record_query_judgement(query_submission(
@@ -453,6 +541,10 @@ async fn mariadb_query_judgement_is_recorded_transactionally() {
 
     assert_eq!(correct_result.query_count, 3);
     assert_eq!(correct_result.problem_status, "cleared");
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        3
+    );
 
     assert_eq!(
         progress_statuses(&pool, run_id).await,
@@ -460,6 +552,10 @@ async fn mariadb_query_judgement_is_recorded_transactionally() {
     );
 
     assert_eq!(stored_query_count(&pool, run_id, first_problem_id).await, 3);
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        3
+    );
 
     let cleared_error = repository
         .record_query_judgement(query_submission(
@@ -477,6 +573,11 @@ async fn mariadb_query_judgement_is_recorded_transactionally() {
     ));
 
     assert_eq!(stored_query_count(&pool, run_id, first_problem_id).await, 3);
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        3,
+        "rejected query must not increment the shared attempt counter"
+    );
 
     cleanup_test_data(&pool).await;
     pool.close().await;

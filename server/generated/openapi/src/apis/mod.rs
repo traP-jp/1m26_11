@@ -1,5 +1,6 @@
 pub mod answers;
 pub mod auth;
+pub mod leaderboard;
 pub mod problems;
 pub mod queries;
 pub mod rooms;

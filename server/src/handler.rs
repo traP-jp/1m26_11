@@ -1,11 +1,13 @@
 mod answers;
 mod auth;
+mod leaderboard;
 mod me;
 mod queries;
 mod rooms;
 
 pub(crate) use answers::submit_answer;
 pub(crate) use auth::{login_guest, logout_demo};
+pub(crate) use leaderboard::get_room_leaderboard;
 pub(crate) use me::get_me;
 pub(crate) use queries::submit_query;
 pub(crate) use rooms::{

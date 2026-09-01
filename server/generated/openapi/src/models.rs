@@ -89,6 +89,13 @@ pub struct SubmitAnswerPathParams {
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
 #[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct GetRoomLeaderboardPathParams {
+    /// 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+    pub room_id: uuid::Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
 pub struct GetProblemPathParams {
     /// 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
     pub room_id: uuid::Uuid,
@@ -1716,6 +1723,7 @@ impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<ErrorRespons
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
 #[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
 pub struct GuestLoginRequest {
+    /// 前後のUnicode空白をserverで除去し、除去後1〜32 Unicode code pointを許可します。
     #[serde(rename = "display_name")]
     #[validate(custom(function = "check_xss_string"))]
     pub display_name: String,
@@ -2401,6 +2409,546 @@ impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<IncorrectQue
                     }
                     std::result::Result::Err(err) => std::result::Result::Err(format!(
                         r#"Unable to convert header value '{value}' into IncorrectQueryResponse - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct LeaderboardEntry {
+    #[serde(rename = "rank")]
+    #[validate(range(min = 1u32))]
+    pub rank: u32,
+
+    #[serde(rename = "user")]
+    #[validate(nested)]
+    pub user: models::User,
+
+    #[serde(rename = "elapsed_ms")]
+    #[validate(range(min = 0u64))]
+    pub elapsed_ms: u64,
+
+    #[serde(rename = "query_count")]
+    #[validate(range(min = 0u64))]
+    pub query_count: u64,
+
+    #[serde(rename = "cleared_at")]
+    pub cleared_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl LeaderboardEntry {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(
+        rank: u32,
+        user: models::User,
+        elapsed_ms: u64,
+        query_count: u64,
+        cleared_at: chrono::DateTime<chrono::Utc>,
+    ) -> LeaderboardEntry {
+        LeaderboardEntry {
+            rank,
+            user,
+            elapsed_ms,
+            query_count,
+            cleared_at,
+        }
+    }
+}
+
+/// Converts the LeaderboardEntry value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for LeaderboardEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            Some("rank".to_string()),
+            Some(self.rank.to_string()),
+            // Skipping user in query parameter serialization
+            Some("elapsed_ms".to_string()),
+            Some(self.elapsed_ms.to_string()),
+            Some("query_count".to_string()),
+            Some(self.query_count.to_string()),
+            // Skipping cleared_at in query parameter serialization
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a LeaderboardEntry value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for LeaderboardEntry {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub rank: Vec<u32>,
+            pub user: Vec<models::User>,
+            pub elapsed_ms: Vec<u64>,
+            pub query_count: Vec<u64>,
+            pub cleared_at: Vec<chrono::DateTime<chrono::Utc>>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing LeaderboardEntry".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "rank" => intermediate_rep.rank.push(
+                        <u32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "user" => intermediate_rep.user.push(
+                        <models::User as std::str::FromStr>::from_str(val)
+                            .map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "elapsed_ms" => intermediate_rep.elapsed_ms.push(
+                        <u64 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "query_count" => intermediate_rep.query_count.push(
+                        <u64 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "cleared_at" => intermediate_rep.cleared_at.push(
+                        <chrono::DateTime<chrono::Utc> as std::str::FromStr>::from_str(val)
+                            .map_err(|x| x.to_string())?,
+                    ),
+                    _ => {
+                        return std::result::Result::Err(
+                            "Unexpected key while parsing LeaderboardEntry".to_string(),
+                        );
+                    }
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(LeaderboardEntry {
+            rank: intermediate_rep
+                .rank
+                .into_iter()
+                .next()
+                .ok_or_else(|| "rank missing in LeaderboardEntry".to_string())?,
+            user: intermediate_rep
+                .user
+                .into_iter()
+                .next()
+                .ok_or_else(|| "user missing in LeaderboardEntry".to_string())?,
+            elapsed_ms: intermediate_rep
+                .elapsed_ms
+                .into_iter()
+                .next()
+                .ok_or_else(|| "elapsed_ms missing in LeaderboardEntry".to_string())?,
+            query_count: intermediate_rep
+                .query_count
+                .into_iter()
+                .next()
+                .ok_or_else(|| "query_count missing in LeaderboardEntry".to_string())?,
+            cleared_at: intermediate_rep
+                .cleared_at
+                .into_iter()
+                .next()
+                .ok_or_else(|| "cleared_at missing in LeaderboardEntry".to_string())?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<LeaderboardEntry> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<LeaderboardEntry>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<LeaderboardEntry>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for LeaderboardEntry - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<LeaderboardEntry> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <LeaderboardEntry as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into LeaderboardEntry - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct LeaderboardMe {
+    #[serde(rename = "rank")]
+    #[validate(range(min = 1u32))]
+    pub rank: u32,
+
+    #[serde(rename = "elapsed_ms")]
+    #[validate(range(min = 0u64))]
+    pub elapsed_ms: u64,
+
+    #[serde(rename = "query_count")]
+    #[validate(range(min = 0u64))]
+    pub query_count: u64,
+}
+
+impl LeaderboardMe {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(rank: u32, elapsed_ms: u64, query_count: u64) -> LeaderboardMe {
+        LeaderboardMe {
+            rank,
+            elapsed_ms,
+            query_count,
+        }
+    }
+}
+
+/// Converts the LeaderboardMe value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for LeaderboardMe {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            Some("rank".to_string()),
+            Some(self.rank.to_string()),
+            Some("elapsed_ms".to_string()),
+            Some(self.elapsed_ms.to_string()),
+            Some("query_count".to_string()),
+            Some(self.query_count.to_string()),
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a LeaderboardMe value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for LeaderboardMe {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub rank: Vec<u32>,
+            pub elapsed_ms: Vec<u64>,
+            pub query_count: Vec<u64>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing LeaderboardMe".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "rank" => intermediate_rep.rank.push(
+                        <u32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "elapsed_ms" => intermediate_rep.elapsed_ms.push(
+                        <u64 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "query_count" => intermediate_rep.query_count.push(
+                        <u64 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    _ => {
+                        return std::result::Result::Err(
+                            "Unexpected key while parsing LeaderboardMe".to_string(),
+                        );
+                    }
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(LeaderboardMe {
+            rank: intermediate_rep
+                .rank
+                .into_iter()
+                .next()
+                .ok_or_else(|| "rank missing in LeaderboardMe".to_string())?,
+            elapsed_ms: intermediate_rep
+                .elapsed_ms
+                .into_iter()
+                .next()
+                .ok_or_else(|| "elapsed_ms missing in LeaderboardMe".to_string())?,
+            query_count: intermediate_rep
+                .query_count
+                .into_iter()
+                .next()
+                .ok_or_else(|| "query_count missing in LeaderboardMe".to_string())?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<LeaderboardMe> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<LeaderboardMe>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<LeaderboardMe>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for LeaderboardMe - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<LeaderboardMe> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <LeaderboardMe as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into LeaderboardMe - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct LeaderboardResponse {
+    #[serde(rename = "room_id")]
+    pub room_id: uuid::Uuid,
+
+    #[serde(rename = "entries")]
+    #[validate(nested)]
+    pub entries: Vec<models::LeaderboardEntry>,
+
+    #[serde(rename = "me")]
+    pub me: Nullable<models::LeaderboardMe>,
+}
+
+impl LeaderboardResponse {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(
+        room_id: uuid::Uuid,
+        entries: Vec<models::LeaderboardEntry>,
+        me: Nullable<models::LeaderboardMe>,
+    ) -> LeaderboardResponse {
+        LeaderboardResponse {
+            room_id,
+            entries,
+            me,
+        }
+    }
+}
+
+/// Converts the LeaderboardResponse value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for LeaderboardResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            // Skipping room_id in query parameter serialization
+
+            // Skipping entries in query parameter serialization
+
+            // Skipping me in query parameter serialization
+
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a LeaderboardResponse value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for LeaderboardResponse {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub room_id: Vec<uuid::Uuid>,
+            pub entries: Vec<Vec<models::LeaderboardEntry>>,
+            pub me: Vec<models::LeaderboardMe>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing LeaderboardResponse".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "room_id" => intermediate_rep.room_id.push(<uuid::Uuid as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    "entries" => return std::result::Result::Err("Parsing a container in this style is not supported in LeaderboardResponse".to_string()),
+                    "me" => return std::result::Result::Err("Parsing a nullable type in this style is not supported in LeaderboardResponse".to_string()),
+                    _ => return std::result::Result::Err("Unexpected key while parsing LeaderboardResponse".to_string())
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(LeaderboardResponse {
+            room_id: intermediate_rep
+                .room_id
+                .into_iter()
+                .next()
+                .ok_or_else(|| "room_id missing in LeaderboardResponse".to_string())?,
+            entries: intermediate_rep
+                .entries
+                .into_iter()
+                .next()
+                .ok_or_else(|| "entries missing in LeaderboardResponse".to_string())?,
+            me: std::result::Result::Err(
+                "Nullable types not supported in LeaderboardResponse".to_string(),
+            )?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<LeaderboardResponse> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<LeaderboardResponse>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<LeaderboardResponse>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for LeaderboardResponse - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<LeaderboardResponse> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <LeaderboardResponse as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into LeaderboardResponse - {err}"#
                     )),
                 }
             }
