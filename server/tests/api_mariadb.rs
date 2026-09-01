@@ -785,8 +785,9 @@ async fn mariadb_problem_query_and_answer_http_flow() {
     assert_eq!(
         correct_answer_body["progress"],
         json!({
-            "cleared_problem_count": 2,
-            "total_problem_count": 4
+            "status": "active",
+            "cleared_count": 2,
+            "required_count": 4
         })
     );
     assert!(correct_answer_body["elapsed_ms"].as_u64().is_some());
@@ -849,8 +850,9 @@ async fn mariadb_final_problem_first_then_room_clear_http_flow() {
     assert_eq!(
         final_answer_body["progress"],
         json!({
-            "cleared_problem_count": 1,
-            "total_problem_count": 4
+            "status": "active",
+            "cleared_count": 1,
+            "required_count": 4
         })
     );
 
@@ -910,8 +912,9 @@ async fn mariadb_final_problem_first_then_room_clear_http_flow() {
     assert_eq!(
         second_answer_body["progress"],
         json!({
-            "cleared_problem_count": 3,
-            "total_problem_count": 4
+            "status": "active",
+            "cleared_count": 3,
+            "required_count": 4
         })
     );
 
