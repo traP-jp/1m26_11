@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { RouterView, useRouter } from 'vue-router'
 
+import { portalPageFixtures } from './PortalPage.fixture'
 import { roomPageFixture } from './RoomPage.fixture'
 import type { RoomUiEvent } from './RoomPage.types'
 
@@ -17,7 +18,12 @@ function handleRoomUiEvent(event: RoomUiEvent): void {
 
 <template>
   <RouterView v-slot="{ Component, route }">
-    <component :is="Component" v-if="route.name === 'portal'" @room-selected="handleRoomSelected" />
+    <component
+      :is="Component"
+      v-if="route.name === 'portal'"
+      v-bind="portalPageFixtures.demoAuthenticated"
+      @start-room="handleRoomSelected"
+    />
     <component
       :is="Component"
       v-else-if="route.name === 'room'"
