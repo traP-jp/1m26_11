@@ -66,5 +66,17 @@ mise run docker-build
 | `RUST_LOG` | `server=info,tower_http=info` | tracing filter |
 | `AUTH_MODE` | 既定値なし | `demo`または`neoshowcase`。起動時に必須 |
 | `DEMO_COOKIE_SECURE` | `true` | demo session Cookieへ`Secure`属性を付けるか。localhostのHTTP開発時だけ`false` |
+| `IMAGE_UPLOAD_ENABLED` | `false` | dev用画像upload APIを有効化する。`true`は`AUTH_MODE=demo`でのみ使用可能 |
+| `S3_ENDPOINT` | 未設定 | upload先のS3互換endpoint。upload有効時は必須 |
+| `S3_BUCKET` | 未設定 | upload先bucket。upload有効時は必須 |
+| `AWS_ACCESS_KEY_ID` | 未設定 | storage access key。upload有効時は必須。repositoryやlogへ記録しない |
+| `AWS_SECRET_ACCESS_KEY` | 未設定 | storage secret key。upload有効時は必須。repositoryやlogへ記録しない |
+| `AWS_REGION` | 未設定 | storage署名に使用するregion。upload有効時は必須 |
+| `S3_FORCE_PATH_STYLE` | 未設定 | S3 path-style accessを使うか。upload有効時は`true`または`false`が必須 |
+| `ASSET_PUBLIC_BASE_URL` | 未設定 | responseの公開Asset URLを組み立てるbase URL。upload有効時は必須 |
+
+画像upload APIはdev専用です。Composeではbackend container内を`0.0.0.0:8080`で待ち受けますが、host側の公開先を`127.0.0.1:8080`へ限定します。Composeを使わず直接起動する場合は`APP_ADDR=127.0.0.1:8080`を指定してください。`Host`、`X-Forwarded-For`、`X-Real-IP`によるlocalhost判定は行いません。
+
+storage credentialはGit管理外の`server/.env.storage.local`で管理し、値をsource、fixture、HTTP request、frontend、logへ含めません。
 
 起動時に `migrations/` の SQLx migration を自動適用します。

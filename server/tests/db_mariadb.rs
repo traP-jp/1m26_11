@@ -193,6 +193,7 @@ async fn mariadb_game_schema_matches_contract() {
     assert_eq!(
         tables,
         vec![
+            "asset_upload_idempotency".to_owned(),
             "demo_sessions".to_owned(),
             "problem_progress".to_owned(),
             "problems".to_owned(),
@@ -204,6 +205,10 @@ async fn mariadb_game_schema_matches_contract() {
     );
 
     let primary_keys: &[(&str, &[&str])] = &[
+        (
+            "asset_upload_idempotency",
+            &["request_method", "request_path", "idempotency_key"],
+        ),
         ("users", &["user_id"]),
         ("demo_sessions", &["session_id"]),
         ("rooms", &["room_id"]),
@@ -227,6 +232,11 @@ async fn mariadb_game_schema_matches_contract() {
     }
 
     let indexes: &[(&str, &str, &[&str])] = &[
+        (
+            "asset_upload_idempotency",
+            "idx_asset_upload_idempotency_expires_at",
+            &["expires_at"],
+        ),
         ("demo_sessions", "idx_demo_sessions_user_id", &["user_id"]),
         ("rooms", "uq_rooms_number", &["number"]),
         (
@@ -305,6 +315,148 @@ async fn mariadb_game_schema_matches_contract() {
         query_count_column_count, 0,
         "query_count must be derived from query history, not stored in a dedicated column",
     );
+
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_asset_upload_idempotency_schema_enforces_constraints() {
+    let pool = connect_test_database().await;
+
+    migrate(&pool).await.expect("migration should succeed");
+
+    let idempotency_key = Uuid::new_v4();
+    let claim_token = Uuid::new_v4();
+    let competing_claim_token = Uuid::new_v4();
+    let invalid_claim_token = Uuid::new_v4();
+    let request_path = format!(
+        "/api/rooms/{}/problems/{}/assets",
+        Uuid::new_v4(),
+        Uuid::new_v4()
+    );
+    let file_sha256 = vec![0xabu8; 32];
+
+    sqlx::query(
+        r#"
+        INSERT INTO asset_upload_idempotency (
+            request_method,
+            request_path,
+            idempotency_key,
+            claim_token,
+            file_sha256,
+            alt,
+            status,
+            expires_at
+        )
+        VALUES (
+            'POST',
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            'processing',
+            DATE_ADD(CURRENT_TIMESTAMP(3), INTERVAL 24 HOUR)
+        )
+        "#,
+    )
+    .bind(&request_path)
+    .bind(idempotency_key)
+    .bind(claim_token.as_bytes().as_slice())
+    .bind(&file_sha256)
+    .bind("テスト画像")
+    .execute(&pool)
+    .await
+    .expect("valid processing idempotency record should be inserted");
+
+    let duplicate_result = sqlx::query(
+        r#"
+        INSERT INTO asset_upload_idempotency (
+            request_method,
+            request_path,
+            idempotency_key,
+            claim_token,
+            file_sha256,
+            alt,
+            status,
+            expires_at
+        )
+        VALUES (
+            'POST',
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            'processing',
+            DATE_ADD(CURRENT_TIMESTAMP(3), INTERVAL 24 HOUR)
+        )
+        "#,
+    )
+    .bind(&request_path)
+    .bind(idempotency_key)
+    .bind(competing_claim_token.as_bytes().as_slice())
+    .bind(&file_sha256)
+    .bind("テスト画像")
+    .execute(&pool)
+    .await;
+
+    assert!(
+        duplicate_result.is_err(),
+        "method, path, and idempotency key must be unique"
+    );
+
+    let invalid_completed_result = sqlx::query(
+        r#"
+        INSERT INTO asset_upload_idempotency (
+            request_method,
+            request_path,
+            idempotency_key,
+            claim_token,
+            file_sha256,
+            alt,
+            status,
+            expires_at
+        )
+        VALUES (
+            'POST',
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            'completed',
+            DATE_ADD(CURRENT_TIMESTAMP(3), INTERVAL 24 HOUR)
+        )
+        "#,
+    )
+    .bind(format!("{request_path}/invalid"))
+    .bind(Uuid::new_v4())
+    .bind(invalid_claim_token.as_bytes().as_slice())
+    .bind(&file_sha256)
+    .bind("不正な完了record")
+    .execute(&pool)
+    .await;
+
+    assert!(
+        invalid_completed_result.is_err(),
+        "completed record must contain object_key and completed_at"
+    );
+
+    sqlx::query(
+        r#"
+        DELETE FROM asset_upload_idempotency
+        WHERE request_method = 'POST'
+          AND request_path = ?
+          AND idempotency_key = ?
+        "#,
+    )
+    .bind(&request_path)
+    .bind(idempotency_key)
+    .execute(&pool)
+    .await
+    .expect("idempotency test record cleanup should succeed");
 
     pool.close().await;
 }
