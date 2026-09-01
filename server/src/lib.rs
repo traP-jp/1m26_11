@@ -111,6 +111,10 @@ pub fn app(state: AppState) -> Router {
             get(handler::get_current_run).fallback(handler::method_not_allowed),
         )
         .route(
+            "/api/rooms/{room_id}/leaderboard",
+            get(handler::get_room_leaderboard).fallback(handler::method_not_allowed),
+        )
+        .route(
             "/api/rooms/{room_id}/problems/{problem_id}/queries",
             post(handler::submit_query).fallback(handler::method_not_allowed),
         )

@@ -131,6 +131,37 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/rooms/{room_id}/leaderboard': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    /**
+     * 部屋別leaderboardを取得する
+     * @description roomごとに、clear済みrunからユーザーごとのbest recordを1件ずつ返します。
+     *     同一ユーザーのbest recordはelapsed_ms、query_count、cleared_atの昇順で選びます。
+     *     leaderboardもelapsed_ms、query_count、cleared_atの昇順で並べます。
+     *     3項目がすべて同じrecordには同じrankを付け、次のrankを飛ばします（1, 1, 3）。
+     *     query_countにはoperation_sequence型問題の試行回数だけを含めます。
+     *     未認証、または現在のユーザーにclear recordがない場合はmeをnullにします。
+     */
+    get: operations['getRoomLeaderboard']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/rooms/{room_id}/problems/{problem_id}': {
     parameters: {
       query?: never
@@ -328,6 +359,31 @@ export interface components {
       elapsed_ms: number
       cleared_problem_ids: string[]
     }
+    LeaderboardResponse: {
+      /** Format: uuid */
+      room_id: string
+      entries: components['schemas']['LeaderboardEntry'][]
+      me: components['schemas']['LeaderboardMe'] | null
+    }
+    LeaderboardEntry: {
+      /** Format: int32 */
+      rank: number
+      user: components['schemas']['User']
+      /** Format: int64 */
+      elapsed_ms: number
+      /** Format: int64 */
+      query_count: number
+      /** Format: date-time */
+      cleared_at: string
+    }
+    LeaderboardMe: {
+      /** Format: int32 */
+      rank: number
+      /** Format: int64 */
+      elapsed_ms: number
+      /** Format: int64 */
+      query_count: number
+    }
     ProblemResponse: {
       /** Format: uuid */
       id: string
@@ -492,6 +548,15 @@ export interface components {
       }
       content: {
         'application/json': components['schemas']['ActiveRunResponse']
+      }
+    }
+    /** @description 部屋別leaderboard */
+    LeaderboardSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['LeaderboardResponse']
       }
     }
     /** @description 公開可能な問題データ */
@@ -781,6 +846,27 @@ export interface operations {
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthorized']
       404: components['responses']['RunNotFound']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  getRoomLeaderboard: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['LeaderboardSuccess']
+      400: components['responses']['BadRequest']
+      404: components['responses']['NotFound']
       500: components['responses']['InternalServerError']
     }
   }

@@ -1,6 +1,6 @@
 # OpenAPI contract
 
-`openapi-v1.yaml` は、フロントエンドとバックエンドが共有するOpenAPI 3.1.0のAPI契約です。P0の認証3本・ゲーム5本を定義し、`GET /openapi.yaml`は契約を配信する既存のtooling endpointとして残しています。この契約から通信境界のRust crateとTypeScript型を生成しますが、DB処理やゲームロジックなどのAPI実装本体は生成しません。
+`openapi-v1.yaml` は、フロントエンドとバックエンドが共有するOpenAPI 3.1.0のAPI契約です。認証・ゲーム・leaderboard APIを定義し、`GET /openapi.yaml`は契約を配信する既存のtooling endpointとして残しています。この契約から通信境界のRust crateとTypeScript型を生成しますが、DB処理やゲームロジックなどのAPI実装本体は生成しません。
 
 ## ファイル構成
 
@@ -13,6 +13,7 @@ openapi/
 ├── examples/
 │   ├── auth/
 │   ├── runs/
+│   ├── leaderboard/
 │   ├── problems/
 │   ├── queries/
 │   └── answers/
@@ -59,6 +60,7 @@ Rustの`rust-axum` Generator 7.24.0はOpenAPI 3.1の`type: "null"`を標準で�
 | `logoutDemo` | bodyなし | `204`: bodyなし |
 | `startOrResumeRun` | bodyなし | `200`: `new_run`, `resumed_run`; `401`: `unauthorized` |
 | `getCurrentRun` | なし | `200`: `current_run`; `401`: `unauthorized`; `404`: `run_not_found` |
+| `getRoomLeaderboard` | なし | `200`: `ranked`, `unauthenticated`, `empty` |
 | `getProblem` | なし | `200`: `available_problem`; `401`: `unauthorized`; `409`: `problem_locked` |
 | `submitQuery` | `serial_operations`, `invalid_source` | `200`: `incorrect_query`, `correct_query`; `401`: `unauthorized`; `409`: `problem_locked`, `problem_already_cleared`; `422`: `validation_error` |
 | `submitAnswer` | `submitted_answer`, `too_long_for_example_problem` | `200`: `incorrect_answer`, `correct_answer_unlocks_problem`, `correct_answer_clears_run`; `401`: `unauthorized`; `409`: `problem_locked` |
