@@ -51,6 +51,9 @@ pub enum RepositoryError {
     #[error("query count is outside the supported range")]
     InvalidQueryCount,
 
+    #[error("leaderboard rank is outside the supported range")]
+    InvalidLeaderboardRank,
+
     #[error("answer is empty after normalization")]
     EmptyAnswer,
 
@@ -175,6 +178,47 @@ pub struct RunRecord {
     pub status: String,
     pub started_at: DateTime<Utc>,
     pub cleared_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LeaderboardRecord {
+    pub rank: u32,
+    pub user_id: Uuid,
+    pub display_name: String,
+    pub elapsed_ms: u64,
+    pub query_count: u64,
+    pub cleared_at: DateTime<Utc>,
+}
+
+#[derive(FromRow)]
+struct LeaderboardRow {
+    rank: i64,
+    user_id: Uuid,
+    display_name: String,
+    elapsed_ms: i64,
+    query_count: i64,
+    cleared_at: DateTime<Utc>,
+}
+
+impl TryFrom<LeaderboardRow> for LeaderboardRecord {
+    type Error = RepositoryError;
+
+    fn try_from(row: LeaderboardRow) -> Result<Self, Self::Error> {
+        let rank = u32::try_from(row.rank).map_err(|_| RepositoryError::InvalidLeaderboardRank)?;
+        let elapsed_ms =
+            u64::try_from(row.elapsed_ms).map_err(|_| RepositoryError::InvalidElapsed)?;
+        let query_count =
+            u64::try_from(row.query_count).map_err(|_| RepositoryError::InvalidQueryCount)?;
+
+        Ok(Self {
+            rank,
+            user_id: row.user_id,
+            display_name: row.display_name,
+            elapsed_ms,
+            query_count,
+            cleared_at: row.cleared_at,
+        })
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -383,6 +427,13 @@ pub trait AuthRepository: Send + Sync {
         _room_id: Uuid,
     ) -> Result<Option<RunRecord>, RepositoryError> {
         unimplemented!("find_cleared_run is not implemented for this repository")
+    }
+
+    async fn find_leaderboard_by_room_id(
+        &self,
+        _room_id: Uuid,
+    ) -> Result<Vec<LeaderboardRecord>, RepositoryError> {
+        unimplemented!("find_leaderboard_by_room_id is not implemented for this repository")
     }
 
     async fn find_problems_by_room_id(
@@ -1046,6 +1097,126 @@ impl AuthRepository for SqlxUserRepository {
         .fetch_optional(&self.pool)
         .await
         .map_err(RepositoryError::Database)
+    }
+
+    async fn find_leaderboard_by_room_id(
+        &self,
+        room_id: Uuid,
+    ) -> Result<Vec<LeaderboardRecord>, RepositoryError> {
+        let rows = sqlx::query_as::<_, LeaderboardRow>(
+            r#"
+            WITH run_records AS (
+                SELECT
+                    runs.run_id,
+                    runs.user_id,
+                    users.display_name,
+                    CAST(
+                        TIMESTAMPDIFF(
+                            MICROSECOND,
+                            runs.started_at,
+                            runs.cleared_at
+                        ) DIV 1000
+                        AS SIGNED
+                    ) AS elapsed_ms,
+                    CAST(
+                        COALESCE(
+                            SUM(
+                                CASE
+                                    WHEN problems.submission_type = 'operation_sequence'
+                                    THEN problem_progress.answer_attempt_count
+                                    ELSE 0
+                                END
+                            ),
+                            0
+                        )
+                        AS SIGNED
+                    ) AS query_count,
+                    runs.cleared_at
+                FROM runs
+                INNER JOIN users
+                    ON users.user_id = runs.user_id
+                LEFT JOIN problem_progress
+                    ON problem_progress.run_id = runs.run_id
+                LEFT JOIN problems
+                    ON problems.problem_id = problem_progress.problem_id
+                   AND problems.room_id = runs.room_id
+                WHERE runs.room_id = ?
+                  AND runs.status = 'cleared'
+                GROUP BY
+                    runs.run_id,
+                    runs.user_id,
+                    users.display_name,
+                    runs.started_at,
+                    runs.cleared_at
+            ),
+            user_best_candidates AS (
+                SELECT
+                    run_id,
+                    user_id,
+                    display_name,
+                    elapsed_ms,
+                    query_count,
+                    cleared_at,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY user_id
+                        ORDER BY
+                            elapsed_ms,
+                            query_count,
+                            cleared_at,
+                            run_id
+                    ) AS user_position
+                FROM run_records
+            ),
+            best_runs AS (
+                SELECT
+                    run_id,
+                    user_id,
+                    display_name,
+                    elapsed_ms,
+                    query_count,
+                    cleared_at
+                FROM user_best_candidates
+                WHERE user_position = 1
+            ),
+            ranked_best_runs AS (
+                SELECT
+                    user_id,
+                    display_name,
+                    elapsed_ms,
+                    query_count,
+                    cleared_at,
+                    CAST(
+                        RANK() OVER (
+                            ORDER BY
+                                elapsed_ms,
+                                query_count,
+                                cleared_at
+                        )
+                        AS SIGNED
+                    ) AS leaderboard_rank
+                FROM best_runs
+            )
+            SELECT
+                leaderboard_rank AS `rank`,
+                user_id,
+                display_name,
+                elapsed_ms,
+                query_count,
+                cleared_at
+            FROM ranked_best_runs
+            ORDER BY
+                elapsed_ms,
+                query_count,
+                cleared_at,
+                user_id
+            "#,
+        )
+        .bind(room_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        rows.into_iter().map(LeaderboardRecord::try_from).collect()
     }
 
     async fn find_problems_by_room_id(
