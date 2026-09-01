@@ -16,8 +16,9 @@ use server::{
     config::AuthMode,
     problem::{Asset, AssetUrlResolveError, AssetUrlResolver, InputSchema},
     repository::{
-        AuthRepository, AuthUserRecord, ProblemDetailRecord, QuerySubmission,
-        QuerySubmissionResult, RepositoryError, RoomRecord, RunRecord,
+        AnswerRunStatus, AnswerSubmission, AnswerSubmissionResult, AuthProvider, AuthRepository,
+        AuthUserRecord, HintRecord, ProblemDetailRecord, QuerySubmission, QuerySubmissionResult,
+        RepositoryError, RoomRecord, RunRecord,
     },
 };
 use sqlx::{
@@ -36,6 +37,7 @@ pub const MOCK_CLEARED_PROBLEM_ID: &str = "22222222-2222-4222-8222-222222222221"
 pub const MOCK_LOCKED_PROBLEM_ID: &str = "22222222-2222-4222-8222-222222222222";
 pub const MOCK_CLEARED_DETAIL_PROBLEM_ID: &str = "22222222-2222-4222-8222-222222222223";
 pub const MOCK_DATABASE_ERROR_PROBLEM_ID: &str = "22222222-2222-4222-8222-222222222224";
+pub const MOCK_STRING_PROBLEM_ID: &str = "22222222-2222-4222-8222-222222222225";
 
 pub fn problem_detail_record(id: Uuid, status: &str) -> ProblemDetailRecord {
     ProblemDetailRecord {
@@ -129,12 +131,13 @@ impl AuthRepository for StubAuthRepository {
         Ok(Some(AuthUserRecord {
             user_id: Uuid::from_str(MOCK_SESSION_ID).unwrap(),
             display_name: "test-user".to_owned(),
+            auth_provider: AuthProvider::Demo,
         }))
     }
 
     async fn find_user_by_provider_subject(
         &self,
-        _auth_provider: &str,
+        _auth_provider: AuthProvider,
         _provider_subject: &str,
     ) -> Result<Option<AuthUserRecord>, RepositoryError> {
         Ok(None)
@@ -142,22 +145,28 @@ impl AuthRepository for StubAuthRepository {
 
     async fn get_or_create_user(
         &self,
-        _auth_provider: &str,
+        auth_provider: AuthProvider,
         _provider_subject: &str,
         display_name: &str,
     ) -> Result<AuthUserRecord, RepositoryError> {
         Ok(AuthUserRecord {
             user_id: Uuid::new_v4(),
             display_name: display_name.to_owned(),
+            auth_provider,
         })
     }
 
-    async fn create_demo_session(
+    async fn get_or_create_demo_user_and_session(
         &self,
         _session_id: Uuid,
-        _user_id: Uuid,
-    ) -> Result<(), RepositoryError> {
-        Ok(())
+        _provider_subject: &str,
+        display_name: &str,
+    ) -> Result<AuthUserRecord, RepositoryError> {
+        Ok(AuthUserRecord {
+            user_id: Uuid::new_v4(),
+            display_name: display_name.to_owned(),
+            auth_provider: AuthProvider::Demo,
+        })
     }
 
     async fn delete_demo_session(&self, _session_id: Uuid) -> Result<(), RepositoryError> {
@@ -279,6 +288,53 @@ impl AuthRepository for StubAuthRepository {
             Ok(None)
         }
     }
+
+    async fn find_hint_for_run(
+        &self,
+        run_id: Uuid,
+        room_id: Uuid,
+        problem_id: Uuid,
+        level: i32,
+    ) -> Result<Option<HintRecord>, RepositoryError> {
+        let active_run_id = Uuid::from_str(MOCK_RESUME_ROOM_ID).unwrap();
+
+        if run_id != active_run_id || room_id != active_run_id {
+            return Ok(None);
+        }
+
+        let available_id = Uuid::from_str(MOCK_CLEARED_PROBLEM_ID).unwrap();
+        let locked_id = Uuid::from_str(MOCK_LOCKED_PROBLEM_ID).unwrap();
+        let cleared_id = Uuid::from_str(MOCK_CLEARED_DETAIL_PROBLEM_ID).unwrap();
+        let database_error_id = Uuid::from_str(MOCK_DATABASE_ERROR_PROBLEM_ID).unwrap();
+
+        if problem_id == database_error_id {
+            return Err(RepositoryError::Database(sqlx::Error::Protocol(
+                "simulated private database failure".to_owned(),
+            )));
+        }
+
+        if problem_id == locked_id {
+            return Err(RepositoryError::ProblemLocked);
+        }
+
+        if problem_id == available_id || problem_id == cleared_id {
+            if level == 1 {
+                Ok(Some(HintRecord {
+                    level: 1,
+                    body_markdown: "最初の操作に注目してください".to_owned(),
+                }))
+            } else if level == 2 {
+                Ok(Some(HintRecord {
+                    level: 2,
+                    body_markdown: "2番目のヒントです".to_owned(),
+                }))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    }
     async fn record_query_judgement(
         &self,
         submission: QuerySubmission,
@@ -295,6 +351,65 @@ impl AuthRepository for StubAuthRepository {
             })
         }
     }
+    async fn record_answer_judgement(
+        &self,
+        submission: AnswerSubmission,
+    ) -> Result<AnswerSubmissionResult, RepositoryError> {
+        let active_run_id = Uuid::from_str(MOCK_RESUME_ROOM_ID).unwrap();
+        let string_problem_id = Uuid::from_str(MOCK_STRING_PROBLEM_ID).unwrap();
+        let operation_problem_id = Uuid::from_str(MOCK_CLEARED_PROBLEM_ID).unwrap();
+        let locked_problem_id = Uuid::from_str(MOCK_LOCKED_PROBLEM_ID).unwrap();
+        let cleared_problem_id = Uuid::from_str(MOCK_CLEARED_DETAIL_PROBLEM_ID).unwrap();
+        let database_error_problem_id = Uuid::from_str(MOCK_DATABASE_ERROR_PROBLEM_ID).unwrap();
+
+        if submission.run_id != active_run_id {
+            return Err(RepositoryError::RunNotFound);
+        }
+
+        if submission.problem_id == locked_problem_id {
+            return Err(RepositoryError::ProblemLocked);
+        }
+
+        if submission.problem_id == cleared_problem_id {
+            return Err(RepositoryError::ProblemAlreadyCleared);
+        }
+
+        if submission.problem_id == database_error_problem_id {
+            return Err(RepositoryError::Database(sqlx::Error::Protocol(
+                "simulated private database failure".to_owned(),
+            )));
+        }
+
+        if submission.problem_id == operation_problem_id {
+            return Err(RepositoryError::WrongAnswerSubmissionType);
+        }
+
+        if submission.problem_id != string_problem_id {
+            return Err(RepositoryError::ProblemNotFound);
+        }
+
+        if submission.answer.chars().count() > 50 {
+            return Err(RepositoryError::AnswerLengthExceeded);
+        }
+
+        if submission.answer.trim().is_empty() {
+            return Err(RepositoryError::EmptyAnswer);
+        }
+
+        if submission.answer == "19520715" {
+            Ok(AnswerSubmissionResult::Correct {
+                unlocked_problem_ids: vec![locked_problem_id],
+                run_status: AnswerRunStatus::Active,
+                cleared_problem_count: 1,
+                total_problem_count: 4,
+                elapsed_ms: 48_321,
+            })
+        } else {
+            Ok(AnswerSubmissionResult::Incorrect {
+                answer_attempt_count: 2,
+            })
+        }
+    }
 }
 
 #[derive(Default)]
@@ -305,6 +420,7 @@ pub struct DemoSessionCalls {
 
 pub struct RecordingAuthRepository {
     pub user_id: Uuid,
+    pub get_or_create_user_calls: Mutex<Vec<(AuthProvider, String, String)>>,
     pub demo_session_calls: Mutex<DemoSessionCalls>,
 }
 
@@ -313,6 +429,7 @@ impl RecordingAuthRepository {
         Self {
             user_id,
             demo_session_calls: Mutex::new(DemoSessionCalls::default()),
+            get_or_create_user_calls: Mutex::new(Vec::new()),
         }
     }
 }
@@ -328,7 +445,7 @@ impl AuthRepository for RecordingAuthRepository {
 
     async fn find_user_by_provider_subject(
         &self,
-        _auth_provider: &str,
+        _auth_provider: AuthProvider,
         _provider_subject: &str,
     ) -> Result<Option<AuthUserRecord>, RepositoryError> {
         Ok(None)
@@ -336,28 +453,52 @@ impl AuthRepository for RecordingAuthRepository {
 
     async fn get_or_create_user(
         &self,
-        _auth_provider: &str,
-        _provider_subject: &str,
+        auth_provider: AuthProvider,
+        provider_subject: &str,
         display_name: &str,
     ) -> Result<AuthUserRecord, RepositoryError> {
+        self.get_or_create_user_calls
+            .lock()
+            .expect("get-or-create user call log should not be poisoned")
+            .push((
+                auth_provider,
+                provider_subject.to_owned(),
+                display_name.to_owned(),
+            ));
+
         Ok(AuthUserRecord {
             user_id: self.user_id,
             display_name: display_name.to_owned(),
+            auth_provider,
         })
     }
 
-    async fn create_demo_session(
+    async fn get_or_create_demo_user_and_session(
         &self,
         session_id: Uuid,
-        user_id: Uuid,
-    ) -> Result<(), RepositoryError> {
+        provider_subject: &str,
+        display_name: &str,
+    ) -> Result<AuthUserRecord, RepositoryError> {
+        self.get_or_create_user_calls
+            .lock()
+            .expect("get-or-create user call log should not be poisoned")
+            .push((
+                AuthProvider::Demo,
+                provider_subject.to_owned(),
+                display_name.to_owned(),
+            ));
+
         self.demo_session_calls
             .lock()
             .expect("demo session call log should not be poisoned")
             .created
-            .push((session_id, user_id));
+            .push((session_id, self.user_id));
 
-        Ok(())
+        Ok(AuthUserRecord {
+            user_id: self.user_id,
+            display_name: display_name.to_owned(),
+            auth_provider: AuthProvider::Demo,
+        })
     }
 
     async fn delete_demo_session(&self, session_id: Uuid) -> Result<(), RepositoryError> {

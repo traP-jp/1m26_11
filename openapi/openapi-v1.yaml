@@ -3,7 +3,7 @@ info:
   title: 1m26_11 API
   version: 1.0.0
   description: |
-    フロントエンドとバックエンドが共有するP0 API契約です。
+    フロントエンドとバックエンドが共有するAPI契約です。
     room_idとproblem_idに記載したUUIDは契約例であり、開始導線の実IDではありません。
 paths:
   /openapi.yaml:
@@ -30,6 +30,24 @@ paths:
           $ref: "#/components/responses/MeSuccess"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /api/me/progress:
+    get:
+      summary: ログイン中のユーザーの全体進捗を取得する
+      description: |
+        公開room全体のclear数、総数、genre別内訳を返します。
+        同じroomを複数回clearしていても、clear数には1回だけ加算します。
+        非公開roomは全体とgenre別のどちらにも含めません。
+        by_genreはgenreの昇順で返します。
+      operationId: getMeProgress
+      tags:
+        - progress
+      responses:
+        "200":
+          $ref: "#/components/responses/MeProgressSuccess"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
   /api/auth/guest:
     post:
       summary: デモ環境で名前を登録する
@@ -47,13 +65,13 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "422":
-          $ref: "#/components/responses/UnprocessableEntity"
+          $ref: "#/components/responses/GuestLoginValidationError"
         "500":
           $ref: "#/components/responses/InternalServerError"
   /api/auth/logout:
     post:
       summary: デモ環境からログアウトする
-      description: AUTH_MODE=demoのときだけ使用し、デモsessionとCookieを無効化します。
+      description: AUTH_MODE=demoのときだけ使用し、デモsessionとCookieを無効化します。NeoShowcase modeでは404を返します。
       operationId: logoutDemo
       tags:
         - auth
@@ -62,9 +80,11 @@ paths:
           description: ログアウト完了。response bodyはありません。
           headers:
             Set-Cookie:
-              description: demo session Cookieを削除するためのheader。Cookie名と具体的な属性は未確定です。
+              description: demo_session Cookieを削除します。Path=/、Max-Age=0、過去のExpiresを指定し、デプロイ環境ではSecureを付けます。
               schema:
                 type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalServerError"
   /api/rooms/{room_id}/runs:
@@ -117,6 +137,30 @@ paths:
           $ref: "#/components/responses/RunNotFound"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /api/rooms/{room_id}/leaderboard:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+    get:
+      summary: 部屋別leaderboardを取得する
+      description: |
+        roomごとに、clear済みrunからユーザーごとのbest recordを1件ずつ返します。
+        同一ユーザーのbest recordはelapsed_ms、query_count、cleared_atの昇順で選びます。
+        leaderboardもelapsed_ms、query_count、cleared_atの昇順で並べます。
+        3項目がすべて同じrecordには同じrankを付け、次のrankを飛ばします（1, 1, 3）。
+        query_countにはoperation_sequence型問題の試行回数だけを含めます。
+        未認証、または現在のユーザーにclear recordがない場合はmeをnullにします。
+      operationId: getRoomLeaderboard
+      tags:
+        - leaderboard
+      responses:
+        "200":
+          $ref: "#/components/responses/LeaderboardSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
   /api/rooms/{room_id}/problems/{problem_id}:
     parameters:
       - $ref: "#/components/parameters/RoomId"
@@ -130,6 +174,30 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/ProblemSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ProblemLocked"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /api/rooms/{room_id}/problems/{problem_id}/hints/{level}:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+      - $ref: "#/components/parameters/ProblemId"
+      - $ref: "#/components/parameters/HintLevel"
+    get:
+      summary: 問題のヒントを取得する
+      description: 認証済みユーザーのcurrent runで、指定されたlevelのヒントを取得します。
+      operationId: getProblemHint
+      tags:
+        - problems
+      responses:
+        "200":
+          $ref: "#/components/responses/ProblemHintSuccess"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -189,7 +257,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          $ref: "#/components/responses/ProblemLocked"
+          $ref: "#/components/responses/AnswerConflict"
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
         "500":
@@ -216,6 +284,15 @@ components:
         type: string
         format: uuid
       example: 22222222-2222-4222-8222-222222222221
+    HintLevel:
+      name: level
+      in: path
+      required: true
+      description: ヒントの段階（1以上の整数）
+      schema:
+        type: integer
+        minimum: 1
+      example: 1
   requestBodies:
     GuestLogin:
       required: true
@@ -227,6 +304,13 @@ components:
             guest_login:
               summary: デモ用の名前登録
               externalValue: ./examples/auth/guest-request.json
+            guest_login_empty:
+              summary: trim後に空となる表示名
+              externalValue: ./examples/auth/guest-request-empty.json
+            guest_login_too_long:
+              summary: trim後に33 Unicode code pointとなる表示名
+              externalValue: ./examples/auth/guest-request-too-long.json
+
     SubmitQuery:
       required: true
       content:
@@ -273,11 +357,24 @@ components:
             demo_unauthenticated:
               summary: デモで未ログイン
               externalValue: ./examples/auth/me-demo-unauthenticated.json
+    MeProgressSuccess:
+      description: ログイン中のユーザーの公開room全体に対する進捗
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/MeProgressResponse"
+          examples:
+            summary:
+              summary: 複数genreのroomをclearしている場合
+              externalValue: ./examples/progress/response-summary.json
+            empty:
+              summary: 公開roomが存在しない場合
+              externalValue: ./examples/progress/response-empty.json
     GuestLoginSuccess:
       description: デモ用ユーザーを取得または作成し、session Cookieを発行した状態
       headers:
         Set-Cookie:
-          description: HttpOnlyなdemo session Cookie。Cookie名と具体的な属性は未確定です。
+          description: demo_session Cookie。Path=/、HttpOnly、SameSite=Lax、Domainなし、有効期限なしのsession Cookieです。デプロイ環境ではSecureを付けます。
           schema:
             type: string
       content:
@@ -288,6 +385,19 @@ components:
             guest_authenticated:
               summary: デモ用ログイン成功
               externalValue: ./examples/auth/guest-response.json
+    GuestLoginValidationError:
+      description: trim後の表示名が空、または32 Unicode code pointを超えています。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            display_name_required:
+              summary: trim後の表示名が空
+              externalValue: ./examples/auth/error-display-name-required.json
+            display_name_too_long:
+              summary: trim後の表示名が32文字を超過
+              externalValue: ./examples/auth/error-display-name-too-long.json
     RunStartOrResumeSuccess:
       description: activeな挑戦状態
       content:
@@ -311,6 +421,22 @@ components:
             current_run:
               summary: 再読込後に取得したactive run
               externalValue: ./examples/runs/active-response.json
+    LeaderboardSuccess:
+      description: 部屋別leaderboard
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/LeaderboardResponse"
+          examples:
+            ranked:
+              summary: 同順位を含むleaderboardと現在のユーザー
+              externalValue: ./examples/leaderboard/response-ranked.json
+            unauthenticated:
+              summary: 未認証時のleaderboard
+              externalValue: ./examples/leaderboard/response-unauthenticated.json
+            empty:
+              summary: clear recordがないleaderboard
+              externalValue: ./examples/leaderboard/response-empty.json
     ProblemSuccess:
       description: 公開可能な問題データ
       content:
@@ -321,6 +447,16 @@ components:
             available_problem:
               summary: 挑戦可能な小なぞ
               externalValue: ./examples/problems/available-response.json
+    ProblemHintSuccess:
+      description: ヒント本文
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProblemHintResponse"
+          examples:
+            hint_level_1:
+              summary: level 1のヒント
+              externalValue: ./examples/problems/hint-level1-response.json
     QuerySuccess:
       description: 操作列の判定結果。不正解もこの200 responseを使用します。
       content:
@@ -405,6 +541,19 @@ components:
             problem_already_cleared:
               summary: cleared済み問題へ送信した場合
               externalValue: ./examples/problems/error-problem-already-cleared.json
+    AnswerConflict:
+      description: 文字列回答を送信できない問題状態です。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            problem_locked:
+              summary: lockedな問題へ送信した場合
+              externalValue: ./examples/problems/error-problem-locked.json
+            problem_already_cleared:
+              summary: cleared済み問題へ送信した場合
+              externalValue: ./examples/problems/error-problem-already-cleared.json
     QueryValidationError:
       description: 操作列またはsourceが問題ごとの制約に違反しています。
       content:
@@ -446,6 +595,43 @@ components:
         - $ref: "#/components/schemas/MeNeoshowcaseUnauthenticated"
         - $ref: "#/components/schemas/MeDemoAuthenticated"
         - $ref: "#/components/schemas/MeDemoUnauthenticated"
+    MeProgressResponse:
+      type: object
+      required:
+        - cleared_room_count
+        - total_room_count
+        - by_genre
+      properties:
+        cleared_room_count:
+          type: integer
+          format: int32
+          minimum: 0
+        total_room_count:
+          type: integer
+          format: int32
+          minimum: 0
+        by_genre:
+          type: array
+          items:
+            $ref: "#/components/schemas/GenreProgress"
+
+    GenreProgress:
+      type: object
+      required:
+        - genre
+        - cleared_room_count
+        - total_room_count
+      properties:
+        genre:
+          type: string
+        cleared_room_count:
+          type: integer
+          format: int32
+          minimum: 0
+        total_room_count:
+          type: integer
+          format: int32
+          minimum: 0
     MeNeoshowcaseAuthenticated:
       type: object
       required:
@@ -537,6 +723,7 @@ components:
       properties:
         display_name:
           type: string
+          description: 前後のUnicode空白をserverで除去し、除去後1〜32 Unicode code pointを許可します。
     GuestLoginResponse:
       type: object
       required:
@@ -571,6 +758,71 @@ components:
           items:
             type: string
             format: uuid
+
+    LeaderboardResponse:
+      type: object
+      required:
+        - room_id
+        - entries
+        - me
+      properties:
+        room_id:
+          type: string
+          format: uuid
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderboardEntry"
+        me:
+          oneOf:
+            - $ref: "#/components/schemas/LeaderboardMe"
+            - type: "null"
+
+    LeaderboardEntry:
+      type: object
+      required:
+        - rank
+        - user
+        - elapsed_ms
+        - query_count
+        - cleared_at
+      properties:
+        rank:
+          type: integer
+          format: int32
+          minimum: 1
+        user:
+          $ref: "#/components/schemas/User"
+        elapsed_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        query_count:
+          type: integer
+          format: int64
+          minimum: 0
+        cleared_at:
+          type: string
+          format: date-time
+    LeaderboardMe:
+      type: object
+      required:
+        - rank
+        - elapsed_ms
+        - query_count
+      properties:
+        rank:
+          type: integer
+          format: int32
+          minimum: 1
+        elapsed_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        query_count:
+          type: integer
+          format: int64
+          minimum: 0
     ProblemResponse:
       type: object
       required:
@@ -608,6 +860,16 @@ components:
           $ref: "#/components/schemas/ProblemInputSchema"
         hint_count:
           type: integer
+    ProblemHintResponse:
+      type: object
+      required:
+        - level
+        - body_markdown
+      properties:
+        level:
+          type: integer
+        body_markdown:
+          type: string
     ProblemType:
       type: string
       enum:
@@ -820,6 +1082,8 @@ components:
           $ref: "#/components/schemas/Progress"
         elapsed_ms:
           type: integer
+          format: int64
+          minimum: 0
     Progress:
       type: object
       required:

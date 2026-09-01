@@ -1,7 +1,8 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use axum::{
     Router,
+    extract::MatchedPath,
     routing::{get, post},
 };
 use config::AuthMode;
@@ -9,6 +10,8 @@ use problem::{AssetUrlResolver, UnconfiguredAssetUrlResolver};
 use repository::AuthRepository;
 use sqlx::MySqlPool;
 use tower_http::trace::TraceLayer;
+use tracing::Span;
+use uuid::Uuid;
 
 #[cfg_attr(
     not(test),
@@ -37,6 +40,7 @@ pub const OPENAPI_DOCUMENT: &str = include_str!(concat!(env!("OUT_DIR"), "/opena
 #[derive(Clone)]
 pub struct AppState {
     pub(crate) auth_mode: AuthMode,
+    pub(crate) demo_cookie_secure: bool,
     pub(crate) auth_repository: Arc<dyn AuthRepository>,
     pub(crate) asset_url_resolver: Arc<dyn AssetUrlResolver>,
 }
@@ -46,9 +50,16 @@ impl AppState {
     pub fn new(auth_mode: AuthMode, auth_repository: Arc<dyn AuthRepository>) -> Self {
         Self {
             auth_mode,
+            demo_cookie_secure: true,
             auth_repository,
             asset_url_resolver: Arc::new(UnconfiguredAssetUrlResolver),
         }
+    }
+
+    #[must_use]
+    pub fn with_demo_cookie_secure(mut self, secure: bool) -> Self {
+        self.demo_cookie_secure = secure;
+        self
     }
 
     #[must_use]
@@ -76,6 +87,10 @@ pub fn app(state: AppState) -> Router {
             get(handler::get_me).fallback(handler::method_not_allowed),
         )
         .route(
+            "/api/me/progress",
+            get(handler::get_me_progress).fallback(handler::method_not_allowed),
+        )
+        .route(
             "/api/auth/guest",
             post(handler::login_guest).fallback(handler::method_not_allowed),
         )
@@ -92,15 +107,54 @@ pub fn app(state: AppState) -> Router {
             get(handler::get_problem).fallback(handler::method_not_allowed),
         )
         .route(
+            "/api/rooms/{room_id}/problems/{problem_id}/hints/{level}",
+            get(handler::get_problem_hint).fallback(handler::method_not_allowed),
+        )
+        .route(
             "/api/rooms/{room_id}/runs/current",
             get(handler::get_current_run).fallback(handler::method_not_allowed),
+        )
+        .route(
+            "/api/rooms/{room_id}/leaderboard",
+            get(handler::get_room_leaderboard).fallback(handler::method_not_allowed),
         )
         .route(
             "/api/rooms/{room_id}/problems/{problem_id}/queries",
             post(handler::submit_query).fallback(handler::method_not_allowed),
         )
+        .route(
+            "/api/rooms/{room_id}/problems/{problem_id}/answers",
+            post(handler::submit_answer).fallback(handler::method_not_allowed),
+        )
         .fallback(handler::not_found)
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|request: &axum::http::Request<_>| {
+                    let request_id = Uuid::new_v4();
+                    let matched_route = request
+                        .extensions()
+                        .get::<MatchedPath>()
+                        .map(MatchedPath::as_str)
+                        .unwrap_or("<unmatched>");
+
+                    tracing::info_span!(
+                        "http_request",
+                        request_id = %request_id,
+                        method = %request.method(),
+                        matched_route = %matched_route,
+                    )
+                })
+                .on_response(
+                    |response: &axum::http::Response<_>, duration: Duration, span: &Span| {
+                        tracing::info!(
+                            parent: span,
+                            status = response.status().as_u16(),
+                            duration_ms = duration.as_secs_f64() * 1_000.0,
+                            "request completed"
+                        );
+                    },
+                ),
+        )
         .with_state(state)
 }
 

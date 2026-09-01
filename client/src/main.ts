@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import './assets/main.css'
 import { isMswEnabled } from './mocks/config'
+import { router } from './router'
 
 async function bootstrap(): Promise<void> {
   if (
@@ -15,7 +16,7 @@ async function bootstrap(): Promise<void> {
     await startMockWorker()
   }
 
-  createApp(App).mount('#app')
+  createApp(App).use(router).mount('#app')
 }
 
 void bootstrap()

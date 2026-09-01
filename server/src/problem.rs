@@ -1,3 +1,4 @@
+mod answer;
 mod asset_url;
 mod loader;
 mod model;
@@ -10,11 +11,12 @@ use std::{io, path::PathBuf};
 
 use thiserror::Error;
 
+pub(crate) use answer::{AnswerJudgeError, judge_answer};
 pub(crate) use asset_url::UnconfiguredAssetUrlResolver;
 pub use asset_url::{AssetUrlResolveError, AssetUrlResolver};
 pub use loader::load_problem_data;
 pub use model::{
-    Asset, InputSchema, JudgeConfig, Operation, Problem, ProblemCatalog, ProblemType, Room,
+    Asset, Hint, InputSchema, JudgeConfig, Operation, Problem, ProblemCatalog, ProblemType, Room,
     SubmissionType,
 };
 pub use public::{ProblemProjectionError, build_problem_response};

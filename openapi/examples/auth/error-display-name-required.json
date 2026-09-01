@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "DISPLAY_NAME_REQUIRED",
+    "message": "表示名を入力してください",
+    "details": {}
+  }
+}
