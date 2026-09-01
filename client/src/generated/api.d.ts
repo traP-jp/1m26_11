@@ -69,7 +69,7 @@ export interface paths {
     put?: never
     /**
      * デモ環境からログアウトする
-     * @description AUTH_MODE=demoのときだけ使用し、デモsessionとCookieを無効化します。
+     * @description AUTH_MODE=demoのときだけ使用し、デモsessionとCookieを無効化します。NeoShowcase modeでは404を返します。
      */
     post: operations['logoutDemo']
     delete?: never
@@ -311,6 +311,7 @@ export interface components {
       logout_url: null
     }
     GuestLoginRequest: {
+      /** @description 前後のUnicode空白をserverで除去し、除去後1〜32 Unicode code pointを許可します。 */
       display_name: string
     }
     GuestLoginResponse: {
@@ -458,12 +459,21 @@ export interface components {
     /** @description デモ用ユーザーを取得または作成し、session Cookieを発行した状態 */
     GuestLoginSuccess: {
       headers: {
-        /** @description HttpOnlyなdemo session Cookie。Cookie名と具体的な属性は未確定です。 */
+        /** @description demo_session Cookie。Path=/、HttpOnly、SameSite=Lax、Domainなし、有効期限なしのsession Cookieです。デプロイ環境ではSecureを付けます。 */
         'Set-Cookie'?: string
         [name: string]: unknown
       }
       content: {
         'application/json': components['schemas']['GuestLoginResponse']
+      }
+    }
+    /** @description trim後の表示名が空、または32 Unicode code pointを超えています。 */
+    GuestLoginValidationError: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
       }
     }
     /** @description activeな挑戦状態 */
@@ -695,7 +705,7 @@ export interface operations {
       200: components['responses']['GuestLoginSuccess']
       400: components['responses']['BadRequest']
       404: components['responses']['NotFound']
-      422: components['responses']['UnprocessableEntity']
+      422: components['responses']['GuestLoginValidationError']
       500: components['responses']['InternalServerError']
     }
   }
@@ -711,12 +721,13 @@ export interface operations {
       /** @description ログアウト完了。response bodyはありません。 */
       204: {
         headers: {
-          /** @description demo session Cookieを削除するためのheader。Cookie名と具体的な属性は未確定です。 */
+          /** @description demo_session Cookieを削除します。Path=/、Max-Age=0、過去のExpiresを指定し、デプロイ環境ではSecureを付けます。 */
           'Set-Cookie'?: string
           [name: string]: unknown
         }
         content?: never
       }
+      404: components['responses']['NotFound']
       500: components['responses']['InternalServerError']
     }
   }
