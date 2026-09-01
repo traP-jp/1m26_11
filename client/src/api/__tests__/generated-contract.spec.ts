@@ -1,10 +1,25 @@
 import { describe, expect, it } from 'vitest'
+import leaderboardEmptyFixture from '../../../../openapi/examples/leaderboard/response-empty.json'
+import leaderboardRankedFixture from '../../../../openapi/examples/leaderboard/response-ranked.json'
+import leaderboardUnauthenticatedFixture from '../../../../openapi/examples/leaderboard/response-unauthenticated.json'
 
 import type { components } from '@/generated/api'
 
 type ActiveRunResponse = components['schemas']['ActiveRunResponse']
 type CorrectQueryResponse = components['schemas']['CorrectQueryResponse']
 type IncorrectQueryResponse = components['schemas']['IncorrectQueryResponse']
+type LeaderboardResponse = components['schemas']['LeaderboardResponse']
+
+const leaderboardMeAcceptsNull: null extends LeaderboardResponse['me'] ? true : false = true
+
+type LeaderboardMeIsRequired =
+  Pick<LeaderboardResponse, 'me'> extends Required<Pick<LeaderboardResponse, 'me'>> ? true : false
+
+const leaderboardMeIsRequired: LeaderboardMeIsRequired = true
+
+const rankedLeaderboard: LeaderboardResponse = leaderboardRankedFixture
+const unauthenticatedLeaderboard: LeaderboardResponse = leaderboardUnauthenticatedFixture
+const emptyLeaderboard: LeaderboardResponse = leaderboardEmptyFixture
 
 const activeRunHasNoQueryCount: 'query_count' extends keyof ActiveRunResponse ? false : true = true
 
@@ -17,7 +32,7 @@ const incorrectQueryCountIsNumber: IncorrectQueryResponse['query_count'] extends
   ? true
   : false = true
 
-describe('generated API numeric contract', () => {
+describe('generated API contract', () => {
   it('keeps run and query counters aligned with the OpenAPI contract', () => {
     const activeRun: ActiveRunResponse = {
       status: 'active',
@@ -53,5 +68,21 @@ describe('generated API numeric contract', () => {
     expect(typeof activeRun.elapsed_ms).toBe('number')
     expect(typeof correctQuery.query_count).toBe('number')
     expect(typeof incorrectQuery.query_count).toBe('number')
+  })
+
+  it('keeps leaderboard fixtures aligned with the generated contract', () => {
+    expect(leaderboardMeAcceptsNull).toBe(true)
+    expect(leaderboardMeIsRequired).toBe(true)
+
+    expect(rankedLeaderboard.entries.map((entry) => entry.rank)).toEqual([1, 1, 3])
+    expect(rankedLeaderboard.me).toEqual({
+      rank: 3,
+      elapsed_ms: 80_000,
+      query_count: 18,
+    })
+
+    expect(unauthenticatedLeaderboard.me).toBeNull()
+    expect(emptyLeaderboard.entries).toEqual([])
+    expect(emptyLeaderboard.me).toBeNull()
   })
 })
