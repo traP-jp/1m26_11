@@ -10,7 +10,7 @@ const defaultProps = {
 }
 
 describe('ConditionBoxList', () => {
-  it('renders supplied items without creating replacement IDs', () => {
+  it('renders supplied items in order', () => {
     const wrapper = mount(ConditionBoxList, { props: defaultProps })
 
     expect(wrapper.findAll('li').map((item) => item.find('span').text())).toEqual([
