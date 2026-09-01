@@ -12,7 +12,8 @@ use server::{
     AppState, app,
     config::AuthMode,
     repository::{
-        AuthRepository, AuthUserRecord, RepositoryError, RoomBestRecordRecord, RoomSummaryRecord,
+        AuthProvider, AuthRepository, AuthUserRecord, RepositoryError, RoomBestRecordRecord,
+        RoomSummaryRecord,
     },
 };
 use uuid::Uuid;
@@ -72,13 +73,14 @@ async fn rooms_authenticated_cleared_matches_openapi_fixture() {
         ) -> Result<Option<AuthUserRecord>, RepositoryError> {
             Ok(Some(AuthUserRecord {
                 user_id: Uuid::parse_str("99999999-9999-4999-8999-999999999999").unwrap(),
+                auth_provider: AuthProvider::Demo,
                 display_name: "cleared-user".to_owned(),
             }))
         }
 
         async fn find_user_by_provider_subject(
             &self,
-            _auth_provider: &str,
+            _auth_provider: AuthProvider,
             _provider_subject: &str,
         ) -> Result<Option<AuthUserRecord>, RepositoryError> {
             Ok(None)
@@ -86,13 +88,14 @@ async fn rooms_authenticated_cleared_matches_openapi_fixture() {
 
         async fn get_or_create_user(
             &self,
-            _auth_provider: &str,
+            auth_provider: AuthProvider,
             _provider_subject: &str,
-            _display_name: &str,
+            display_name: &str,
         ) -> Result<AuthUserRecord, RepositoryError> {
             Ok(AuthUserRecord {
                 user_id: Uuid::parse_str("99999999-9999-4999-8999-999999999999").unwrap(),
-                display_name: "cleared-user".to_owned(),
+                auth_provider,
+                display_name: display_name.to_owned(),
             })
         }
 
@@ -155,7 +158,7 @@ async fn rooms_empty_matches_openapi_fixture() {
 
         async fn find_user_by_provider_subject(
             &self,
-            _auth_provider: &str,
+            _auth_provider: AuthProvider,
             _provider_subject: &str,
         ) -> Result<Option<AuthUserRecord>, RepositoryError> {
             Ok(None)
@@ -163,13 +166,14 @@ async fn rooms_empty_matches_openapi_fixture() {
 
         async fn get_or_create_user(
             &self,
-            _auth_provider: &str,
+            auth_provider: AuthProvider,
             _provider_subject: &str,
-            _display_name: &str,
+            display_name: &str,
         ) -> Result<AuthUserRecord, RepositoryError> {
             Ok(AuthUserRecord {
                 user_id: Uuid::new_v4(),
-                display_name: "test".to_owned(),
+                auth_provider,
+                display_name: display_name.to_owned(),
             })
         }
 
@@ -214,7 +218,7 @@ async fn rooms_database_error_returns_500_without_details() {
 
         async fn find_user_by_provider_subject(
             &self,
-            _auth_provider: &str,
+            _auth_provider: AuthProvider,
             _provider_subject: &str,
         ) -> Result<Option<AuthUserRecord>, RepositoryError> {
             Ok(None)
@@ -222,13 +226,14 @@ async fn rooms_database_error_returns_500_without_details() {
 
         async fn get_or_create_user(
             &self,
-            _auth_provider: &str,
+            auth_provider: AuthProvider,
             _provider_subject: &str,
-            _display_name: &str,
+            display_name: &str,
         ) -> Result<AuthUserRecord, RepositoryError> {
             Ok(AuthUserRecord {
                 user_id: Uuid::new_v4(),
-                display_name: "test".to_owned(),
+                auth_provider,
+                display_name: display_name.to_owned(),
             })
         }
 
