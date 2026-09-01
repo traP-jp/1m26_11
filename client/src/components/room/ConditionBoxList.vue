@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ConditionBoxItem } from './ConditionBoxList.types'
 
-defineProps<{
+const props = defineProps<{
   items: readonly ConditionBoxItem[]
   disabled: boolean
 }>()
@@ -11,6 +11,21 @@ const emit = defineEmits<{
   remove: [itemId: string]
   clear: []
 }>()
+
+function requestAdd(): void {
+  if (props.disabled) return
+  emit('add')
+}
+
+function requestClear(): void {
+  if (props.disabled || props.items.length === 0) return
+  emit('clear')
+}
+
+function requestRemove(itemId: string): void {
+  if (props.disabled) return
+  emit('remove', itemId)
+}
 </script>
 
 <template>
