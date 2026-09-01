@@ -2,7 +2,7 @@ use openapi_generated::{
     NullValue,
     models::{
         ActiveRunResponse, CorrectQueryResponse, IncorrectQueryResponse, LeaderboardResponse,
-        MeDemoUnauthenticated, Operation,
+        MeDemoUnauthenticated, MeProgressResponse, Operation,
     },
     types::Nullable,
 };
@@ -26,6 +26,16 @@ const LEADERBOARD_UNAUTHENTICATED: &str = include_str!(concat!(
 const LEADERBOARD_EMPTY: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../openapi/examples/leaderboard/response-empty.json"
+));
+
+const ME_PROGRESS_SUMMARY: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../openapi/examples/progress/response-summary.json"
+));
+
+const ME_PROGRESS_EMPTY: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../openapi/examples/progress/response-empty.json"
 ));
 
 #[test]
@@ -128,6 +138,82 @@ fn generated_leaderboard_responses_match_fixtures() {
     assert!(
         serde_json::from_value::<LeaderboardResponse>(missing_me).is_err(),
         "me must be required even though it accepts null"
+    );
+}
+
+#[test]
+fn generated_me_progress_responses_match_fixtures() {
+    for fixture in [ME_PROGRESS_SUMMARY, ME_PROGRESS_EMPTY] {
+        let expected: serde_json::Value =
+            serde_json::from_str(fixture).expect("progress fixture should be valid JSON");
+
+        let model: MeProgressResponse = serde_json::from_value(expected.clone())
+            .expect("progress fixture should match generated model");
+
+        assert_eq!(
+            serde_json::to_value(model).expect("generated progress model should serialize"),
+            expected
+        );
+    }
+
+    let summary: MeProgressResponse = serde_json::from_str(ME_PROGRESS_SUMMARY)
+        .expect("summary fixture should match generated model");
+
+    assert_eq!(summary.cleared_room_count, 5);
+    assert_eq!(summary.total_room_count, 20);
+
+    assert_eq!(
+        summary
+            .by_genre
+            .iter()
+            .map(|progress| progress.genre.as_str())
+            .collect::<Vec<_>>(),
+        vec!["OSINT", "Web"]
+    );
+
+    assert_eq!(
+        summary
+            .by_genre
+            .iter()
+            .map(|progress| progress.cleared_room_count)
+            .sum::<u32>(),
+        summary.cleared_room_count
+    );
+
+    assert_eq!(
+        summary
+            .by_genre
+            .iter()
+            .map(|progress| progress.total_room_count)
+            .sum::<u32>(),
+        summary.total_room_count
+    );
+
+    let empty: MeProgressResponse = serde_json::from_str(ME_PROGRESS_EMPTY)
+        .expect("empty fixture should match generated model");
+
+    assert_eq!(empty.cleared_room_count, 0);
+    assert_eq!(empty.total_room_count, 0);
+    assert!(empty.by_genre.is_empty());
+
+    let mut negative_total: serde_json::Value =
+        serde_json::from_str(ME_PROGRESS_SUMMARY).expect("summary fixture should be valid JSON");
+
+    negative_total["total_room_count"] = serde_json::json!(-1);
+
+    assert!(
+        serde_json::from_value::<MeProgressResponse>(negative_total).is_err(),
+        "negative total_room_count must not deserialize into the generated u32 field"
+    );
+
+    let mut negative_genre_count: serde_json::Value =
+        serde_json::from_str(ME_PROGRESS_SUMMARY).expect("summary fixture should be valid JSON");
+
+    negative_genre_count["by_genre"][0]["cleared_room_count"] = serde_json::json!(-1);
+
+    assert!(
+        serde_json::from_value::<MeProgressResponse>(negative_genre_count).is_err(),
+        "negative genre count must not deserialize into the generated u32 field"
     );
 }
 
