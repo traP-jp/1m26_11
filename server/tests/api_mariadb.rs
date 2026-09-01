@@ -31,6 +31,18 @@ const GAME_PROBLEM_IDS: [&str; 4] = [
     "6853a228-0462-4413-91f4-6b8ef672cefc",
     "9ca65619-6ad2-4e74-bf4a-4f146b238067",
 ];
+const PROGRESS_HTTP_TEST_SUBJECT_PREFIX: &str = "issue89-progress-http-";
+const PROGRESS_HTTP_TEST_ROOM_PREFIX: &str = "issue89-progress-http-room-";
+
+const PROGRESS_SUMMARY_RESPONSE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../openapi/examples/progress/response-summary.json"
+));
+
+const PROGRESS_EMPTY_RESPONSE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../openapi/examples/progress/response-empty.json"
+));
 
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
@@ -1332,6 +1344,201 @@ async fn mariadb_error_responses_and_query_rollback_http_flow() {
     pool.close().await;
 }
 
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_user_progress_http_flow() {
+    let pool = connect_test_database().await;
+    migrate(&pool).await.expect("migration should succeed");
+    cleanup_progress_http_test_data(&pool).await;
+
+    let suffix = Uuid::new_v4().simple().to_string();
+    let display_name = format!("{PROGRESS_HTTP_TEST_SUBJECT_PREFIX}{}", &suffix[..8]);
+
+    let repository = Arc::new(SqlxUserRepository::new(pool.clone()));
+    let app = app(AppState::new(AuthMode::Demo, repository).with_demo_cookie_secure(false));
+
+    let (user_id, _session_id, cookie) = login_guest(&app, &display_name).await;
+
+    let room_number_base = (Uuid::new_v4().as_u128() % 1_900_000_000) as i32 + 1;
+    let mut public_room_ids = Vec::new();
+
+    for (index, genre) in ["OSINT"; 8].into_iter().chain(["Web"; 12]).enumerate() {
+        let room_id = Uuid::new_v4();
+
+        sqlx::query(
+            r#"
+            INSERT INTO rooms (
+                room_id,
+                number,
+                name,
+                genre,
+                description,
+                is_published
+            )
+            VALUES (?, ?, ?, ?, 'progress HTTP integration test', 1)
+            "#,
+        )
+        .bind(room_id)
+        .bind(room_number_base + index as i32)
+        .bind(format!("{PROGRESS_HTTP_TEST_ROOM_PREFIX}{room_id}"))
+        .bind(genre)
+        .execute(&pool)
+        .await
+        .expect("public progress room should be inserted");
+
+        public_room_ids.push(room_id);
+    }
+
+    let private_room_id = Uuid::new_v4();
+
+    sqlx::query(
+        r#"
+        INSERT INTO rooms (
+            room_id,
+            number,
+            name,
+            genre,
+            description,
+            is_published
+        )
+        VALUES (?, ?, ?, 'OSINT', 'private progress HTTP test room', 0)
+        "#,
+    )
+    .bind(private_room_id)
+    .bind(room_number_base + 20)
+    .bind(format!("{PROGRESS_HTTP_TEST_ROOM_PREFIX}{private_room_id}"))
+    .execute(&pool)
+    .await
+    .expect("private progress room should be inserted");
+
+    let started_at = DateTime::parse_from_rfc3339("2026-08-06T10:00:00Z")
+        .expect("started_at should be valid")
+        .with_timezone(&Utc);
+    let cleared_at = DateTime::parse_from_rfc3339("2026-08-06T10:01:00Z")
+        .expect("cleared_at should be valid")
+        .with_timezone(&Utc);
+
+    // OSINTを3部屋、Webを2部屋clearする。
+    // public_room_ids[0]を重複させ、複数runでも1部屋として数えることも確認する。
+    for room_id in [
+        public_room_ids[0],
+        public_room_ids[1],
+        public_room_ids[2],
+        public_room_ids[8],
+        public_room_ids[9],
+        public_room_ids[0],
+        private_room_id,
+    ] {
+        sqlx::query(
+            r#"
+            INSERT INTO runs (
+                run_id,
+                user_id,
+                room_id,
+                status,
+                started_at,
+                cleared_at
+            )
+            VALUES (?, ?, ?, 'cleared', ?, ?)
+            "#,
+        )
+        .bind(Uuid::new_v4())
+        .bind(user_id)
+        .bind(room_id)
+        .bind(started_at)
+        .bind(cleared_at)
+        .execute(&pool)
+        .await
+        .expect("progress cleared run should be inserted");
+    }
+
+    // 未clearの公開roomにactive runを作り、clear数へ含まれないことを確認する。
+    sqlx::query(
+        r#"
+        INSERT INTO runs (
+            run_id,
+            user_id,
+            room_id,
+            status,
+            started_at,
+            cleared_at
+        )
+        VALUES (?, ?, ?, 'active', ?, NULL)
+        "#,
+    )
+    .bind(Uuid::new_v4())
+    .bind(user_id)
+    .bind(public_room_ids[3])
+    .bind(started_at)
+    .execute(&pool)
+    .await
+    .expect("progress active run should be inserted");
+
+    let summary_response = request(
+        &app,
+        Request::get("/api/me/progress")
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .expect("progress request should be valid"),
+    )
+    .await;
+
+    assert_eq!(summary_response.status(), StatusCode::OK);
+    assert_eq!(
+        summary_response.headers()[header::CONTENT_TYPE],
+        "application/json"
+    );
+
+    let actual_summary: Value = body_json(summary_response).await;
+    let expected_summary: Value = serde_json::from_str(PROGRESS_SUMMARY_RESPONSE)
+        .expect("summary fixture should be valid JSON");
+
+    assert_eq!(actual_summary, expected_summary);
+
+    // 同じ認証ユーザーのままroomを削除し、0件のレスポンスも実DB経由で確認する。
+    sqlx::query("DELETE FROM runs WHERE user_id = ?")
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .expect("progress runs should be removable");
+
+    sqlx::query(
+        r#"
+        DELETE FROM rooms
+        WHERE name LIKE ?
+        "#,
+    )
+    .bind(format!("{PROGRESS_HTTP_TEST_ROOM_PREFIX}%"))
+    .execute(&pool)
+    .await
+    .expect("progress rooms should be removable");
+
+    let empty_response = request(
+        &app,
+        Request::get("/api/me/progress")
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .expect("empty progress request should be valid"),
+    )
+    .await;
+
+    assert_eq!(empty_response.status(), StatusCode::OK);
+    assert_eq!(
+        empty_response.headers()[header::CONTENT_TYPE],
+        "application/json"
+    );
+
+    let actual_empty: Value = body_json(empty_response).await;
+    let expected_empty: Value =
+        serde_json::from_str(PROGRESS_EMPTY_RESPONSE).expect("empty fixture should be valid JSON");
+
+    assert_eq!(actual_empty, expected_empty);
+
+    logout_guest(&app, &cookie).await;
+    cleanup_progress_http_test_data(&pool).await;
+    pool.close().await;
+}
+
 async fn setup_demo_game() -> (MySqlPool, Router, Uuid, Uuid, String) {
     let pool = connect_test_database().await;
     migrate(&pool).await.expect("migration should succeed");
@@ -1542,6 +1749,45 @@ async fn cleanup_game_flow_test_data(pool: &MySqlPool) {
         .execute(pool)
         .await
         .expect("game test room should be removable");
+}
+
+async fn cleanup_progress_http_test_data(pool: &MySqlPool) {
+    let subject_pattern = format!("{PROGRESS_HTTP_TEST_SUBJECT_PREFIX}%");
+    let room_pattern = format!("{PROGRESS_HTTP_TEST_ROOM_PREFIX}%");
+
+    sqlx::query(
+        r#"
+        DELETE FROM runs
+        WHERE user_id IN (
+            SELECT user_id
+            FROM users
+            WHERE provider_subject LIKE ?
+        )
+        OR room_id IN (
+            SELECT room_id
+            FROM rooms
+            WHERE name LIKE ?
+        )
+        "#,
+    )
+    .bind(&subject_pattern)
+    .bind(&room_pattern)
+    .execute(pool)
+    .await
+    .expect("progress HTTP runs should be removable");
+
+    sqlx::query(
+        r#"
+        DELETE FROM rooms
+        WHERE name LIKE ?
+        "#,
+    )
+    .bind(&room_pattern)
+    .execute(pool)
+    .await
+    .expect("progress HTTP rooms should be removable");
+
+    cleanup_users_with_subject_prefix(pool, PROGRESS_HTTP_TEST_SUBJECT_PREFIX).await;
 }
 
 fn parse_uuid(value: &str) -> Uuid {

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import leaderboardEmptyFixture from '../../../../openapi/examples/leaderboard/response-empty.json'
 import leaderboardRankedFixture from '../../../../openapi/examples/leaderboard/response-ranked.json'
 import leaderboardUnauthenticatedFixture from '../../../../openapi/examples/leaderboard/response-unauthenticated.json'
+import meProgressEmptyFixture from '../../../../openapi/examples/progress/response-empty.json'
+import meProgressSummaryFixture from '../../../../openapi/examples/progress/response-summary.json'
 
 import type { components } from '@/generated/api'
 
@@ -9,8 +11,11 @@ type ActiveRunResponse = components['schemas']['ActiveRunResponse']
 type CorrectQueryResponse = components['schemas']['CorrectQueryResponse']
 type IncorrectQueryResponse = components['schemas']['IncorrectQueryResponse']
 type LeaderboardResponse = components['schemas']['LeaderboardResponse']
+type MeProgressResponse = components['schemas']['MeProgressResponse']
 
 const leaderboardMeAcceptsNull: null extends LeaderboardResponse['me'] ? true : false = true
+const summaryProgress: MeProgressResponse = meProgressSummaryFixture
+const emptyProgress: MeProgressResponse = meProgressEmptyFixture
 
 type LeaderboardMeIsRequired =
   Pick<LeaderboardResponse, 'me'> extends Required<Pick<LeaderboardResponse, 'me'>> ? true : false
@@ -84,5 +89,31 @@ describe('generated API contract', () => {
     expect(unauthenticatedLeaderboard.me).toBeNull()
     expect(emptyLeaderboard.entries).toEqual([])
     expect(emptyLeaderboard.me).toBeNull()
+  })
+
+  it('keeps progress fixtures aligned with the generated contract', () => {
+    expect(summaryProgress.cleared_room_count).toBe(5)
+    expect(summaryProgress.total_room_count).toBe(20)
+
+    expect(summaryProgress.by_genre.map((progress) => progress.genre)).toEqual(['OSINT', 'Web'])
+
+    const clearedRoomCount = summaryProgress.by_genre.reduce(
+      (total, progress) => total + progress.cleared_room_count,
+      0,
+    )
+
+    const totalRoomCount = summaryProgress.by_genre.reduce(
+      (total, progress) => total + progress.total_room_count,
+      0,
+    )
+
+    expect(clearedRoomCount).toBe(summaryProgress.cleared_room_count)
+    expect(totalRoomCount).toBe(summaryProgress.total_room_count)
+
+    expect(emptyProgress).toEqual({
+      cleared_room_count: 0,
+      total_room_count: 0,
+      by_genre: [],
+    })
   })
 })
