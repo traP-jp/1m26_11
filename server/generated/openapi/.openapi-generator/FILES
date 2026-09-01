@@ -3,6 +3,7 @@ Cargo.toml
 README.md
 src/apis/answers.rs
 src/apis/auth.rs
+src/apis/leaderboard.rs
 src/apis/mod.rs
 src/apis/problems.rs
 src/apis/queries.rs

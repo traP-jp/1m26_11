@@ -1,6 +1,6 @@
 # Rust API for openapi
 
-フロントエンドとバックエンドが共有するP0 API契約です。
+フロントエンドとバックエンドが共有するAPI契約です。
 room_idとproblem_idに記載したUUIDは契約例であり、開始導線の実IDではありません。
 
 

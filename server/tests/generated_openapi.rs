@@ -1,15 +1,31 @@
 use openapi_generated::{
     NullValue,
     models::{
-        ActiveRunResponse, CorrectQueryResponse, IncorrectQueryResponse, MeDemoUnauthenticated,
-        Operation,
+        ActiveRunResponse, CorrectQueryResponse, IncorrectQueryResponse, LeaderboardResponse,
+        MeDemoUnauthenticated, Operation,
     },
+    types::Nullable,
 };
 use uuid::Uuid;
 
 const DEMO_UNAUTHENTICATED: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../openapi/examples/auth/me-demo-unauthenticated.json"
+));
+
+const LEADERBOARD_RANKED: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../openapi/examples/leaderboard/response-ranked.json"
+));
+
+const LEADERBOARD_UNAUTHENTICATED: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../openapi/examples/leaderboard/response-unauthenticated.json"
+));
+
+const LEADERBOARD_EMPTY: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../openapi/examples/leaderboard/response-empty.json"
 ));
 
 #[test]
@@ -56,6 +72,63 @@ fn generated_required_null_fields_match_the_fixture() {
     let mut non_null = expected;
     non_null["user"] = serde_json::json!({});
     assert!(serde_json::from_value::<MeDemoUnauthenticated>(non_null).is_err());
+}
+
+#[test]
+fn generated_leaderboard_responses_match_fixtures() {
+    for fixture in [
+        LEADERBOARD_RANKED,
+        LEADERBOARD_UNAUTHENTICATED,
+        LEADERBOARD_EMPTY,
+    ] {
+        let expected: serde_json::Value =
+            serde_json::from_str(fixture).expect("leaderboard fixture should be valid JSON");
+
+        let model: LeaderboardResponse = serde_json::from_value(expected.clone())
+            .expect("leaderboard fixture should match generated model");
+
+        assert_eq!(
+            serde_json::to_value(model).expect("generated leaderboard model should serialize"),
+            expected
+        );
+    }
+
+    let ranked: LeaderboardResponse = serde_json::from_str(LEADERBOARD_RANKED)
+        .expect("ranked fixture should match generated model");
+
+    assert!(
+        matches!(ranked.me, Nullable::Present(_)),
+        "authenticated fixture should contain me"
+    );
+    assert_eq!(
+        ranked
+            .entries
+            .iter()
+            .map(|entry| entry.rank)
+            .collect::<Vec<_>>(),
+        vec![1, 1, 3]
+    );
+
+    let unauthenticated: LeaderboardResponse = serde_json::from_str(LEADERBOARD_UNAUTHENTICATED)
+        .expect("unauthenticated fixture should match generated model");
+
+    assert!(
+        matches!(unauthenticated.me, Nullable::Null),
+        "unauthenticated fixture should contain an explicit null me"
+    );
+
+    let mut missing_me: serde_json::Value =
+        serde_json::from_str(LEADERBOARD_EMPTY).expect("empty fixture should be valid JSON");
+
+    missing_me
+        .as_object_mut()
+        .expect("leaderboard fixture should be an object")
+        .remove("me");
+
+    assert!(
+        serde_json::from_value::<LeaderboardResponse>(missing_me).is_err(),
+        "me must be required even though it accepts null"
+    );
 }
 
 #[test]
