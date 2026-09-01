@@ -452,6 +452,10 @@ async fn mariadb_query_judgement_is_recorded_transactionally() {
         stored_query_count(&pool, run_id, second_problem_id).await,
         0
     );
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, second_problem_id).await,
+        0
+    );
 
     let first_query_id = Uuid::new_v4();
 
@@ -467,6 +471,10 @@ async fn mariadb_query_judgement_is_recorded_transactionally() {
 
     assert_eq!(first_result.query_count, 1);
     assert_eq!(first_result.problem_status, "available");
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        1
+    );
 
     let stored = sqlx::query_as::<
         _,
@@ -512,6 +520,10 @@ async fn mariadb_query_judgement_is_recorded_transactionally() {
 
     assert_eq!(second_result.query_count, 2);
     assert_eq!(second_result.problem_status, "available");
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        2
+    );
 
     let correct_result = repository
         .record_query_judgement(query_submission(
@@ -525,6 +537,10 @@ async fn mariadb_query_judgement_is_recorded_transactionally() {
 
     assert_eq!(correct_result.query_count, 3);
     assert_eq!(correct_result.problem_status, "cleared");
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        3
+    );
 
     assert_eq!(
         progress_statuses(&pool, run_id).await,
@@ -532,6 +548,10 @@ async fn mariadb_query_judgement_is_recorded_transactionally() {
     );
 
     assert_eq!(stored_query_count(&pool, run_id, first_problem_id).await, 3);
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        3
+    );
 
     let cleared_error = repository
         .record_query_judgement(query_submission(
@@ -549,6 +569,11 @@ async fn mariadb_query_judgement_is_recorded_transactionally() {
     ));
 
     assert_eq!(stored_query_count(&pool, run_id, first_problem_id).await, 3);
+    assert_eq!(
+        stored_answer_attempt_count(&pool, run_id, first_problem_id).await,
+        3,
+        "rejected query must not increment the shared attempt counter"
+    );
 
     cleanup_test_data(&pool).await;
     pool.close().await;

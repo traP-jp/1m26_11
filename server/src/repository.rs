@@ -666,9 +666,11 @@ impl AuthRepository for SqlxUserRepository {
         .map_err(RepositoryError::Database)?
         .ok_or(RepositoryError::RunNotFound)?;
 
-        let stored_status = sqlx::query_scalar::<_, String>(
+        let (stored_status, answer_attempt_count) = sqlx::query_as::<_, (String, i32)>(
             r#"
-            SELECT problem_progress.status
+            SELECT
+                problem_progress.status,
+                problem_progress.answer_attempt_count
             FROM problem_progress
             INNER JOIN problems
                 ON problems.problem_id =
@@ -702,6 +704,14 @@ impl AuthRepository for SqlxUserRepository {
             }
         }
 
+        if answer_attempt_count < 0 {
+            return Err(RepositoryError::InvalidAnswerAttemptCount);
+        }
+
+        let next_answer_attempt_count = answer_attempt_count
+            .checked_add(1)
+            .ok_or(RepositoryError::InvalidAnswerAttemptCount)?;
+
         sqlx::query(
             r#"
             INSERT INTO queries (
@@ -729,6 +739,28 @@ impl AuthRepository for SqlxUserRepository {
         .await
         .map_err(RepositoryError::Database)?;
 
+        let counter_update = sqlx::query(
+            r#"
+            UPDATE problem_progress
+            SET answer_attempt_count = ?
+            WHERE run_id = ?
+              AND problem_id = ?
+              AND status = 'available'
+              AND answer_attempt_count = ?
+            "#,
+        )
+        .bind(next_answer_attempt_count)
+        .bind(submission.run_id)
+        .bind(submission.problem_id)
+        .bind(answer_attempt_count)
+        .execute(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        if counter_update.rows_affected() != 1 {
+            return Err(RepositoryError::ProblemProgressUpdateConflict);
+        }
+
         let problem_status = if submission.is_correct {
             let plan = apply_problem_clear_in_transaction(
                 &mut transaction,
@@ -747,22 +779,8 @@ impl AuthRepository for SqlxUserRepository {
             "available".to_owned()
         };
 
-        let query_count = sqlx::query_scalar::<_, i64>(
-            r#"
-            SELECT COUNT(*)
-            FROM queries
-            WHERE run_id = ?
-              AND problem_id = ?
-            "#,
-        )
-        .bind(submission.run_id)
-        .bind(submission.problem_id)
-        .fetch_one(&mut *transaction)
-        .await
-        .map_err(RepositoryError::Database)?;
-
-        let query_count =
-            u64::try_from(query_count).map_err(|_| RepositoryError::InvalidQueryCount)?;
+        let query_count = u64::try_from(next_answer_attempt_count)
+            .map_err(|_| RepositoryError::InvalidQueryCount)?;
 
         transaction
             .commit()
@@ -987,16 +1005,27 @@ impl AuthRepository for SqlxUserRepository {
             .map_err(RepositoryError::Database)?;
         }
 
+        let run = sqlx::query_as::<_, RunRecord>(
+            r#"
+            SELECT
+                run_id AS id,
+                user_id,
+                room_id,
+                status,
+                started_at,
+                cleared_at
+            FROM runs
+            WHERE run_id = ?
+            "#,
+        )
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(RepositoryError::Database)?;
+
         tx.commit().await.map_err(RepositoryError::Database)?;
 
-        Ok(RunRecord {
-            id,
-            user_id,
-            room_id,
-            status: "active".to_owned(),
-            started_at,
-            cleared_at: None,
-        })
+        Ok(run)
     }
 
     async fn find_cleared_run(

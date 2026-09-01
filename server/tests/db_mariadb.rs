@@ -288,6 +288,23 @@ async fn mariadb_game_schema_matches_contract() {
         );
     }
 
+    let query_count_column_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+          AND column_name = 'query_count'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query_count column lookup should succeed");
+
+    assert_eq!(
+        query_count_column_count, 0,
+        "query_count must be derived from query history, not stored in a dedicated column",
+    );
+
     pool.close().await;
 }
 
