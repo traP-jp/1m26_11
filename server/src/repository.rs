@@ -623,6 +623,20 @@ impl AuthRepository for SqlxUserRepository {
         .await
         .map_err(RepositoryError::Database)?;
 
+        sqlx::query(
+            r#"
+            UPDATE problem_progress
+            SET answer_attempt_count = answer_attempt_count + 1
+            WHERE run_id = ?
+              AND problem_id = ?
+            "#,
+        )
+        .bind(submission.run_id)
+        .bind(submission.problem_id)
+        .execute(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
         let problem_status = if submission.is_correct {
             let plan = apply_problem_clear_in_transaction(
                 &mut transaction,
