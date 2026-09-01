@@ -1,12 +1,13 @@
-# Raspberry Pi Pico H button PoC
+# Raspberry Pi Pico H device PoC
 
-Raspberry Pi Pico H（RP2040）に接続した機械式スイッチの raw GPIO 状態遷移を、
-VS Code の MicroPico vREPL で確認するための PoC です。
+Raspberry Pi Pico H（RP2040）に接続した機械式スイッチを確認するdevice PoCです。用途を混同しない
+ように、次の2 scriptを分けています。
 
-この PoC の表示は人が配線と bounce を確認するための一時的な診断出力です。最終シリアル
-protocol、encoding、delimiter、frame、controlの表現方法を定義するものではありません。物理スイッチと
-game controlの対応は「ピン割当」に記載します。
-また、本番用 debounce、連打の集約、repeat、長押し判定は実装しません。
+- `button_test.py`: MicroPico vREPLでraw GPIO遷移とbounceを観測する一時診断用
+- `serial_protocol_poc.py`: 確定したWire v1どおりにdebounceとshort／long pressを判定する実機確認用
+
+`button_test.py`の人向け表示は最終serial protocolではなく、本番用debounce、repeat、長押し判定を
+実装しません。Wire v1の規範は[`SERIAL_PROTOCOL.md`](SERIAL_PROTOCOL.md)を参照してください。
 
 ## 現在の確認状況
 
@@ -17,11 +18,16 @@ game controlの対応は「ピン割当」に記載します。
 | GP2／スイッチ1の押下・保持・解放・短い間隔の連続操作 | 2026-08-27 確認済み |
 | GP3～GP8／スイッチ2～7 | 2026-08-27 確認済み |
 | USB抜き差し後のMicroPico再接続・再実行 | 2026-08-27 確認済み（WSLへ再attach） |
-| `Upload Project` の実機転送内容 | 2026-08-27 確認済み |
+| 診断scriptだけだった時点の`Upload Project`転送内容 | 2026-08-27 確認済み |
+| 2 script構成の`Upload Project`転送内容 | 2026-09-02 確認済み |
 | スイッチ1～7とgame controlの対応 | 2026-08-29 確定 |
+| `button_test.py`のWeb Serial raw受信・切断・再接続 | 2026-09-01 確認済み |
+| Wire v1契約と専用firmware／parser PoC | 2026-09-02 実装・実機確認済み |
+| Issue #92手順の別担当による再現 | 未実施 |
 
-GPIOの実機確認が終わるまでは、Issue #92のdevice側PoCも完了扱いにしません。また、Issue #92全体の
-完了条件であるWeb Serial確認と入力契約確定は、このPoCの対象外です。
+Wire v1は`serial_protocol_poc.py`を実機へ転送し、Web Serialでshort／long press、全7 control、
+切断・再接続まで確認済みです。ただしIssue #92の完了条件にある別担当による再現はまだ実施していないため、
+その確認前にIssue全体を完了扱いにしません。
 
 ## 使用機材
 
@@ -46,13 +52,16 @@ device/
 │   ├── extensions.json        # MicroPicoだけを推奨
 │   └── settings.json          # portableな転送設定だけを共有
 ├── poc/
-│   └── button_test.py         # 手動実行するraw GPIO確認用script
+│   ├── button_test.py         # 手動実行するraw GPIO確認用script
+│   └── serial_protocol_poc.py # Wire v1実機確認用script
 ├── samples/                   # 実機vREPLで取得したlogだけを保存
-└── README.md
+├── README.md
+└── SERIAL_PROTOCOL.md         # device／frontend間のWire v1規範
 ```
 
 `main.py`と`boot.py`は置きません。Picoへ転送してもUSB接続時には自動起動せず、検証者が
-`button_test.py`を明示的に実行します。
+用途に合うscriptを明示的に実行します。Web Serial raw viewerはraw REPLから
+`/serial_protocol_poc.py`を起動します。
 
 `samples/`には実機vREPLから取得した原文だけを保存します。想定出力や手作りのsampleは追加しません。
 
@@ -77,8 +86,8 @@ GPIOは `Pin.IN` と内部 `Pin.PULL_UP` で初期化します。
 - 押下: LOW（`level=0`、`PRESSED`）
 
 この物理スイッチとgame controlの対応は2026-08-29に確定しました。`button_test.py`はraw GPIO診断用の
-ため、引き続きbutton番号とGPIOだけを表示し、control名は出力しません。最終シリアルprotocolでのfield名や
-表現方法は未確定です。
+ため、引き続きbutton番号とGPIOだけを表示し、control名は出力しません。`serial_protocol_poc.py`は
+Wire v1のcontrol名をJSON frameとして出力します。
 
 公式pinout: [Raspberry Pi Pico pinout](https://datasheets.raspberrypi.com/pico/Pico-R3-A4-Pinout.pdf)
 
@@ -219,24 +228,56 @@ GP2の初期状態、押下、保持、解放、短い間隔の操作が成功�
 
 GP2未確認のまま監視対象や配線を広げません。
 
+## Wire v1専用PoC
+
+`poc/serial_protocol_poc.py`は[`SERIAL_PROTOCOL.md`](SERIAL_PROTOCOL.md)の実機確認用です。
+GP2～GP8を1 ms sleepを挟むpollingで読み、buttonごとに20 ms連続して安定したlevelだけを状態遷移として
+採用します。debounce済みの押下から解放までが700 ms未満なら`short_press`、700 ms以上なら
+`long_press`を解放時に1 frameだけ出力し、保持中のrepeatは出力しません。
+
+出力は次のcompact JSONと改行だけです。bannerやraw GPIO診断行は混在させません。MicroPythonの
+`print`によるCRLFもfrontendが受理します。
+
+```text
+{"v":1,"control":"up","gesture":"short_press"}
+```
+
+起動時からLOWのbuttonは、20 ms以上安定してHIGHへ戻るまで入力受付を開始しません。各buttonの状態は
+独立しており、重なった操作もreleaseが確定したstream順に1 frameずつ出力します。
+
+MicroPico vREPLで単体確認する場合はlocalの`device/poc/serial_protocol_poc.py`を開き、
+`MicroPico: Run current file on Pico`を実行します。Web Serial確認では`Upload Project`だけを実行し、
+MicroPico側からscriptを開始せず、browserの`Connect & start`に起動させます。
+
 ## Upload Project
 
 `device/.vscode/settings.json`は、`Upload Project`の送信元を`device/poc/`、file typeを`.py`だけに
-固定します。現在の転送対象は`button_test.py`だけで、Pico filesystem rootの`button_test.py`として
-配置されます。`README.md`、`samples/`、`.vscode/`、`.micropico`は転送対象外です。
+固定します。現在の転送対象は`button_test.py`と`serial_protocol_poc.py`で、Pico filesystem rootへ
+同名で配置されます。`README.md`、`SERIAL_PROTOCOL.md`、`samples/`、`.vscode/`、`.micropico`は
+転送対象外です。
 
 1. MicroPicoが対象Picoへ接続済みであることを確認します。
 2. `MicroPico: Upload project to Pico`を実行します。
 3. `MicroPico: Toggle Virtual File System (reloads UI and closes existing vREPLs)`で、転送された
-   `/button_test.py`を確認します。このcommandは既存vREPLを閉じるため、実行中のscriptを先に停止します。
+   `/button_test.py`と`/serial_protocol_poc.py`を確認します。このcommandは既存vREPLを閉じるため、
+   実行中のscriptを先に停止します。
 4. READMEやsample logが新たに転送されていないことを確認します。
-5. Upload済みcopy自体を確認する場合は、Virtual File System上の`/button_test.py`を開き、
-   `MicroPico: Run current file on Pico`で実行します。
-6. 通常の開発時はlocalの`device/poc/button_test.py`を開き、`MicroPico: Run current file on Pico`で実行します。
+5. Upload済みcopy自体を確認する場合は、Virtual File System上の対象scriptを開き、
+   `MicroPico: Run current file on Pico`で実行します。Web Serial確認前には停止します。
+6. 通常の開発時はlocalの使用するscriptを開き、`MicroPico: Run current file on Pico`で実行します。
 
 `Upload Project`は送信元を限定しますが、Pico上の既存fileを全削除する操作ではありません。再利用する
 Picoでは、既存の`main.py`や`boot.py`が自動起動しないかをfilesystem表示で確認してください。既存fileを
 削除する場合は、対象を確認してから個別に行います。
+
+repository rootをMicroPico projectとして開くと、`device/`自体や`device/samples/`まで誤って転送対象に
+するlocal設定が生成される場合があります。必ず`device/`だけを別のVS Code windowで開き、repository rootの
+`.vscode/settings.json`へMicroPico設定を保存しません。2026-09-02の最終確認ではPico rootが次の2 fileだけ
+であることをREPLの`os.listdir()`で確認しました。
+
+```text
+['button_test.py', 'serial_protocol_poc.py']
+```
 
 ## USBを抜き差しした後
 
@@ -247,7 +288,8 @@ Picoでは、既存の`main.py`や`boot.py`が自動起動しないかをfilesys
 5. 自動再接続を待ちます。接続しなければ`MicroPico: Connect`を実行します。
 6. 意図的に`MicroPico: Disconnect`した場合、自動再接続は待たず`MicroPico: Connect`を実行します。
 7. portが変わった、または複数台ある場合は`MicroPico: Switch Pico`で現在のPicoを選びます。
-8. `button_test.py`を再実行し、同じGPIO遷移を確認します。
+8. raw配線確認では`button_test.py`を再実行し、同じGPIO遷移を確認します。Wire v1確認では
+   browserの`Connect & start`から`serial_protocol_poc.py`を再起動します。
 
 ## 2台目以降のセットアップ
 
@@ -258,14 +300,16 @@ Picoでは、既存の`main.py`や`boot.py`が自動起動しないかをfilesys
 5. WSLで使う場合、新しいPicoは別deviceとして管理者PowerShellで現在のBUSIDをbindし、WSLへattachします。
 6. `MicroPico: Switch Pico`で2台目の現在のportを選びます。
 7. `Upload Project`を実行し、転送対象を確認します。
-8. localの`device/poc/button_test.py`を`Run current file on Pico`で実行します。
+8. raw配線確認ではlocalの`device/poc/button_test.py`を`Run current file on Pico`で実行します。
+   Wire v1確認ではbrowserから`serial_protocol_poc.py`を起動します。
 9. GP2成功後にGP3～GP8を確認し、USB再接続試験も行います。
 
 ## Web Serialとの排他
 
 MicroPicoとbrowserは同じserial portを同時に開けません。vREPL terminalを閉じるだけでは接続が残る
 場合があるため、Web Serial確認前には必ず`MicroPico: Disconnect`を実行し、Disconnected表示を確認
-します。browser側でportをcloseした後に、`MicroPico: Connect`で再接続します。
+します。browserはUpload済み`/serial_protocol_poc.py`をraw REPLから起動します。browser側で
+`Stop & disconnect`してportをcloseした後に、`MicroPico: Connect`で再接続します。
 
 PicoをWSLへattachしている間はWindows側から利用できません。Windows browserでWeb Serialを確認する
 場合は、MicroPicoをDisconnectした後、PowerShellで`usbipd detach --busid <BUSID>`を実行してからbrowserで
@@ -311,6 +355,31 @@ portを開きます。browser側でportをcloseした後は、`usbipd attach --w
 - Upload確認log: `samples/20260827-upload-project-vrepl.log`
 - Pico filesystem上の`button_test.py`を実行し、全7入力が初期化されることを確認
 - Upload済みscript実行log: `samples/20260827-uploaded-button-test-vrepl.log`
+
+### 2026-09-01 Web Serial診断capture
+
+- Windows上のChrome 150、`http://localhost:5173/device-poc`、115200／8-N-1で実施
+- `button_test.py`をbrowserのraw REPL bootstrapから起動し、全7 GPIOの押下／解放をraw byteで確認
+- 正常停止、読取り中のUSB物理切断、capture保持、利用者操作による再接続、再接続後のGP2を確認
+- 実測captureとSHA-256、script出力区間、操作結果は
+  [`client/samples/web-serial/README.md`](../client/samples/web-serial/README.md)に記録
+- このcaptureは人向け診断出力であり、Wire v1のJSON frame実測sampleには流用しない
+
+### 2026-09-02 Wire v1 Web Serial capture
+
+- `Upload Project`後のPico rootが`button_test.py`と`serial_protocol_poc.py`だけであることを確認
+- 起動時にスイッチ1を押したまま接続し、保持中と最初の解放ではframeが出ず、その次の短押しだけが
+  `up / short_press`になることを確認
+- GP2～GP8で`up`, `down`, `left`, `right`, `red`, `yellow`, `green`の全7 controlを確認
+- GP2の700 ms以上の保持で、保持中はrepeatせず、解放時に`up / long_press`が1 frameだけ出ることを確認
+- GP2の短い間隔の3操作が`up / short_press` 3 frameとなることを確認
+- GP2を保持しながらGP5を4回操作し、`right / short_press` 4 frameの後、GP2解放時に
+  `up / long_press`が出る独立入力を確認
+- 正常停止と、読取り中のUSB物理切断によるcapture保持、BOOTSELなしの再接続、利用者gestureでの
+  再起動、再接続後の`up / short_press`、正常停止を確認
+- 実測`.bin`／`.json`、SHA-256、connectionごとのoffset、raw frame列は
+  [`client/samples/web-serial/README.md`](../client/samples/web-serial/README.md)に記録
+- raw REPL制御byteを含むcapture全体と、Wire v1 parserへ渡すhalf-open intervalを分けて保存
 
 ## 参照資料
 

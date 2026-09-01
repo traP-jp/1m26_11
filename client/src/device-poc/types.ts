@@ -13,6 +13,8 @@ export const SERIAL_POC_PORT_FILTER = {
 
 export const SERIAL_POC_CAPTURE_LIMIT_BYTES = 1024 * 1024
 
+export const SERIAL_POC_SCRIPT_PATH = '/serial_protocol_poc.py' as const
+
 export type SerialPocOperation =
   | 'request-port'
   | 'open-port'
@@ -50,11 +52,12 @@ export interface SerialConnectionRecord {
   id: number
   startedAt: string
   startedOffset: number
+  scriptPath: typeof SERIAL_POC_SCRIPT_PATH
   usbVendorId?: number
   usbProductId?: number
   rawReplReadyObservedOffset?: number
-  buttonTestLaunchRequestedOffset?: number
-  buttonTestActiveObservedOffset?: number
+  scriptLaunchRequestedOffset?: number
+  scriptActiveObservedOffset?: number
   stopRequestedOffset?: number
   stopCompletedObservedOffset?: number
   endedAt?: string

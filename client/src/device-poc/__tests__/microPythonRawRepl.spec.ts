@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   enterMicroPythonRawRepl,
-  launchUploadedButtonTest,
+  launchUploadedScript,
   SerialByteBuffer,
-  stopUploadedButtonTest,
+  stopUploadedScript,
   type RawReplChannel,
 } from '../microPythonRawRepl'
 
@@ -26,18 +26,12 @@ class FakeRawReplChannel implements RawReplChannel {
 
     if (bytes[bytes.length - 1] === 0x04) {
       this.received.append(encoder.encode('O'))
-      this.received.append(
-        new Uint8Array([
-          ...encoder.encode('K[button_test] temporary human-readable hardware '),
-          ...encoder.encode('diagnostic\r\n'),
-        ]),
-      )
+      this.received.append(encoder.encode('K'))
       return
     }
 
     if (bytes.length === 1 && bytes[0] === 0x03) {
-      this.received.append(encoder.encode('[button_test] stopped\r'))
-      this.received.append(new Uint8Array([...encoder.encode('\n'), 0x04]))
+      this.received.append(new Uint8Array([0x04]))
       this.received.append(new Uint8Array([0x04]))
       this.received.append(new Uint8Array([0x3e]))
     }
@@ -67,17 +61,17 @@ describe('SerialByteBuffer', () => {
 })
 
 describe('MicroPython raw REPL bootstrap', () => {
-  it('raw REPLへ入り、Upload済みbutton_test.pyを起動して停止する', async () => {
+  it('raw REPLへ入り、Upload済みprotocol PoCを起動して停止する', async () => {
     const channel = new FakeRawReplChannel()
 
     await enterMicroPythonRawRepl(channel)
-    await launchUploadedButtonTest(channel)
-    await expect(stopUploadedButtonTest(channel)).resolves.toBe(true)
+    await launchUploadedScript(channel)
+    await expect(stopUploadedScript(channel)).resolves.toBe(true)
 
     expect(channel.writes[0]).toEqual([0x0d, 0x03])
     expect(channel.writes[1]).toEqual([0x0d, 0x01])
     expect(new TextDecoder().decode(new Uint8Array(channel.writes[2]!.slice(0, -1)))).toBe(
-      "exec(open('/button_test.py').read())",
+      "exec(open('/serial_protocol_poc.py').read())",
     )
     expect(channel.writes[2]![channel.writes[2]!.length - 1]).toBe(0x04)
     expect(channel.writes[3]).toEqual([0x03])
@@ -93,7 +87,7 @@ describe('MicroPython raw REPL bootstrap', () => {
             new Uint8Array([
               0x4f,
               0x4b,
-              ...encoder.encode('[button_test] temporary human-readable hardware diagnostic\r\n'),
+              ...encoder.encode('{"v":1,"control":"up","gesture":"short_press"}\r\n'),
               0x04,
               0x04,
               0x3e,
@@ -103,9 +97,7 @@ describe('MicroPython raw REPL bootstrap', () => {
       },
     }
 
-    await expect(launchUploadedButtonTest(channel)).rejects.toThrow(
-      'ended before it remained active',
-    )
+    await expect(launchUploadedScript(channel)).rejects.toThrow('ended before it remained active')
   })
 
   it('仮の診断出力文言を起動契約として解釈しない', async () => {
@@ -119,6 +111,6 @@ describe('MicroPython raw REPL bootstrap', () => {
       },
     }
 
-    await expect(launchUploadedButtonTest(channel)).resolves.toBeUndefined()
+    await expect(launchUploadedScript(channel)).resolves.toBeUndefined()
   })
 })

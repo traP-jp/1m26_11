@@ -1,12 +1,8 @@
 import type { RawSerialChunk, SerialPocState } from '../../device-poc/types'
 
 const encoder = new TextEncoder()
-const initialChunk = encoder.encode(
-  '[button_test] initial button=1 gpio=GP2 level=1 state=RELEASED\r\n',
-)
-const pressedChunk = encoder.encode(
-  '[button_test] elapsed_us=901400 button=1 gpio=GP2 level=0 state=PRESSED\r\n',
-)
+const initialChunk = encoder.encode('{"v":1,"control":"up",')
+const pressedChunk = encoder.encode('"gesture":"short_press"}\r\n')
 const runningChunks: RawSerialChunk[] = [
   {
     sequence: 1,
@@ -76,12 +72,12 @@ export const serialRawViewerFixtures = {
     canConnect: false,
     canStop: true,
     canClear: false,
-    canDownload: true,
+    canDownload: false,
   },
   stopping: {
     state: {
       phase: 'stopping',
-      message: 'button_test.pyを停止しています。',
+      message: '/serial_protocol_poc.pyを停止しています。',
     } satisfies SerialPocState,
     chunks: runningChunks,
     decodedPreview: new TextDecoder().decode(initialChunk) + new TextDecoder().decode(pressedChunk),

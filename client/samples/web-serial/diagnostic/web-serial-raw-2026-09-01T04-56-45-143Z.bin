@@ -1,0 +1,96 @@
+
+>>> 
+>>> 
+>>> 
+raw REPL; CTRL-B to exit
+>OK[button_test] temporary human-readable hardware diagnostic
+[button_test] NOT the production serial protocol
+[button_test] no debounce, repeat, or long-press logic
+[button_test] polling interval: 1 ms
+[button_test] initial button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] initial button=2 gpio=GP3 level=1 state=RELEASED
+[button_test] initial button=3 gpio=GP4 level=1 state=RELEASED
+[button_test] initial button=4 gpio=GP5 level=1 state=RELEASED
+[button_test] initial button=5 gpio=GP6 level=1 state=RELEASED
+[button_test] initial button=6 gpio=GP7 level=1 state=RELEASED
+[button_test] initial button=7 gpio=GP8 level=1 state=RELEASED
+[button_test] elapsed_us=39144990 button=2 gpio=GP3 level=0 state=PRESSED
+[button_test] elapsed_us=39365811 button=2 gpio=GP3 level=1 state=RELEASED
+[button_test] elapsed_us=42077433 button=1 gpio=GP2 level=0 state=PRESSED
+[button_test] elapsed_us=42173334 button=4 gpio=GP5 level=0 state=PRESSED
+[button_test] elapsed_us=42174381 button=4 gpio=GP5 level=1 state=RELEASED
+[button_test] elapsed_us=42176378 button=4 gpio=GP5 level=0 state=PRESSED
+[button_test] elapsed_us=42386894 button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] elapsed_us=42476534 button=4 gpio=GP5 level=1 state=RELEASED
+[button_test] elapsed_us=50630754 button=2 gpio=GP3 level=0 state=PRESSED
+[button_test] elapsed_us=50953175 button=2 gpio=GP3 level=1 state=RELEASED
+[button_test] elapsed_us=51929484 button=2 gpio=GP3 level=0 state=PRESSED
+[button_test] elapsed_us=52224194 button=2 gpio=GP3 level=1 state=RELEASED
+[button_test] elapsed_us=53631788 button=1 gpio=GP2 level=0 state=PRESSED
+[button_test] elapsed_us=53965806 button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] elapsed_us=62052025 button=2 gpio=GP3 level=0 state=PRESSED
+[button_test] elapsed_us=62409273 button=2 gpio=GP3 level=1 state=RELEASED
+[button_test] elapsed_us=70136291 button=2 gpio=GP3 level=0 state=PRESSED
+[button_test] elapsed_us=70899669 button=2 gpio=GP3 level=1 state=RELEASED
+[button_test] elapsed_us=71836976 button=2 gpio=GP3 level=0 state=PRESSED
+[button_test] elapsed_us=72168542 button=2 gpio=GP3 level=1 state=RELEASED
+[button_test] elapsed_us=72453882 button=2 gpio=GP3 level=0 state=PRESSED
+[button_test] elapsed_us=72787746 button=2 gpio=GP3 level=1 state=RELEASED
+[button_test] elapsed_us=248136395 button=7 gpio=GP8 level=0 state=PRESSED
+[button_test] elapsed_us=248390644 button=7 gpio=GP8 level=1 state=RELEASED
+[button_test] elapsed_us=248862400 button=7 gpio=GP8 level=0 state=PRESSED
+[button_test] elapsed_us=248872395 button=7 gpio=GP8 level=1 state=RELEASED
+[button_test] elapsed_us=250575141 button=6 gpio=GP7 level=0 state=PRESSED
+[button_test] elapsed_us=250797182 button=6 gpio=GP7 level=1 state=RELEASED
+[button_test] elapsed_us=252379768 button=5 gpio=GP6 level=0 state=PRESSED
+[button_test] elapsed_us=252577340 button=5 gpio=GP6 level=1 state=RELEASED
+[button_test] elapsed_us=256250672 button=1 gpio=GP2 level=0 state=PRESSED
+[button_test] elapsed_us=267981602 button=4 gpio=GP5 level=0 state=PRESSED
+[button_test] elapsed_us=268877543 button=4 gpio=GP5 level=1 state=RELEASED
+[button_test] elapsed_us=269074236 button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] elapsed_us=273092096 button=1 gpio=GP2 level=0 state=PRESSED
+[button_test] elapsed_us=274170848 button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] elapsed_us=275220258 button=2 gpio=GP3 level=0 state=PRESSED
+[button_test] elapsed_us=275549269 button=2 gpio=GP3 level=1 state=RELEASED
+[button_test] elapsed_us=280705911 button=1 gpio=GP2 level=0 state=PRESSED
+[button_test] elapsed_us=281073090 button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] elapsed_us=321258271 button=1 gpio=GP2 level=0 state=PRESSED
+[button_test] elapsed_us=338518140 button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] elapsed_us=356355804 button=1 gpio=GP2 level=0 state=PRESSED
+[button_test] elapsed_us=356619764 button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] elapsed_us=356835682 button=1 gpio=GP2 level=0 state=PRESSED
+[button_test] elapsed_us=357094409 button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] elapsed_us=357316269 button=1 gpio=GP2 level=0 state=PRESSED
+[button_test] elapsed_us=357585929 button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] elapsed_us=381438954 button=2 gpio=GP3 level=0 state=PRESSED
+[button_test] elapsed_us=381703652 button=2 gpio=GP3 level=1 state=RELEASED
+[button_test] elapsed_us=404643153 button=4 gpio=GP5 level=0 state=PRESSED
+[button_test] elapsed_us=404752668 button=2 gpio=GP3 level=0 state=PRESSED
+[button_test] elapsed_us=404943530 button=2 gpio=GP3 level=1 state=RELEASED
+[button_test] elapsed_us=404969690 button=4 gpio=GP5 level=1 state=RELEASED
+[button_test] elapsed_us=413761899 button=5 gpio=GP6 level=0 state=PRESSED
+[button_test] elapsed_us=413993754 button=5 gpio=GP6 level=1 state=RELEASED
+[button_test] elapsed_us=421819326 button=6 gpio=GP7 level=0 state=PRESSED
+[button_test] elapsed_us=422057372 button=6 gpio=GP7 level=1 state=RELEASED
+[button_test] elapsed_us=435919863 button=7 gpio=GP8 level=0 state=PRESSED
+[button_test] elapsed_us=436143512 button=7 gpio=GP8 level=1 state=RELEASED
+[button_test] elapsed_us=453786267 button=1 gpio=GP2 level=0 state=PRESSED
+[button_test] elapsed_us=453787254 button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] elapsed_us=453788269 button=1 gpio=GP2 level=0 state=PRESSED
+[button_test] elapsed_us=453789102 button=4 gpio=GP5 level=0 state=PRESSED
+[button_test] elapsed_us=473004138 button=4 gpio=GP5 level=1 state=RELEASED
+[button_test] elapsed_us=473577251 button=4 gpio=GP5 level=0 state=PRESSED
+[button_test] elapsed_us=474543780 button=4 gpio=GP5 level=1 state=RELEASED
+[button_test] elapsed_us=474841982 button=4 gpio=GP5 level=0 state=PRESSED
+[button_test] elapsed_us=475511257 button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] elapsed_us=475735331 button=4 gpio=GP5 level=1 state=RELEASED
+[button_test] elapsed_us=476366068 button=4 gpio=GP5 level=0 state=PRESSED
+[button_test] elapsed_us=476475402 button=1 gpio=GP2 level=0 state=PRESSED
+[button_test] elapsed_us=476522054 button=4 gpio=GP5 level=1 state=RELEASED
+[button_test] elapsed_us=476527596 button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] elapsed_us=477704714 button=1 gpio=GP2 level=0 state=PRESSED
+[button_test] elapsed_us=477727280 button=4 gpio=GP5 level=0 state=PRESSED
+[button_test] elapsed_us=490390586 button=4 gpio=GP5 level=1 state=RELEASED
+[button_test] elapsed_us=499207624 button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] stopped
+>

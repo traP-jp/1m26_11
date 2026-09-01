@@ -60,16 +60,11 @@ class FakeSerialPort implements SerialPortLike {
       return
     }
     if (bytes[bytes.length - 1] === 0x04) {
-      this.emit(
-        encoder.encode(
-          'OK[button_test] temporary human-readable hardware diagnostic\r\n' +
-            '[button_test] initial button=7 gpio=GP8 level=1 state=RELEASED\r\n',
-        ),
-      )
+      this.emit(encoder.encode('OK'))
       return
     }
     if (bytes.length === 1 && bytes[0] === 0x03) {
-      this.emit(new Uint8Array([...encoder.encode('[button_test] stopped\r\n'), 0x04, 0x04, 0x3e]))
+      this.emit(new Uint8Array([0x04, 0x04, 0x3e]))
     }
   }
 }
@@ -203,7 +198,7 @@ describe('useDeviceSerialPoc', () => {
     expect(serialPoc.totalBytes.value).toBe(0)
   })
 
-  it('Picoを選択し、raw REPLからbutton_test.pyを起動して停止する', async () => {
+  it('Picoを選択し、raw REPLからprotocol PoCを起動して停止する', async () => {
     const port = new FakeSerialPort()
     const serial = createSerial(port)
     const serialPoc = useDeviceSerialPoc({

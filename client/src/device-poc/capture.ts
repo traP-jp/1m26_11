@@ -43,7 +43,7 @@ export async function createRawCaptureArtifacts(
   const baseName = `web-serial-raw-${timestamp}`
 
   const metadata = {
-    captureSchema: 'web-serial-raw-capture/v1',
+    captureSchema: 'web-serial-raw-capture/v2',
     source: 'web-serial-hardware',
     capturedAt: input.capturedAt,
     environment: {
@@ -77,7 +77,7 @@ export async function createRawCaptureArtifacts(
     notes: [
       'capture.bin is authoritative; decoded text is intentionally not exported.',
       'capture.bin contains received raw REPL bootstrap responses as well as script output.',
-      'The metadata connection offsets identify the observed bootstrap and script phases.',
+      'Each connection records its script path and observed bootstrap/script phase offsets.',
       'Read chunk boundaries are transport observations, not protocol frame boundaries.',
       'The raw REPL bootstrap is PoC transport control, not the production serial protocol.',
     ],

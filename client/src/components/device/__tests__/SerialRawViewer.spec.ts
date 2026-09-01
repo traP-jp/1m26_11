@@ -20,24 +20,34 @@ describe('SerialRawViewer', () => {
       props: serialRawViewerFixtures.running,
     })
 
-    expect(wrapper.get('[data-testid="raw-hex"]').text()).toMatch(/^5b 62 75 74/)
+    expect(wrapper.get('[data-testid="raw-hex"]').text()).toMatch(/^7b 22 76/)
     expect(wrapper.text()).toContain('chunk境界はframe境界ではありません')
     expect(wrapper.get('[data-testid="decoded-preview"]').text()).toContain('␍␊')
+    expect(wrapper.get('[data-testid="decoded-preview"]').text()).toContain(
+      '"gesture":"short_press"',
+    )
   })
 
   it('各操作をsemantic eventとして通知する', async () => {
-    const wrapper = mount(SerialRawViewer, {
+    const runningWrapper = mount(SerialRawViewer, {
       props: serialRawViewerFixtures.running,
     })
-    const buttons = wrapper.findAll('button')
+    const runningButtons = runningWrapper.findAll('button')
 
-    await buttons[1]!.trigger('click')
-    await buttons[2]!.trigger('click')
-    await buttons[3]!.trigger('click')
+    await runningButtons[1]!.trigger('click')
 
-    expect(wrapper.emitted('stop')).toHaveLength(1)
-    expect(wrapper.emitted('downloadRaw')).toHaveLength(1)
-    expect(wrapper.emitted('downloadMetadata')).toHaveLength(1)
+    expect(runningWrapper.emitted('stop')).toHaveLength(1)
+
+    const disconnectedWrapper = mount(SerialRawViewer, {
+      props: serialRawViewerFixtures.disconnected,
+    })
+    const disconnectedButtons = disconnectedWrapper.findAll('button')
+
+    await disconnectedButtons[2]!.trigger('click')
+    await disconnectedButtons[3]!.trigger('click')
+
+    expect(disconnectedWrapper.emitted('downloadRaw')).toHaveLength(1)
+    expect(disconnectedWrapper.emitted('downloadMetadata')).toHaveLength(1)
   })
 
   it('errorをalertとして通知する', () => {

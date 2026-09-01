@@ -3,15 +3,16 @@ import { computed, getCurrentScope, onScopeDispose, readonly, ref, shallowRef } 
 import { createRawCaptureArtifacts, downloadBlob } from './capture'
 import {
   enterMicroPythonRawRepl,
-  launchUploadedButtonTest,
+  launchUploadedScript,
   SerialByteBuffer,
-  stopUploadedButtonTest,
+  stopUploadedScript,
   type RawReplChannel,
 } from './microPythonRawRepl'
 import {
   SERIAL_POC_CAPTURE_LIMIT_BYTES,
   SERIAL_POC_OPEN_OPTIONS,
   SERIAL_POC_PORT_FILTER,
+  SERIAL_POC_SCRIPT_PATH,
   type RawSerialChunk,
   type SerialConnectionEndReason,
   type SerialConnectionRecord,
@@ -305,14 +306,15 @@ export function useDeviceSerialPoc(options: UseDeviceSerialPocOptions = {}) {
       }
 
       if (stopScript && portToClose && bufferToClose) {
-        state.value = { phase: 'stopping', message: 'button_test.pyを停止しています。' }
+        state.value = {
+          phase: 'stopping',
+          message: `${SERIAL_POC_SCRIPT_PATH}を停止しています。`,
+        }
         if (connectionId !== undefined) {
           updateConnection(connectionId, { stopRequestedOffset: totalBytes.value })
         }
         try {
-          stopConfirmed = await stopUploadedButtonTest(
-            createRawReplChannel(portToClose, bufferToClose),
-          )
+          stopConfirmed = await stopUploadedScript(createRawReplChannel(portToClose, bufferToClose))
           if (stopConfirmed && connectionId !== undefined) {
             updateConnection(connectionId, {
               stopCompletedObservedOffset: totalBytes.value,
@@ -398,7 +400,7 @@ export function useDeviceSerialPoc(options: UseDeviceSerialPocOptions = {}) {
           message: !stopScript
             ? 'ポートを解放しました。'
             : stopConfirmed
-              ? 'button_test.pyを停止し、ポートを解放しました。'
+              ? `${SERIAL_POC_SCRIPT_PATH}を停止し、ポートを解放しました。`
               : 'ポートを解放しましたが、スクリプトの停止応答は確認できませんでした。',
           incomplete: stopScript && !stopConfirmed,
         }
@@ -484,6 +486,7 @@ export function useDeviceSerialPoc(options: UseDeviceSerialPocOptions = {}) {
           id: connectionId,
           startedAt: wallClock().toISOString(),
           startedOffset: totalBytes.value,
+          scriptPath: SERIAL_POC_SCRIPT_PATH,
           usbVendorId: portInfo.usbVendorId,
           usbProductId: portInfo.usbProductId,
         },
@@ -508,14 +511,14 @@ export function useDeviceSerialPoc(options: UseDeviceSerialPocOptions = {}) {
 
       operation = 'launch-script'
       commandSubmitted = true
-      updateConnection(connectionId, { buttonTestLaunchRequestedOffset: totalBytes.value })
+      updateConnection(connectionId, { scriptLaunchRequestedOffset: totalBytes.value })
       state.value = {
         phase: 'launching',
-        message: 'Upload済み /button_test.py を起動しています。',
+        message: `Upload済み ${SERIAL_POC_SCRIPT_PATH} を起動しています。`,
       }
-      await launchUploadedButtonTest(channel)
+      await launchUploadedScript(channel)
       if (sessionGeneration !== generation || closingRequested) return
-      updateConnection(connectionId, { buttonTestActiveObservedOffset: totalBytes.value })
+      updateConnection(connectionId, { scriptActiveObservedOffset: totalBytes.value })
 
       state.value = {
         phase: 'running',

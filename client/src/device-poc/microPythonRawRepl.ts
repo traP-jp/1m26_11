@@ -1,8 +1,10 @@
+import { SERIAL_POC_SCRIPT_PATH } from './types'
+
 const textEncoder = new TextEncoder()
 
 const RAW_REPL_BANNER = textEncoder.encode('raw REPL; CTRL-B to exit\r\n>')
 const RAW_REPL_END = new Uint8Array([0x04, 0x04, 0x3e])
-const RAW_REPL_COMMAND = textEncoder.encode("exec(open('/button_test.py').read())")
+const RAW_REPL_COMMAND = textEncoder.encode(`exec(open('${SERIAL_POC_SCRIPT_PATH}').read())`)
 
 const CTRL_C = new Uint8Array([0x03])
 const INTERRUPT = new Uint8Array([0x0d, 0x03])
@@ -162,7 +164,7 @@ export async function enterMicroPythonRawRepl(channel: RawReplChannel): Promise<
   await channel.received.waitForSequence(RAW_REPL_BANNER, bannerOffset, 5_000)
 }
 
-export async function launchUploadedButtonTest(channel: RawReplChannel): Promise<void> {
+export async function launchUploadedScript(channel: RawReplChannel): Promise<void> {
   const responseOffset = channel.received.length
   const command = new Uint8Array(RAW_REPL_COMMAND.length + CTRL_D.length)
   command.set(RAW_REPL_COMMAND)
@@ -172,11 +174,11 @@ export async function launchUploadedButtonTest(channel: RawReplChannel): Promise
   const stdoutOffset = await channel.received.waitForExact(OK, responseOffset, 1_000)
   await channel.received.waitForQuiet(100, 2_000)
   if (channel.received.hasSequence(CTRL_D, stdoutOffset)) {
-    throw new Error('button_test.py ended before it remained active')
+    throw new Error(`${SERIAL_POC_SCRIPT_PATH} ended before it remained active`)
   }
 }
 
-export async function stopUploadedButtonTest(channel: RawReplChannel): Promise<boolean> {
+export async function stopUploadedScript(channel: RawReplChannel): Promise<boolean> {
   const responseOffset = channel.received.length
   await channel.write(CTRL_C)
 

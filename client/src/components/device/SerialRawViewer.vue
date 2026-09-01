@@ -81,8 +81,8 @@ function makeControlCharactersVisible(text: string): string {
         Device Web Serial raw viewer
       </h1>
       <p class="max-w-3xl text-sm leading-6 text-slate-600">
-        Raspberry Pi Pico Hのraw byteを観測する診断画面です。これは最終シリアルprotocol、frame
-        parser、button判定ではありません。
+        Raspberry Pi Pico HからWire v1のraw byteを観測する診断画面です。frameの検証や操作列への
+        変換は行わず、.binへ保存したbyte列を正本とします。
       </p>
     </header>
 

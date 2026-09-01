@@ -33,9 +33,10 @@ describe('raw capture', () => {
           id: 1,
           startedAt: '2026-08-29T00:00:00.000Z',
           startedOffset: 0,
+          scriptPath: '/serial_protocol_poc.py',
           rawReplReadyObservedOffset: 1,
-          buttonTestLaunchRequestedOffset: 1,
-          buttonTestActiveObservedOffset: 2,
+          scriptLaunchRequestedOffset: 1,
+          scriptActiveObservedOffset: 2,
           stopRequestedOffset: 2,
           stopCompletedObservedOffset: 4,
           endedAt: '2026-08-29T00:00:01.000Z',
@@ -54,16 +55,18 @@ describe('raw capture', () => {
     expect([...new Uint8Array(await artifacts.raw.arrayBuffer())]).toEqual([0xff, 0xfe, 0x80, 0x0a])
     const metadata = JSON.parse(await artifacts.metadata.text()) as {
       captureStopThresholdBytes: number
+      captureSchema: string
       totalBytes: number
       rawSha256: string
-      connections: Array<{ buttonTestActiveObservedOffset: number }>
+      connections: Array<{ scriptActiveObservedOffset: number; scriptPath: string }>
       chunks: Array<{ offset: number; length: number }>
     }
     expect(metadata).toMatchObject({
+      captureSchema: 'web-serial-raw-capture/v2',
       captureStopThresholdBytes: 1024,
       totalBytes: 4,
       rawSha256: '38a27c80957be56cb326a25a2e3bc468362db68db71b33018e968716a4da4c07',
-      connections: [{ buttonTestActiveObservedOffset: 2 }],
+      connections: [{ scriptActiveObservedOffset: 2, scriptPath: '/serial_protocol_poc.py' }],
       chunks: [
         { offset: 0, length: 2 },
         { offset: 2, length: 2 },

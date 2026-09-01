@@ -1,0 +1,171 @@
+{
+  "captureSchema": "web-serial-raw-capture/v2",
+  "source": "web-serial-hardware",
+  "capturedAt": "2026-09-01T15:55:41.921Z",
+  "environment": {
+    "origin": "http://localhost:5173",
+    "secureContext": true,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+  },
+  "device": {
+    "expected": {
+      "board": "Raspberry Pi Pico H",
+      "mcu": "RP2040",
+      "firmware": "MicroPython v1.29.0"
+    },
+    "verification": "operator confirmation required; the viewer does not identify board or firmware"
+  },
+  "openOptions": {
+    "baudRate": 115200,
+    "dataBits": 8,
+    "stopBits": 1,
+    "parity": "none",
+    "flowControl": "none"
+  },
+  "captureStopThresholdBytes": 1048576,
+  "captureMayExceedStopThreshold": true,
+  "totalChunks": 14,
+  "totalBytes": 177,
+  "rawSha256": "f9fe6de3c5ca1064a579c91ed8af3ef253f917188b2bf9ae7d8bfa51deac99b5",
+  "connections": [
+    {
+      "id": 1,
+      "startedAt": "2026-09-01T15:55:41.921Z",
+      "startedOffset": 0,
+      "scriptPath": "/serial_protocol_poc.py",
+      "usbVendorId": 11914,
+      "usbProductId": 5,
+      "rawReplReadyObservedOffset": 27,
+      "scriptLaunchRequestedOffset": 27,
+      "scriptActiveObservedOffset": 29,
+      "endedAt": "2026-09-01T15:56:33.411Z",
+      "endedOffset": 77,
+      "endReason": "read-error",
+      "stopConfirmed": false
+    },
+    {
+      "id": 2,
+      "startedAt": "2026-09-01T15:57:53.589Z",
+      "startedOffset": 77,
+      "scriptPath": "/serial_protocol_poc.py",
+      "usbVendorId": 11914,
+      "usbProductId": 5,
+      "rawReplReadyObservedOffset": 124,
+      "scriptLaunchRequestedOffset": 124,
+      "scriptActiveObservedOffset": 126,
+      "stopRequestedOffset": 174,
+      "stopCompletedObservedOffset": 177,
+      "endedAt": "2026-09-01T16:02:40.736Z",
+      "endedOffset": 177,
+      "endReason": "user",
+      "stopConfirmed": true
+    }
+  ],
+  "chunks": [
+    {
+      "sequence": 1,
+      "connectionId": 1,
+      "offset": 0,
+      "length": 1,
+      "receivedElapsedMs": 111.89999999850988
+    },
+    {
+      "sequence": 2,
+      "connectionId": 1,
+      "offset": 1,
+      "length": 25,
+      "receivedElapsedMs": 112.5
+    },
+    {
+      "sequence": 3,
+      "connectionId": 1,
+      "offset": 26,
+      "length": 1,
+      "receivedElapsedMs": 112.80000000074506
+    },
+    {
+      "sequence": 4,
+      "connectionId": 1,
+      "offset": 27,
+      "length": 2,
+      "receivedElapsedMs": 114.80000000074506
+    },
+    {
+      "sequence": 5,
+      "connectionId": 1,
+      "offset": 29,
+      "length": 1,
+      "receivedElapsedMs": 12180.89999999851
+    },
+    {
+      "sequence": 6,
+      "connectionId": 1,
+      "offset": 30,
+      "length": 47,
+      "receivedElapsedMs": 12183.800000000745
+    },
+    {
+      "sequence": 7,
+      "connectionId": 2,
+      "offset": 77,
+      "length": 6,
+      "receivedElapsedMs": 131668.69999999925
+    },
+    {
+      "sequence": 8,
+      "connectionId": 2,
+      "offset": 83,
+      "length": 6,
+      "receivedElapsedMs": 131669.09999999776
+    },
+    {
+      "sequence": 9,
+      "connectionId": 2,
+      "offset": 89,
+      "length": 1,
+      "receivedElapsedMs": 131770.59999999776
+    },
+    {
+      "sequence": 10,
+      "connectionId": 2,
+      "offset": 90,
+      "length": 1,
+      "receivedElapsedMs": 131771.09999999776
+    },
+    {
+      "sequence": 11,
+      "connectionId": 2,
+      "offset": 91,
+      "length": 33,
+      "receivedElapsedMs": 131771.3999999985
+    },
+    {
+      "sequence": 12,
+      "connectionId": 2,
+      "offset": 124,
+      "length": 2,
+      "receivedElapsedMs": 131773
+    },
+    {
+      "sequence": 13,
+      "connectionId": 2,
+      "offset": 126,
+      "length": 48,
+      "receivedElapsedMs": 353534.8999999985
+    },
+    {
+      "sequence": 14,
+      "connectionId": 2,
+      "offset": 174,
+      "length": 3,
+      "receivedElapsedMs": 418805.59999999776
+    }
+  ],
+  "notes": [
+    "capture.bin is authoritative; decoded text is intentionally not exported.",
+    "capture.bin contains received raw REPL bootstrap responses as well as script output.",
+    "Each connection records its script path and observed bootstrap/script phase offsets.",
+    "Read chunk boundaries are transport observations, not protocol frame boundaries.",
+    "The raw REPL bootstrap is PoC transport control, not the production serial protocol."
+  ]
+}

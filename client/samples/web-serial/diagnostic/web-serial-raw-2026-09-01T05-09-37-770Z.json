@@ -1,0 +1,365 @@
+{
+  "captureSchema": "web-serial-raw-capture/v1",
+  "source": "web-serial-hardware",
+  "capturedAt": "2026-09-01T05:09:37.770Z",
+  "environment": {
+    "origin": "http://localhost:5173",
+    "secureContext": true,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+  },
+  "device": {
+    "expected": {
+      "board": "Raspberry Pi Pico H",
+      "mcu": "RP2040",
+      "firmware": "MicroPython v1.29.0"
+    },
+    "verification": "operator confirmation required; the viewer does not identify board or firmware"
+  },
+  "openOptions": {
+    "baudRate": 115200,
+    "dataBits": 8,
+    "stopBits": 1,
+    "parity": "none",
+    "flowControl": "none"
+  },
+  "captureStopThresholdBytes": 1048576,
+  "captureMayExceedStopThreshold": true,
+  "totalChunks": 42,
+  "totalBytes": 2626,
+  "rawSha256": "218bba776fc061fe751ab0ebb382f127e970066445ebf5b98c5b727bf95e03de",
+  "connections": [
+    {
+      "id": 1,
+      "startedAt": "2026-09-01T05:09:37.770Z",
+      "startedOffset": 0,
+      "usbVendorId": 11914,
+      "usbProductId": 5,
+      "rawReplReadyObservedOffset": 27,
+      "buttonTestLaunchRequestedOffset": 27,
+      "buttonTestActiveObservedOffset": 681,
+      "endedAt": "2026-09-01T05:14:03.913Z",
+      "endedOffset": 1748,
+      "endReason": "read-error",
+      "stopConfirmed": false
+    },
+    {
+      "id": 2,
+      "startedAt": "2026-09-01T05:15:34.616Z",
+      "startedOffset": 1748,
+      "usbVendorId": 11914,
+      "usbProductId": 5,
+      "rawReplReadyObservedOffset": 1795,
+      "buttonTestLaunchRequestedOffset": 1795,
+      "buttonTestActiveObservedOffset": 2449,
+      "stopRequestedOffset": 2600,
+      "stopCompletedObservedOffset": 2626,
+      "endedAt": "2026-09-01T05:16:28.750Z",
+      "endedOffset": 2626,
+      "endReason": "user",
+      "stopConfirmed": true
+    }
+  ],
+  "chunks": [
+    {
+      "sequence": 1,
+      "connectionId": 1,
+      "offset": 0,
+      "length": 26,
+      "receivedElapsedMs": 110
+    },
+    {
+      "sequence": 2,
+      "connectionId": 1,
+      "offset": 26,
+      "length": 1,
+      "receivedElapsedMs": 110.70000004768372
+    },
+    {
+      "sequence": 3,
+      "connectionId": 1,
+      "offset": 27,
+      "length": 2,
+      "receivedElapsedMs": 113
+    },
+    {
+      "sequence": 4,
+      "connectionId": 1,
+      "offset": 29,
+      "length": 58,
+      "receivedElapsedMs": 159.80000019073486
+    },
+    {
+      "sequence": 5,
+      "connectionId": 1,
+      "offset": 87,
+      "length": 168,
+      "receivedElapsedMs": 160.90000009536743
+    },
+    {
+      "sequence": 6,
+      "connectionId": 1,
+      "offset": 255,
+      "length": 87,
+      "receivedElapsedMs": 161.10000014305115
+    },
+    {
+      "sequence": 7,
+      "connectionId": 1,
+      "offset": 342,
+      "length": 19,
+      "receivedElapsedMs": 161.30000019073486
+    },
+    {
+      "sequence": 8,
+      "connectionId": 1,
+      "offset": 361,
+      "length": 128,
+      "receivedElapsedMs": 161.80000019073486
+    },
+    {
+      "sequence": 9,
+      "connectionId": 1,
+      "offset": 489,
+      "length": 21,
+      "receivedElapsedMs": 163.40000009536743
+    },
+    {
+      "sequence": 10,
+      "connectionId": 1,
+      "offset": 510,
+      "length": 171,
+      "receivedElapsedMs": 164
+    },
+    {
+      "sequence": 11,
+      "connectionId": 1,
+      "offset": 681,
+      "length": 75,
+      "receivedElapsedMs": 69901.70000004768
+    },
+    {
+      "sequence": 12,
+      "connectionId": 1,
+      "offset": 756,
+      "length": 9,
+      "receivedElapsedMs": 70159.90000009537
+    },
+    {
+      "sequence": 13,
+      "connectionId": 1,
+      "offset": 765,
+      "length": 67,
+      "receivedElapsedMs": 70160.60000014305
+    },
+    {
+      "sequence": 14,
+      "connectionId": 1,
+      "offset": 832,
+      "length": 75,
+      "receivedElapsedMs": 77699.90000009537
+    },
+    {
+      "sequence": 15,
+      "connectionId": 1,
+      "offset": 907,
+      "length": 76,
+      "receivedElapsedMs": 77992.80000019073
+    },
+    {
+      "sequence": 16,
+      "connectionId": 1,
+      "offset": 983,
+      "length": 37,
+      "receivedElapsedMs": 149609.20000004768
+    },
+    {
+      "sequence": 17,
+      "connectionId": 1,
+      "offset": 1020,
+      "length": 39,
+      "receivedElapsedMs": 149610
+    },
+    {
+      "sequence": 18,
+      "connectionId": 1,
+      "offset": 1059,
+      "length": 1,
+      "receivedElapsedMs": 149884.20000004768
+    },
+    {
+      "sequence": 19,
+      "connectionId": 1,
+      "offset": 1060,
+      "length": 76,
+      "receivedElapsedMs": 149885.20000004768
+    },
+    {
+      "sequence": 20,
+      "connectionId": 1,
+      "offset": 1136,
+      "length": 76,
+      "receivedElapsedMs": 150893.40000009537
+    },
+    {
+      "sequence": 21,
+      "connectionId": 1,
+      "offset": 1212,
+      "length": 63,
+      "receivedElapsedMs": 151179.5
+    },
+    {
+      "sequence": 22,
+      "connectionId": 1,
+      "offset": 1275,
+      "length": 14,
+      "receivedElapsedMs": 151182.20000004768
+    },
+    {
+      "sequence": 23,
+      "connectionId": 1,
+      "offset": 1289,
+      "length": 76,
+      "receivedElapsedMs": 174858.20000004768
+    },
+    {
+      "sequence": 24,
+      "connectionId": 1,
+      "offset": 1365,
+      "length": 77,
+      "receivedElapsedMs": 175128.10000014305
+    },
+    {
+      "sequence": 25,
+      "connectionId": 1,
+      "offset": 1442,
+      "length": 76,
+      "receivedElapsedMs": 192785.80000019073
+    },
+    {
+      "sequence": 26,
+      "connectionId": 1,
+      "offset": 1518,
+      "length": 12,
+      "receivedElapsedMs": 193078.90000009537
+    },
+    {
+      "sequence": 27,
+      "connectionId": 1,
+      "offset": 1530,
+      "length": 65,
+      "receivedElapsedMs": 193080.20000004768
+    },
+    {
+      "sequence": 28,
+      "connectionId": 1,
+      "offset": 1595,
+      "length": 76,
+      "receivedElapsedMs": 193654.40000009537
+    },
+    {
+      "sequence": 29,
+      "connectionId": 1,
+      "offset": 1671,
+      "length": 77,
+      "receivedElapsedMs": 193995.80000019073
+    },
+    {
+      "sequence": 30,
+      "connectionId": 2,
+      "offset": 1748,
+      "length": 12,
+      "receivedElapsedMs": 356873.5
+    },
+    {
+      "sequence": 31,
+      "connectionId": 2,
+      "offset": 1760,
+      "length": 1,
+      "receivedElapsedMs": 356992.2000000477
+    },
+    {
+      "sequence": 32,
+      "connectionId": 2,
+      "offset": 1761,
+      "length": 34,
+      "receivedElapsedMs": 356994.80000019073
+    },
+    {
+      "sequence": 33,
+      "connectionId": 2,
+      "offset": 1795,
+      "length": 2,
+      "receivedElapsedMs": 356997.10000014305
+    },
+    {
+      "sequence": 34,
+      "connectionId": 2,
+      "offset": 1797,
+      "length": 206,
+      "receivedElapsedMs": 357053.2000000477
+    },
+    {
+      "sequence": 35,
+      "connectionId": 2,
+      "offset": 2003,
+      "length": 255,
+      "receivedElapsedMs": 357054
+    },
+    {
+      "sequence": 36,
+      "connectionId": 2,
+      "offset": 2258,
+      "length": 191,
+      "receivedElapsedMs": 357057.10000014305
+    },
+    {
+      "sequence": 37,
+      "connectionId": 2,
+      "offset": 2449,
+      "length": 1,
+      "receivedElapsedMs": 372382.2000000477
+    },
+    {
+      "sequence": 38,
+      "connectionId": 2,
+      "offset": 2450,
+      "length": 63,
+      "receivedElapsedMs": 372383.2000000477
+    },
+    {
+      "sequence": 39,
+      "connectionId": 2,
+      "offset": 2513,
+      "length": 11,
+      "receivedElapsedMs": 372384.2000000477
+    },
+    {
+      "sequence": 40,
+      "connectionId": 2,
+      "offset": 2524,
+      "length": 1,
+      "receivedElapsedMs": 372665.5
+    },
+    {
+      "sequence": 41,
+      "connectionId": 2,
+      "offset": 2525,
+      "length": 75,
+      "receivedElapsedMs": 372667.5
+    },
+    {
+      "sequence": 42,
+      "connectionId": 2,
+      "offset": 2600,
+      "length": 26,
+      "receivedElapsedMs": 410958.40000009537
+    }
+  ],
+  "notes": [
+    "capture.bin is authoritative; decoded text is intentionally not exported.",
+    "capture.bin contains received raw REPL bootstrap responses as well as script output.",
+    "The metadata connection offsets identify the observed bootstrap and script phases.",
+    "Read chunk boundaries are transport observations, not protocol frame boundaries.",
+    "The raw REPL bootstrap is PoC transport control, not the production serial protocol."
+  ]
+}
