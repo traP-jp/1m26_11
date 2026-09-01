@@ -28,6 +28,7 @@ where
         + apis::auth::Auth<E>
         + apis::leaderboard::Leaderboard<E>
         + apis::problems::Problems<E>
+        + apis::progress::Progress<E>
         + apis::queries::Queries<E>
         + apis::runs::Runs<E>
         + apis::tooling::Tooling<E>
@@ -41,6 +42,7 @@ where
         .route("/api/auth/guest", post(login_guest::<I, A, E>))
         .route("/api/auth/logout", post(logout_demo::<I, A, E>))
         .route("/api/me", get(get_me::<I, A, E>))
+        .route("/api/me/progress", get(get_me_progress::<I, A, E>))
         .route(
             "/api/rooms/{room_id}/leaderboard",
             get(get_room_leaderboard::<I, A, E>),
@@ -1092,6 +1094,116 @@ where
                 response.body(Body::from(body_content))
             }
             apis::problems::GetProblemHintResponse::Status500_Server(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(500);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+        },
+        Err(why) => {
+            // Application code returned an error. This should not happen, as the implementation should
+            // return a valid response.
+            return api_impl
+                .as_ref()
+                .handle_error(&method, &host, &cookies, why)
+                .await;
+        }
+    };
+
+    resp.map_err(|e| {
+        error!(error = ?e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })
+}
+
+#[tracing::instrument(skip_all)]
+fn get_me_progress_validation() -> std::result::Result<(), ValidationErrors> {
+    Ok(())
+}
+/// GetMeProgress - GET /api/me/progress
+#[tracing::instrument(skip_all)]
+async fn get_me_progress<I, A, E>(
+    method: Method,
+    TypedHeader(host): TypedHeader<Host>,
+    cookies: CookieJar,
+    State(api_impl): State<I>,
+) -> Result<Response, StatusCode>
+where
+    I: AsRef<A> + Send + Sync,
+    A: apis::progress::Progress<E> + Send + Sync,
+    E: std::fmt::Debug + Send + Sync + 'static,
+{
+    #[allow(clippy::redundant_closure)]
+    let validation = tokio::task::spawn_blocking(move || get_me_progress_validation())
+        .await
+        .unwrap();
+
+    let Ok(()) = validation else {
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Body::from(validation.unwrap_err().to_string()))
+            .map_err(|_| StatusCode::BAD_REQUEST);
+    };
+
+    let result = api_impl
+        .as_ref()
+        .get_me_progress(&method, &host, &cookies)
+        .await;
+
+    let resp = match result {
+        Ok(rsp) => match rsp {
+            apis::progress::GetMeProgressResponse::Status200(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(200);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::progress::GetMeProgressResponse::Status401(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(401);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::progress::GetMeProgressResponse::Status500_Server(body) => {
                 let mut response = Response::builder();
                 let mut response = response.status(500);
                 {
