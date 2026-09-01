@@ -60,6 +60,7 @@ a {
   grid-template-columns: repeat(3, 1fr);
   align-items: start;
   gap: 1.25rem;
+  padding: 1em 0em 0em;
 }
 
 @media (max-width: 36rem) {

@@ -13,6 +13,21 @@ use sqlx::{FromRow, MySql, MySqlPool, Transaction};
 use thiserror::Error;
 use uuid::Uuid;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AuthProvider {
+    Demo,
+    NeoShowcase,
+}
+
+impl AuthProvider {
+    const fn as_db_str(self) -> &'static str {
+        match self {
+            Self::Demo => "demo",
+            Self::NeoShowcase => "neoshowcase",
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum RepositoryError {
     #[error("database operation failed")]
@@ -35,6 +50,9 @@ pub enum RepositoryError {
 
     #[error("query count is outside the supported range")]
     InvalidQueryCount,
+
+    #[error("leaderboard rank is outside the supported range")]
+    InvalidLeaderboardRank,
 
     #[error("answer is empty after normalization")]
     EmptyAnswer,
@@ -65,6 +83,21 @@ pub enum RepositoryError {
 
     #[error("run update affected an unexpected number of rows")]
     RunUpdateConflict,
+
+    #[error("stored auth provider is invalid")]
+    InvalidAuthProvider,
+}
+
+impl TryFrom<&str> for AuthProvider {
+    type Error = RepositoryError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "demo" => Ok(Self::Demo),
+            "neoshowcase" => Ok(Self::NeoShowcase),
+            _ => Err(RepositoryError::InvalidAuthProvider),
+        }
+    }
 }
 
 impl From<ClearProblemError> for RepositoryError {
@@ -100,10 +133,30 @@ impl SqlxUserRepository {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, FromRow)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuthUserRecord {
     pub user_id: Uuid,
     pub display_name: String,
+    pub auth_provider: AuthProvider,
+}
+
+#[derive(FromRow)]
+struct AuthUserRow {
+    user_id: Uuid,
+    display_name: String,
+    auth_provider: String,
+}
+
+impl TryFrom<AuthUserRow> for AuthUserRecord {
+    type Error = RepositoryError;
+
+    fn try_from(row: AuthUserRow) -> Result<Self, Self::Error> {
+        Ok(Self {
+            user_id: row.user_id,
+            display_name: row.display_name,
+            auth_provider: AuthProvider::try_from(row.auth_provider.as_str())?,
+        })
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, FromRow)]
@@ -125,6 +178,86 @@ pub struct RunRecord {
     pub status: String,
     pub started_at: DateTime<Utc>,
     pub cleared_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LeaderboardRecord {
+    pub rank: u32,
+    pub user_id: Uuid,
+    pub display_name: String,
+    pub elapsed_ms: u64,
+    pub query_count: u64,
+    pub cleared_at: DateTime<Utc>,
+}
+
+#[derive(FromRow)]
+struct LeaderboardRow {
+    rank: i64,
+    user_id: Uuid,
+    display_name: String,
+    started_at: DateTime<Utc>,
+    query_count: i64,
+    cleared_at: DateTime<Utc>,
+}
+
+impl TryFrom<LeaderboardRow> for LeaderboardRecord {
+    type Error = RepositoryError;
+
+    fn try_from(row: LeaderboardRow) -> Result<Self, Self::Error> {
+        let rank = u32::try_from(row.rank).map_err(|_| RepositoryError::InvalidLeaderboardRank)?;
+        let elapsed = row.cleared_at.signed_duration_since(row.started_at);
+        let elapsed_ms = duration_to_elapsed_ms(elapsed)?;
+        let query_count =
+            u64::try_from(row.query_count).map_err(|_| RepositoryError::InvalidQueryCount)?;
+
+        Ok(Self {
+            rank,
+            user_id: row.user_id,
+            display_name: row.display_name,
+            elapsed_ms,
+            query_count,
+            cleared_at: row.cleared_at,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UserProgressRecord {
+    pub cleared_room_count: u32,
+    pub total_room_count: u32,
+    pub by_genre: Vec<GenreProgressRecord>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GenreProgressRecord {
+    pub genre: String,
+    pub cleared_room_count: u32,
+    pub total_room_count: u32,
+}
+
+#[derive(FromRow)]
+struct GenreProgressRow {
+    genre: String,
+    cleared_room_count: i64,
+    total_room_count: i64,
+}
+
+impl TryFrom<GenreProgressRow> for GenreProgressRecord {
+    type Error = RepositoryError;
+
+    fn try_from(row: GenreProgressRow) -> Result<Self, Self::Error> {
+        let cleared_room_count = u32::try_from(row.cleared_room_count)
+            .map_err(|_| RepositoryError::InvalidProgressCount)?;
+
+        let total_room_count = u32::try_from(row.total_room_count)
+            .map_err(|_| RepositoryError::InvalidProgressCount)?;
+
+        Ok(Self {
+            genre: row.genre,
+            cleared_room_count,
+            total_room_count,
+        })
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -258,23 +391,24 @@ pub trait AuthRepository: Send + Sync {
 
     async fn find_user_by_provider_subject(
         &self,
-        auth_provider: &str,
+        auth_provider: AuthProvider,
         provider_subject: &str,
     ) -> Result<Option<AuthUserRecord>, RepositoryError>;
 
     async fn get_or_create_user(
         &self,
-        auth_provider: &str,
+        auth_provider: AuthProvider,
         provider_subject: &str,
         display_name: &str,
     ) -> Result<AuthUserRecord, RepositoryError>;
 
-    async fn create_demo_session(
+    async fn get_or_create_demo_user_and_session(
         &self,
         _session_id: Uuid,
-        _user_id: Uuid,
-    ) -> Result<(), RepositoryError> {
-        unimplemented!("create_demo_session is not implemented for this repository")
+        _provider_subject: &str,
+        _display_name: &str,
+    ) -> Result<AuthUserRecord, RepositoryError> {
+        unimplemented!("get_or_create_demo_user_and_session is not implemented for this repository")
     }
 
     async fn delete_demo_session(&self, _session_id: Uuid) -> Result<(), RepositoryError> {
@@ -334,6 +468,20 @@ pub trait AuthRepository: Send + Sync {
         unimplemented!("find_cleared_run is not implemented for this repository")
     }
 
+    async fn find_leaderboard_by_room_id(
+        &self,
+        _room_id: Uuid,
+    ) -> Result<Vec<LeaderboardRecord>, RepositoryError> {
+        unimplemented!("find_leaderboard_by_room_id is not implemented for this repository")
+    }
+
+    async fn find_user_progress(
+        &self,
+        _user_id: Uuid,
+    ) -> Result<UserProgressRecord, RepositoryError> {
+        unimplemented!("find_user_progress is not implemented for this repository")
+    }
+
     async fn find_problems_by_room_id(
         &self,
         _room_id: Uuid,
@@ -362,46 +510,53 @@ impl AuthRepository for SqlxUserRepository {
         &self,
         session_id: Uuid,
     ) -> Result<Option<AuthUserRecord>, RepositoryError> {
-        sqlx::query_as::<_, AuthUserRecord>(
+        let row = sqlx::query_as::<_, AuthUserRow>(
             r#"
-            SELECT users.user_id, users.display_name
+            SELECT
+                users.user_id,
+                users.display_name,
+                users.auth_provider
             FROM demo_sessions
             INNER JOIN users ON users.user_id = demo_sessions.user_id
             WHERE demo_sessions.session_id = ?
-              AND users.auth_provider = 'demo'
+            AND users.auth_provider = 'demo'
             LIMIT 1
             "#,
         )
         .bind(session_id)
         .fetch_optional(&self.pool)
         .await
-        .map_err(RepositoryError::Database)
+        .map_err(RepositoryError::Database)?;
+
+        row.map(AuthUserRecord::try_from).transpose()
     }
 
     async fn find_user_by_provider_subject(
         &self,
-        auth_provider: &str,
+        auth_provider: AuthProvider,
         provider_subject: &str,
     ) -> Result<Option<AuthUserRecord>, RepositoryError> {
-        sqlx::query_as::<_, AuthUserRecord>(
+        let row = sqlx::query_as::<_, AuthUserRow>(
             r#"
-            SELECT user_id, display_name
+            SELECT user_id, display_name, auth_provider
             FROM users
             WHERE auth_provider = ?
-              AND provider_subject = ?
+            AND provider_subject = ?
             LIMIT 1
             "#,
         )
-        .bind(auth_provider)
+        .bind(auth_provider.as_db_str())
         .bind(provider_subject)
         .fetch_optional(&self.pool)
         .await
-        .map_err(RepositoryError::Database)
+        .map_err(RepositoryError::Database)?;
+
+        row.map(AuthUserRecord::try_from).transpose()
     }
 
     async fn get_or_create_user(
         &self,
-        auth_provider: &str,
+        auth_provider: AuthProvider,
         provider_subject: &str,
         display_name: &str,
     ) -> Result<AuthUserRecord, RepositoryError> {
@@ -420,7 +575,7 @@ impl AuthRepository for SqlxUserRepository {
             "#,
         )
         .bind(user_id)
-        .bind(auth_provider)
+        .bind(auth_provider.as_db_str())
         .bind(provider_subject)
         .bind(display_name)
         .execute(&self.pool)
@@ -432,11 +587,54 @@ impl AuthRepository for SqlxUserRepository {
             .ok_or(RepositoryError::UserNotFoundAfterUpsert)
     }
 
-    async fn create_demo_session(
+    async fn get_or_create_demo_user_and_session(
         &self,
         session_id: Uuid,
-        user_id: Uuid,
-    ) -> Result<(), RepositoryError> {
+        provider_subject: &str,
+        display_name: &str,
+    ) -> Result<AuthUserRecord, RepositoryError> {
+        let mut transaction = self.pool.begin().await.map_err(RepositoryError::Database)?;
+
+        let new_user_id = Uuid::new_v4();
+
+        sqlx::query(
+            r#"
+            INSERT INTO users (
+                user_id,
+                auth_provider,
+                provider_subject,
+                display_name
+            )
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE user_id = user_id
+            "#,
+        )
+        .bind(new_user_id)
+        .bind(AuthProvider::Demo.as_db_str())
+        .bind(provider_subject)
+        .bind(display_name)
+        .execute(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        let user_record = sqlx::query_as::<_, AuthUserRow>(
+            r#"
+            SELECT user_id, display_name, auth_provider
+            FROM users
+            WHERE auth_provider = ?
+              AND provider_subject = ?
+            LIMIT 1
+            "#,
+        )
+        .bind(AuthProvider::Demo.as_db_str())
+        .bind(provider_subject)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?
+        .map(AuthUserRecord::try_from)
+        .transpose()?
+        .ok_or(RepositoryError::UserNotFoundAfterUpsert)?;
+
         sqlx::query(
             r#"
             INSERT INTO demo_sessions (session_id, user_id)
@@ -444,12 +642,17 @@ impl AuthRepository for SqlxUserRepository {
             "#,
         )
         .bind(session_id)
-        .bind(user_id)
-        .execute(&self.pool)
+        .bind(user_record.user_id)
+        .execute(&mut *transaction)
         .await
         .map_err(RepositoryError::Database)?;
 
-        Ok(())
+        transaction
+            .commit()
+            .await
+            .map_err(RepositoryError::Database)?;
+
+        Ok(user_record)
     }
 
     async fn delete_demo_session(&self, session_id: Uuid) -> Result<(), RepositoryError> {
@@ -560,9 +763,11 @@ impl AuthRepository for SqlxUserRepository {
         .map_err(RepositoryError::Database)?
         .ok_or(RepositoryError::RunNotFound)?;
 
-        let stored_status = sqlx::query_scalar::<_, String>(
+        let (stored_status, answer_attempt_count) = sqlx::query_as::<_, (String, i32)>(
             r#"
-            SELECT problem_progress.status
+            SELECT
+                problem_progress.status,
+                problem_progress.answer_attempt_count
             FROM problem_progress
             INNER JOIN problems
                 ON problems.problem_id =
@@ -596,6 +801,14 @@ impl AuthRepository for SqlxUserRepository {
             }
         }
 
+        if answer_attempt_count < 0 {
+            return Err(RepositoryError::InvalidAnswerAttemptCount);
+        }
+
+        let next_answer_attempt_count = answer_attempt_count
+            .checked_add(1)
+            .ok_or(RepositoryError::InvalidAnswerAttemptCount)?;
+
         sqlx::query(
             r#"
             INSERT INTO queries (
@@ -623,6 +836,28 @@ impl AuthRepository for SqlxUserRepository {
         .await
         .map_err(RepositoryError::Database)?;
 
+        let counter_update = sqlx::query(
+            r#"
+            UPDATE problem_progress
+            SET answer_attempt_count = ?
+            WHERE run_id = ?
+              AND problem_id = ?
+              AND status = 'available'
+              AND answer_attempt_count = ?
+            "#,
+        )
+        .bind(next_answer_attempt_count)
+        .bind(submission.run_id)
+        .bind(submission.problem_id)
+        .bind(answer_attempt_count)
+        .execute(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        if counter_update.rows_affected() != 1 {
+            return Err(RepositoryError::ProblemProgressUpdateConflict);
+        }
+
         let problem_status = if submission.is_correct {
             let plan = apply_problem_clear_in_transaction(
                 &mut transaction,
@@ -641,22 +876,8 @@ impl AuthRepository for SqlxUserRepository {
             "available".to_owned()
         };
 
-        let query_count = sqlx::query_scalar::<_, i64>(
-            r#"
-            SELECT COUNT(*)
-            FROM queries
-            WHERE run_id = ?
-              AND problem_id = ?
-            "#,
-        )
-        .bind(submission.run_id)
-        .bind(submission.problem_id)
-        .fetch_one(&mut *transaction)
-        .await
-        .map_err(RepositoryError::Database)?;
-
-        let query_count =
-            u64::try_from(query_count).map_err(|_| RepositoryError::InvalidQueryCount)?;
+        let query_count = u64::try_from(next_answer_attempt_count)
+            .map_err(|_| RepositoryError::InvalidQueryCount)?;
 
         transaction
             .commit()
@@ -817,7 +1038,7 @@ impl AuthRepository for SqlxUserRepository {
     ) -> Result<RunRecord, RepositoryError> {
         let mut tx = self.pool.begin().await.map_err(RepositoryError::Database)?;
 
-        sqlx::query(
+        let insert_result = sqlx::query(
             r#"
             INSERT INTO runs (run_id, user_id, room_id, status, started_at, cleared_at)
             VALUES (?, ?, ?, 'active', ?, NULL)
@@ -828,8 +1049,23 @@ impl AuthRepository for SqlxUserRepository {
         .bind(room_id)
         .bind(started_at)
         .execute(&mut *tx)
-        .await
-        .map_err(RepositoryError::Database)?;
+        .await;
+
+        if let Err(error) = insert_result {
+            let is_unique_violation = error
+                .as_database_error()
+                .is_some_and(|database_error| database_error.is_unique_violation());
+
+            tx.rollback().await.map_err(RepositoryError::Database)?;
+
+            if is_unique_violation {
+                if let Some(active_run) = self.find_active_run(user_id, room_id).await? {
+                    return Ok(active_run);
+                }
+            }
+
+            return Err(RepositoryError::Database(error));
+        }
 
         let problems = sqlx::query_as::<_, ProblemRecord>(
             r#"
@@ -866,16 +1102,27 @@ impl AuthRepository for SqlxUserRepository {
             .map_err(RepositoryError::Database)?;
         }
 
+        let run = sqlx::query_as::<_, RunRecord>(
+            r#"
+            SELECT
+                run_id AS id,
+                user_id,
+                room_id,
+                status,
+                started_at,
+                cleared_at
+            FROM runs
+            WHERE run_id = ?
+            "#,
+        )
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(RepositoryError::Database)?;
+
         tx.commit().await.map_err(RepositoryError::Database)?;
 
-        Ok(RunRecord {
-            id,
-            user_id,
-            room_id,
-            status: "active".to_owned(),
-            started_at,
-            cleared_at: None,
-        })
+        Ok(run)
     }
 
     async fn find_cleared_run(
@@ -896,6 +1143,184 @@ impl AuthRepository for SqlxUserRepository {
         .fetch_optional(&self.pool)
         .await
         .map_err(RepositoryError::Database)
+    }
+
+    async fn find_leaderboard_by_room_id(
+        &self,
+        room_id: Uuid,
+    ) -> Result<Vec<LeaderboardRecord>, RepositoryError> {
+        let rows = sqlx::query_as::<_, LeaderboardRow>(
+            r#"
+            WITH run_records AS (
+                SELECT
+                    runs.run_id,
+                    runs.user_id,
+                    users.display_name,
+                    runs.started_at,
+                    CAST(
+                        TIMESTAMPDIFF(
+                            MICROSECOND,
+                            runs.started_at,
+                            runs.cleared_at
+                        ) DIV 1000
+                        AS SIGNED
+                    ) AS elapsed_ms,
+                    CAST(
+                        COALESCE(
+                            SUM(
+                                CASE
+                                    WHEN problems.submission_type = 'operation_sequence'
+                                    THEN problem_progress.answer_attempt_count
+                                    ELSE 0
+                                END
+                            ),
+                            0
+                        )
+                        AS SIGNED
+                    ) AS query_count,
+                    runs.cleared_at
+                FROM runs
+                INNER JOIN users
+                    ON users.user_id = runs.user_id
+                LEFT JOIN problem_progress
+                    ON problem_progress.run_id = runs.run_id
+                LEFT JOIN problems
+                    ON problems.problem_id = problem_progress.problem_id
+                   AND problems.room_id = runs.room_id
+                WHERE runs.room_id = ?
+                  AND runs.status = 'cleared'
+                GROUP BY
+                    runs.run_id,
+                    runs.user_id,
+                    users.display_name,
+                    runs.started_at,
+                    runs.cleared_at
+            ),
+            user_best_candidates AS (
+                SELECT
+                    run_id,
+                    user_id,
+                    display_name,
+                    started_at,
+                    elapsed_ms,
+                    query_count,
+                    cleared_at,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY user_id
+                        ORDER BY
+                            elapsed_ms,
+                            query_count,
+                            cleared_at,
+                            run_id
+                    ) AS user_position
+                FROM run_records
+            ),
+            best_runs AS (
+                SELECT
+                    run_id,
+                    user_id,
+                    display_name,
+                    started_at,
+                    elapsed_ms,
+                    query_count,
+                    cleared_at
+                FROM user_best_candidates
+                WHERE user_position = 1
+            ),
+            ranked_best_runs AS (
+                SELECT
+                    user_id,
+                    display_name,
+                    started_at,
+                    elapsed_ms,
+                    query_count,
+                    cleared_at,
+                    CAST(
+                        RANK() OVER (
+                            ORDER BY
+                                elapsed_ms,
+                                query_count,
+                                cleared_at
+                        )
+                        AS SIGNED
+                    ) AS leaderboard_rank
+                FROM best_runs
+            )
+            SELECT
+                leaderboard_rank AS `rank`,
+                user_id,
+                display_name,
+                started_at,
+                query_count,
+                cleared_at
+            FROM ranked_best_runs
+            ORDER BY
+                elapsed_ms,
+                query_count,
+                cleared_at,
+                user_id
+            "#,
+        )
+        .bind(room_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        rows.into_iter().map(LeaderboardRecord::try_from).collect()
+    }
+
+    async fn find_user_progress(
+        &self,
+        user_id: Uuid,
+    ) -> Result<UserProgressRecord, RepositoryError> {
+        let rows = sqlx::query_as::<_, GenreProgressRow>(
+            r#"
+            SELECT
+                rooms.genre,
+                CAST(COUNT(cleared_rooms.room_id) AS SIGNED)
+                    AS cleared_room_count,
+                CAST(COUNT(*) AS SIGNED)
+                    AS total_room_count
+            FROM rooms
+            LEFT JOIN (
+                SELECT DISTINCT room_id
+                FROM runs
+                WHERE user_id = ?
+                  AND status = 'cleared'
+            ) AS cleared_rooms
+                ON cleared_rooms.room_id = rooms.room_id
+            WHERE rooms.is_published = 1
+            GROUP BY rooms.genre
+            ORDER BY rooms.genre ASC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        let by_genre = rows
+            .into_iter()
+            .map(GenreProgressRecord::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let cleared_room_count = by_genre.iter().try_fold(0_u32, |total, progress| {
+            total
+                .checked_add(progress.cleared_room_count)
+                .ok_or(RepositoryError::InvalidProgressCount)
+        })?;
+
+        let total_room_count = by_genre.iter().try_fold(0_u32, |total, progress| {
+            total
+                .checked_add(progress.total_room_count)
+                .ok_or(RepositoryError::InvalidProgressCount)
+        })?;
+
+        Ok(UserProgressRecord {
+            cleared_room_count,
+            total_room_count,
+            by_genre,
+        })
     }
 
     async fn find_problems_by_room_id(
@@ -1179,6 +1604,29 @@ pub(crate) async fn apply_problem_clear_in_transaction(
     }
 
     Ok(plan)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AuthProvider, RepositoryError};
+
+    #[test]
+    fn auth_provider_decodes_known_values() {
+        let demo = AuthProvider::try_from("demo").expect("demo should decode as an auth provider");
+        let neoshowcase = AuthProvider::try_from("neoshowcase")
+            .expect("neoshowcase should decode as an auth provider");
+
+        assert_eq!(demo, AuthProvider::Demo);
+        assert_eq!(neoshowcase, AuthProvider::NeoShowcase);
+    }
+
+    #[test]
+    fn auth_provider_rejects_unknown_value() {
+        assert!(matches!(
+            AuthProvider::try_from("unknown"),
+            Err(RepositoryError::InvalidAuthProvider),
+        ));
+    }
 }
 
 #[cfg(test)]

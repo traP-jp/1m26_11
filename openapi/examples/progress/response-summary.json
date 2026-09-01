@@ -1,0 +1,16 @@
+{
+  "cleared_room_count": 5,
+  "total_room_count": 20,
+  "by_genre": [
+    {
+      "genre": "OSINT",
+      "cleared_room_count": 3,
+      "total_room_count": 8
+    },
+    {
+      "genre": "Web",
+      "cleared_room_count": 2,
+      "total_room_count": 12
+    }
+  ]
+}

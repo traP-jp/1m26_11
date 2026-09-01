@@ -24,8 +24,8 @@ async fn run() -> Result<(), Box<dyn Error>> {
     migrate(&pool).await?;
 
     let repository = Arc::new(SqlxUserRepository::new(pool.clone()));
-    let state = AppState::new(config.auth_mode, repository);
-
+    let state = AppState::new(config.auth_mode, repository)
+        .with_demo_cookie_secure(config.demo_cookie_secure);
     let listener = TcpListener::bind(config.app_addr).await?;
     info!(address = %config.app_addr, "listening");
     axum::serve(listener, app(state))

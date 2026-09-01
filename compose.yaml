@@ -8,6 +8,7 @@ services:
     environment:
       APP_ADDR: 0.0.0.0:8080
       AUTH_MODE: demo
+      DEMO_COOKIE_SECURE: "false"
       DB_USER: root
       DB_PASS: pass
       DB_HOST: db
