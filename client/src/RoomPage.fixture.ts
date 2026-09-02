@@ -10,6 +10,7 @@ type QueryRequest = components['schemas']['QueryRequest']
 interface RoomFixture {
   room_id: string
   name: string
+  problem_count: number
   required_count: number
 }
 
@@ -58,6 +59,7 @@ export function roomViewModelFromFixtures(
 const room = {
   room_id: '1411824c-d357-4941-af76-c76cb827dda6',
   name: '最初の部屋',
+  problem_count: 4,
   required_count: 4,
 }
 const run = mockContract.getResponseExample(

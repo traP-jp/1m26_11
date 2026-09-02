@@ -858,57 +858,130 @@ impl AuthRepository for SqlxUserRepository {
             .collect::<Result<_, RepositoryError>>()?;
 
         #[derive(FromRow)]
-        struct ClearedRunRow {
-            user_id: Uuid,
+        struct UserRoomBestRow {
             room_id: Uuid,
-            started_at: DateTime<Utc>,
-            cleared_at: Option<DateTime<Utc>>,
+            rank: i64,
+            elapsed_ms: i64,
             query_count: i64,
         }
 
-        let cleared_run_rows = if !user_cleared_rooms.is_empty() {
+        let user_room_best_rows = if !user_cleared_rooms.is_empty() {
             let mut query_builder = sqlx::QueryBuilder::<sqlx::MySql>::new(
                 r#"
-                SELECT
-                    runs.user_id,
-                    runs.room_id,
-                    runs.started_at,
-                    runs.cleared_at,
-                    CAST(
-                        COALESCE(
-                            SUM(
-                                CASE
-                                    WHEN problems.submission_type = 'operation_sequence'
-                                    THEN problem_progress.answer_attempt_count
-                                    ELSE 0
-                                END
-                            ),
-                            0
-                        ) AS SIGNED
-                    ) AS query_count
-                FROM runs
-                INNER JOIN rooms ON rooms.room_id = runs.room_id
-                LEFT JOIN problem_progress ON problem_progress.run_id = runs.run_id
-                LEFT JOIN problems
-                    ON problems.problem_id = problem_progress.problem_id
-                   AND problems.room_id = runs.room_id
-                WHERE rooms.is_published = 1
-                  AND runs.status = 'cleared'
-                  AND runs.cleared_at IS NOT NULL
-                  AND runs.room_id IN (
+                WITH run_records AS (
+                    SELECT
+                        runs.run_id,
+                        runs.user_id,
+                        runs.room_id,
+                        runs.started_at,
+                        CAST(
+                            TIMESTAMPDIFF(
+                                MICROSECOND,
+                                runs.started_at,
+                                runs.cleared_at
+                            ) DIV 1000
+                            AS SIGNED
+                        ) AS elapsed_ms,
+                        CAST(
+                            COALESCE(
+                                SUM(
+                                    CASE
+                                        WHEN problems.submission_type = 'operation_sequence'
+                                        THEN problem_progress.answer_attempt_count
+                                        ELSE 0
+                                    END
+                                ),
+                                0
+                            )
+                            AS SIGNED
+                        ) AS query_count,
+                        runs.cleared_at
+                    FROM runs
+                    INNER JOIN rooms ON rooms.room_id = runs.room_id
+                    LEFT JOIN problem_progress ON problem_progress.run_id = runs.run_id
+                    LEFT JOIN problems
+                        ON problems.problem_id = problem_progress.problem_id
+                       AND problems.room_id = runs.room_id
+                    WHERE rooms.is_published = 1
+                      AND runs.status = 'cleared'
+                      AND runs.cleared_at IS NOT NULL
+                      AND runs.room_id IN (
                 "#,
             );
             let mut separated = query_builder.separated(", ");
             for room_id in &user_cleared_rooms {
                 separated.push_bind(*room_id);
             }
-            separated.push_unseparated(")");
-            query_builder.push(
-                " GROUP BY runs.run_id, runs.user_id, runs.room_id, runs.started_at, runs.cleared_at",
+            separated.push_unseparated(
+                r#")
+                    GROUP BY
+                        runs.run_id,
+                        runs.user_id,
+                        runs.room_id,
+                        runs.started_at,
+                        runs.cleared_at
+                ),
+                user_best_candidates AS (
+                    SELECT
+                        run_id,
+                        user_id,
+                        room_id,
+                        started_at,
+                        elapsed_ms,
+                        query_count,
+                        cleared_at,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY room_id, user_id
+                            ORDER BY
+                                elapsed_ms,
+                                query_count,
+                                cleared_at,
+                                run_id
+                        ) AS user_position
+                    FROM run_records
+                ),
+                best_runs AS (
+                    SELECT
+                        run_id,
+                        user_id,
+                        room_id,
+                        started_at,
+                        elapsed_ms,
+                        query_count,
+                        cleared_at
+                    FROM user_best_candidates
+                    WHERE user_position = 1
+                ),
+                ranked_best_runs AS (
+                    SELECT
+                        room_id,
+                        user_id,
+                        elapsed_ms,
+                        query_count,
+                        CAST(
+                            RANK() OVER (
+                                PARTITION BY room_id
+                                ORDER BY
+                                    elapsed_ms,
+                                    query_count,
+                                    cleared_at
+                            )
+                            AS SIGNED
+                        ) AS leaderboard_rank
+                    FROM best_runs
+                )
+                SELECT
+                    room_id,
+                    leaderboard_rank AS `rank`,
+                    elapsed_ms,
+                    query_count
+                FROM ranked_best_runs
+                WHERE user_id = "#,
             );
+            query_builder.push_bind(user_id);
 
             query_builder
-                .build_query_as::<ClearedRunRow>()
+                .build_query_as::<UserRoomBestRow>()
                 .fetch_all(&self.pool)
                 .await
                 .map_err(RepositoryError::Database)?
@@ -916,100 +989,28 @@ impl AuthRepository for SqlxUserRepository {
             Vec::new()
         };
 
-        #[derive(Clone)]
-        struct UserBest {
-            user_id: Uuid,
-            elapsed_ms: u64,
-            query_count: u64,
-            cleared_at: DateTime<Utc>,
-        }
-
-        let mut room_user_bests: std::collections::HashMap<
-            Uuid,
-            std::collections::HashMap<Uuid, UserBest>,
-        > = std::collections::HashMap::new();
-
-        for run in cleared_run_rows {
-            let cleared_at = run.cleared_at.ok_or(RepositoryError::InvalidElapsed)?;
-            let elapsed = cleared_at.signed_duration_since(run.started_at);
-            if elapsed < chrono::Duration::zero() {
-                return Err(RepositoryError::InvalidElapsed);
-            }
-            let elapsed_ms = duration_to_elapsed_ms(elapsed)?;
-            let query_count =
-                u64::try_from(run.query_count).map_err(|_| RepositoryError::InvalidQueryCount)?;
-
-            let current_best = UserBest {
-                user_id: run.user_id,
-                elapsed_ms,
-                query_count,
-                cleared_at,
-            };
-
-            let users_map = room_user_bests.entry(run.room_id).or_default();
-            match users_map.get_mut(&run.user_id) {
-                Some(existing) => {
-                    let is_better = (
-                        current_best.elapsed_ms,
-                        current_best.query_count,
-                        current_best.cleared_at,
-                    ) < (
-                        existing.elapsed_ms,
-                        existing.query_count,
-                        existing.cleared_at,
-                    );
-                    if is_better {
-                        *existing = current_best;
-                    }
-                }
-                None => {
-                    users_map.insert(run.user_id, current_best);
-                }
-            }
-        }
-
         let mut user_room_best_records: std::collections::HashMap<Uuid, RoomBestRecordRecord> =
             std::collections::HashMap::new();
 
-        for (room_id, users_map) in room_user_bests {
-            if !user_cleared_rooms.contains(&room_id) {
-                continue;
+        for row in user_room_best_rows {
+            if row.elapsed_ms < 0 {
+                return Err(RepositoryError::InvalidElapsed);
             }
+            let elapsed_ms =
+                u64::try_from(row.elapsed_ms).map_err(|_| RepositoryError::InvalidElapsed)?;
+            let query_count =
+                u64::try_from(row.query_count).map_err(|_| RepositoryError::InvalidQueryCount)?;
+            let rank =
+                u32::try_from(row.rank).map_err(|_| RepositoryError::InvalidProgressCount)?;
 
-            let mut sorted_bests: Vec<UserBest> = users_map.into_values().collect();
-            sorted_bests.sort_by(|a, b| {
-                (a.elapsed_ms, a.query_count, a.cleared_at).cmp(&(
-                    b.elapsed_ms,
-                    b.query_count,
-                    b.cleared_at,
-                ))
-            });
-
-            let mut rank = 1u32;
-            for (i, item) in sorted_bests.iter().enumerate() {
-                if i > 0 {
-                    let prev = &sorted_bests[i - 1];
-                    if item.elapsed_ms == prev.elapsed_ms
-                        && item.query_count == prev.query_count
-                        && item.cleared_at == prev.cleared_at
-                    {
-                        // Same rank for tie
-                    } else {
-                        rank = (i + 1) as u32;
-                    }
-                }
-                if item.user_id == user_id {
-                    user_room_best_records.insert(
-                        room_id,
-                        RoomBestRecordRecord {
-                            elapsed_ms: item.elapsed_ms,
-                            rank,
-                            query_count: item.query_count,
-                        },
-                    );
-                    break;
-                }
-            }
+            user_room_best_records.insert(
+                row.room_id,
+                RoomBestRecordRecord {
+                    elapsed_ms,
+                    rank,
+                    query_count,
+                },
+            );
         }
 
         room_rows
