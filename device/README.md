@@ -35,9 +35,9 @@ productionのdebounce、repeat抑止、長押し判定を実装しません。
 | Issue #92手順の別担当による再現 | 未実施 |
 
 2026-09-02にはPoCの確認とは別に、`firmware/main.py`から自動起動するproduction版を実機へ書き込み、
-直接readで手動matrixと物理電源再投入を確認しました。無加工raw byte、期待event列、SHA-256、環境と
-判定は[`samples/issue81-production/README.md`](samples/issue81-production/README.md)に記録します。
-別担当がREADMEだけを使って行う再現確認は引き続き未実施です。
+直接readで手動matrixと物理電源再投入を確認しました。captureはローカル検証にだけ使用し、repositoryや
+PRには添付しません。実施環境と観測結果はこのREADMEへ記録します。別担当がREADMEだけを使って行う
+再現確認は引き続き未実施です。
 
 ## 使用機材
 
@@ -68,7 +68,7 @@ device/
 ├── poc/
 │   ├── button_test.py         # 手動実行するraw GPIO確認用script
 │   └── serial_protocol_poc.py # Issue #92時点のWire v1実機確認用script
-├── samples/                   # 編集しない実機raw記録と、その期待event／hash
+├── samples/                   # 過去のPoCで取得したvREPL transcript
 ├── tests/                     # hardware非依存のproduction状態機械test
 ├── README.md
 └── SERIAL_PROTOCOL.md         # device／frontend間のWire v1規範
@@ -81,9 +81,9 @@ device/
 viewerはraw REPLからPoC版`/serial_protocol_poc.py`を起動していたため、同名のproduction互換entrypoint
 や自動起動する`main.py`と取り違えないでください。
 
-既存の`samples/20260827-*`と`client/samples/web-serial/`はPoC時点の実測履歴です。production版の
-実測sampleはraw byteを無加工で保存し、期待event列とSHA-256を別fileとして対応付けます。syntheticな
-境界caseは`tests/`の期待値として管理し、実機sampleを装いません。
+既存の`samples/20260827-*`はPoC時点の実測履歴です。production版のraw captureはローカル検証にだけ
+使用し、repositoryへcommitしたりPRへ添付したりしません。syntheticな境界caseは`tests/`で管理し、
+実機sampleを装いません。
 
 ## ピン割当
 
@@ -426,10 +426,11 @@ PicoをWSLへattachしている間はWindows側から利用できません。Win
 portを開きます。browser側でportをcloseした後は、`usbipd attach --wsl --busid <BUSID>`、WSL側の
 `/dev/ttyACM*`確認、`MicroPico: Connect`の順で戻します。
 
-## 実測logの保存
+## 実機確認記録の扱い
 
-実機から取得したraw byteを正本として`device/samples/`へ保存します。PoCのvREPL transcriptとproduction
-の直接read captureを同じ検証結果として扱いません。
+productionの直接readで取得したraw byteはローカル検証用とし、repositoryやPRへ添付しません。PoCの
+vREPL transcriptとproductionの直接read captureを同じ検証結果として扱わず、実施環境、操作、期待値、
+観測結果、制約をREADMEまたはIssueへ記録します。
 
 production sampleはcaseごとに、少なくとも次を対応付けます。
 
@@ -437,15 +438,15 @@ production sampleはcaseごとに、少なくとも次を対応付けます。
 - 期待event列: `YYYYMMDD-issue81-<case>.expected.jsonl`。期待するcanonical frameを受信順に1 lineずつ記す
 - hash: raw `.bin`のSHA-256。metadataまたは`YYYYMMDD-issue81-<case>.sha256`へ記す
 - 実施記録: commit SHA、Pico／MicroPython、配線、capture tool、日時、操作手順、操作回数、期待event数、
-  実event数、判定、raw／期待値filenameを記す
+  実event数、判定を記す
 
 Linux／WSLでは、現在のPicoだけが対象portにつながっていることを確認し、repository rootから
-次の手順で直接readしたbyteを無変換で保存できます。`serial_port`、取得日、case名は実際の値へ
-変更します。
+次の手順で直接readしたbyteをrepository外またはignore対象のlocal pathへ無変換で保存できます。
+`serial_port`と`capture_path`は実際の値へ変更します。
 
 ```sh
 serial_port=/dev/ttyACM0
-capture_path=device/samples/20260902-issue81-single.bin
+capture_path=/tmp/issue81-single.bin
 stty -F "$serial_port" 115200 cs8 -cstopb -parenb -ixon -ixoff -crtscts raw -echo
 dd if="$serial_port" of="$capture_path" bs=4096 status=none oflag=excl
 ```
@@ -454,16 +455,16 @@ dd if="$serial_port" of="$capture_path" bs=4096 status=none oflag=excl
 上書きを防ぎます。USBを抜いてreadが終了するcaseと、再接続後のcaseは別のraw fileとし、対応関係を
 実施記録へ残します。このcommandはproductionの`main.py`を停止したりraw REPL commandを送ったりしません。
 
-Linux／WSLでは次のようにraw fileのSHA-256を記録できます。
+Linux／WSLでは次のようにraw fileのSHA-256をローカルで照合できます。
 
 ```sh
-sha256sum device/samples/YYYYMMDD-issue81-CASE.bin
+sha256sum /tmp/issue81-CASE.bin
 ```
 
 Windows PowerShellでは次を使用します。
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\device\samples\YYYYMMDD-issue81-CASE.bin
+Get-FileHash -Algorithm SHA256 .\issue81-CASE.bin
 ```
 
 serial monitorがtextとして保存する際にLF／CRLFを変換する場合、そのfileはraw正本にしません。binary保存
@@ -471,7 +472,7 @@ serial monitorがtextとして保存する際にLF／CRLFを変換する場合�
 command、停止応答が含まれていないことも確認します。payloadはcanonical key順・空白なしで、改行はLFまたは
 CRLFだけであることをbyte単位で照合します。
 
-既存のvREPL logには従来どおり次を適用します。
+既存のPoC vREPL logには従来どおり次を適用します。
 
 - filename例: `YYYYMMDD-gp2-vrepl.log`
 - vREPL transcriptのedgeを削除、重複排除、並べ替え、時刻補完しない
@@ -506,11 +507,11 @@ CRLFだけであることをbyte単位で照合します。
 1. 対象commit、Pico H、MicroPython version、host OS、capture toolを記録する。
 2. pin割当どおりに配線し、production 3 fileを`Upload Project`で転送する。
 3. Pico rootの3 fileを確認し、USBを物理的に抜き差しして`main.py`を自動起動する。
-4. 手動確認matrixを実行し、raw `.bin`、期待event列、SHA-256、操作数／event数を記録する。
-5. frontend parserへ同じraw sampleを入力する確認は別工程として行い、firmwareのraw正本を加工しない。
+4. 手動確認matrixを実行し、ローカルrawのSHA-256、期待event列、操作数／event数を照合する。
+5. frontend parserへ同じraw byteを入力する確認は別工程として行い、firmwareのrawを加工しない。
 6. 不一致や手順不足をIssue #81またはPRへ記録し、修正後はmatrixを最初から再実行する。
 
-PRまたはsample READMEには次のtemplateをcaseごとに埋めます。未実施欄を空欄のまま合格扱いにしません。
+PRまたはIssueには次のtemplateをcaseごとに埋めます。未実施欄を空欄のまま合格扱いにしません。
 
 ```text
 実施者:
@@ -523,9 +524,7 @@ case／具体的な操作:
 操作数:
 期待event列／期待event数:
 実event列／実event数:
-raw file:
-raw SHA-256:
-expected file:
+local raw SHA-256:
 canonical frame以外のbyte: なし／あり（内容）
 結果: PASS／FAIL
 備考:
@@ -536,14 +535,12 @@ canonical frame以外のbyte: なし／あり（内容）
 ### 2026-08-27 GP2／スイッチ1
 
 - 環境: Raspberry Pi Pico H（RP2040）、MicroPython v1.29.0 UF2、MicroPico v4.3.4、VS Code WSL window
-- firmware確認log: `samples/20260827-firmware-vrepl.log`
+- firmware bannerでMicroPython v1.29.0とRaspberry Pi Pico（RP2040）を確認
 - 配線: スイッチ1をGP2（物理pin 4）とGND（物理pin 8）の間へ接続
 - 初期状態: 未押下で`level=1 state=RELEASED`
 - 押下／解放: 押下で`level=0 state=PRESSED`、解放で`level=1 state=RELEASED`
 - 保持: PRESSEDで開始後、解放まで約41.8秒の間に追加の状態遷移なし
 - 短い間隔の操作: 6行のraw遷移を取得。約1.8 ms間隔の反転を含むが、原因をbounceとは断定しない
-- 実測log: `samples/20260827-gp2-vrepl.log`、`samples/20260827-gp2-hold-vrepl.log`、
-  `samples/20260827-gp2-rapid-vrepl.log`
 - `Upload Project`の転送内容は後述の全7入力試験後に確認
 
 ### 2026-08-27 GP2～GP8／スイッチ1～7
@@ -555,13 +552,10 @@ canonical frame以外のbyte: なし／あり（内容）
   `level=1 state=RELEASED`を確認
 - 複数入力の押下が重なる場合も、それぞれのbutton番号とGPIOで遷移を取得
 - 約1 ms単位の短い反転を含むraw遷移を取得したが、原因をbounceとは断定しない
-- 実測log: `samples/20260827-gp2-gp8-vrepl.log`
 - `MicroPico: Upload project to Pico`完了後、実機REPLの`os.listdir()`でPico filesystem rootが
   `['button_test.py']`だけであることを確認
 - `README.md`、`samples/`、`.vscode/`、`.micropico`が転送されていないことを確認
-- Upload確認log: `samples/20260827-upload-project-vrepl.log`
 - Pico filesystem上の`button_test.py`を実行し、全7入力が初期化されることを確認
-- Upload済みscript実行log: `samples/20260827-uploaded-button-test-vrepl.log`
 
 ### 2026-09-01 Web Serial診断capture
 
@@ -593,9 +587,9 @@ canonical frame以外のbyte: なし／あり（内容）
 ### Issue #81 production実機記録
 
 2026-09-02にproduction 3 fileを書き込み、raw REPLを使わない直接readで全7 control、連打、長押し、
-重なったbutton操作、無操作時の余分な出力、物理電源再投入、押下中再投入を確認しました。採用した
-raw／期待event／SHA-256とcaseごとの結果は
-[`samples/issue81-production/README.md`](samples/issue81-production/README.md)を参照してください。
+重なったbutton操作、無操作時の余分な出力、物理電源再投入、押下中再投入を確認しました。非空の
+captureはcanonical JSONとCRLFだけで構成され、期待event列と一致しました。capture自体はローカル確認に
+だけ使用し、repositoryやPRには添付しません。
 
 実装・capture担当とは別の担当者がREADMEだけを使って行う再現確認は未実施です。再現完了までは
 「別担当再現済み」とは扱いません。

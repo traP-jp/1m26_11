@@ -5,8 +5,8 @@
 この文書は、Issue #92で定めたRaspberry Pi Pico Hとfrontend間のSerial Protocol v1の規範です。
 deviceが生成するbutton操作eventと、frontendが受信してdevice event列へ追加するまでの契約を定めます。
 Issue #81のproduction firmwareは`firmware/button_firmware.py`、自動起動は`firmware/main.py`でこの規範を
-実装します。Issue #92の契約変更とIssue #81の実装変更を同一視せず、実装が規範へ適合することをtestと
-実機sampleで追跡します。
+実装します。Issue #92の契約変更とIssue #81の実装変更を同一視せず、規範への適合をunit testと実機確認の
+記録で追跡します。
 
 この文書で「必須」とする事項がv1の契約です。現在のraw GPIO診断用`button_test.py`の出力仕様では
 ありません。`poc/`はIssue #92を確定した時点の調査履歴で、production entrypointではありません。
@@ -31,7 +31,7 @@ deviceが送るcanonical JSONは空白を含めず、keyを`v`、`control`、`ge
 ```
 
 JSON objectのkey順とJSON上許される空白は意味を持たないため、frontendは順序や空白だけが異なる
-schema適合frameも受理します。ただし、deviceは再現可能なsampleを作るため上記canonical形式で送信します。
+schema適合frameも受理します。ただし、deviceは再現可能な出力にするため上記canonical形式で送信します。
 
 Serial portのopen設定やUSBの接続手順はpayload／framing契約とは分離します。production firmwareの
 書込み・起動・確認手順は[device README](README.md)、過去のPoC viewer設定は
@@ -59,8 +59,8 @@ frontendはこの開始offsetでframe bufferを空にしてからv1の処理を�
 取得方法は[client README](../client/README.md)も参照してください。取得したcaptureはローカルでの確認にだけ
 使用し、repositoryやPRには添付しません。
 
-production firmwareでは、このPoC固有のoffset境界は不要です。production sampleへraw REPL制御byteが
-含まれていた場合は、offsetで除外して合格にせず、確認手順または接続方法の誤りとして扱います。
+production firmwareでは、このPoC固有のoffset境界は不要です。production確認時のraw streamへraw REPL
+制御byteが含まれていた場合は、offsetで除外して合格にせず、確認手順または接続方法の誤りとして扱います。
 
 ## Frame schema
 
@@ -220,7 +220,7 @@ transportとGPIO挙動を確認しましたが、取得したcapture自体はrep
 この診断captureはJSON Frame schema、20 ms debounce、700 ms threshold、short／long gestureを送るWire v1
 の実測記録ではなく、protocol parserのcanonical sampleとして流用しません。
 
-2026-09-02には`poc/serial_protocol_poc.py`をraw REPLから実機で実行し、次を確認しました。
+2026-09-02のWire v1確認では、`poc/serial_protocol_poc.py`をraw REPLから実機で実行し、次を確認しました。
 
 - 全7 controlの`short_press`と、`up`の`long_press`
 - 起動時LOWの最初のreleaseを無視し、次のgestureから出力する動作
@@ -235,16 +235,15 @@ transportとGPIO挙動を確認しましたが、取得したcapture自体はrep
 実機が送信しないLF単独、invalid UTF-8／JSON／schema、overlong、切断時partial frameは
 contract-synthetic fixtureで検証し、実機由来のcaseとは明示的に区別します。
 
-[device vREPL samples](samples/)もraw GPIO診断の実測記録であり、canonical protocol sampleではありません。
+過去のdevice vREPL transcriptもraw GPIO診断の実測記録であり、canonical protocol sampleではありません。
 
 Issue #81の`firmware/`はhardware非依存の状態機械testを`mise run device-test`で検証します。このtestは
 19／20 ms、699／700 ms、bounce、連打、長押し、起動時LOW、複数button、tick wrapなどを決定的に確認する
 synthetic入力であり、production実機sampleではありません。
 
 2026-09-02にproduction `main.py`を書き込んだPicoを直接readし、canonical frame以外がないこと、物理的な
-電源再投入、押下中再投入を確認しました。無加工raw byte、期待event列、SHA-256、制約は
-[production hardware samples](samples/issue81-production/)に対応付けます。これは同日のPoC captureとは
-別の実測です。別担当による再現は未実施です。
+電源再投入、押下中再投入を確認しました。captureは同日のPoCとは別にローカルで照合し、repositoryやPRへは
+添付しません。別担当による再現は未実施です。
 
 ## 対象外
 

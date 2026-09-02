@@ -7,6 +7,9 @@ device.code-workspace
 __pycache__/
 *.py[cod]
 
-# Ignore ordinary logs, but retain measured hardware logs
+# Ignore ordinary logs, but retain the historical PoC transcripts already tracked
 *.log
 !samples/*.log
+
+# Production captures are local verification artifacts, not repository contents
+samples/issue81-production/
