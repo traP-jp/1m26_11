@@ -1,0 +1,40 @@
+openapi_document: ../openapi-v1.yaml
+cases:
+  - id: upload_problem_asset
+    priority: p1
+    preconditions:
+      auth_mode: demo
+      image_upload_enabled: true
+      localhost_only_network_boundary: true
+      room_exists: true
+      room_is_published: false
+      problem_exists: true
+      problem_belongs_to_room: true
+      valid_idempotency_key: true
+      valid_png_file: true
+      valid_alt: true
+    steps:
+      - operation_id: uploadProblemAsset
+        response:
+          status: 201
+          example: created
+        state_after:
+          storage_object_created: true
+          problem_asset_appended: true
+
+  - id: retry_same_image_upload
+    priority: p1
+    preconditions:
+      auth_mode: demo
+      image_upload_enabled: true
+      localhost_only_network_boundary: true
+      prior_request_completed: true
+      same_method_path_idempotency_key_file_and_alt: true
+    steps:
+      - operation_id: uploadProblemAsset
+        response:
+          status: 201
+          example: created
+        state_after:
+          storage_object_created: false
+          problem_asset_appended: false
