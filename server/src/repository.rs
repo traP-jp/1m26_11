@@ -725,7 +725,12 @@ impl AuthRepository for SqlxUserRepository {
                 rooms.genre,
                 rooms.description,
                 COUNT(problems.problem_id) AS problem_count,
-                COALESCE(SUM(CASE WHEN problems.is_required = 1 THEN 1 ELSE 0 END), 0) AS required_count
+                CAST(
+                    COALESCE(
+                        SUM(CASE WHEN problems.is_required = 1 THEN 1 ELSE 0 END),
+                        0
+                    ) AS SIGNED
+                ) AS required_count
             FROM rooms
             LEFT JOIN problems ON problems.room_id = rooms.room_id
             WHERE rooms.is_published = 1
@@ -869,13 +874,18 @@ impl AuthRepository for SqlxUserRepository {
                     runs.room_id,
                     runs.started_at,
                     runs.cleared_at,
-                    COALESCE(SUM(
-                        CASE
-                            WHEN problems.submission_type = 'operation_sequence'
-                            THEN problem_progress.answer_attempt_count
-                            ELSE 0
-                        END
-                    ), 0) AS query_count
+                    CAST(
+                        COALESCE(
+                            SUM(
+                                CASE
+                                    WHEN problems.submission_type = 'operation_sequence'
+                                    THEN problem_progress.answer_attempt_count
+                                    ELSE 0
+                                END
+                            ),
+                            0
+                        ) AS SIGNED
+                    ) AS query_count
                 FROM runs
                 INNER JOIN rooms ON rooms.room_id = runs.room_id
                 LEFT JOIN problem_progress ON problem_progress.run_id = runs.run_id
