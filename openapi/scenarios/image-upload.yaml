@@ -5,7 +5,7 @@ cases:
     preconditions:
       auth_mode: demo
       image_upload_enabled: true
-      request_from_localhost: true
+      localhost_only_network_boundary: true
       room_exists: true
       room_is_published: false
       problem_exists: true
@@ -27,7 +27,7 @@ cases:
     preconditions:
       auth_mode: demo
       image_upload_enabled: true
-      request_from_localhost: true
+      localhost_only_network_boundary: true
       prior_request_completed: true
       same_method_path_idempotency_key_file_and_alt: true
     steps:

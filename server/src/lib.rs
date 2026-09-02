@@ -32,6 +32,11 @@ mod error;
 )]
 pub(crate) mod game_progress;
 mod handler;
+#[expect(
+    dead_code,
+    reason = "image upload validation and storage will be used by the upload handler"
+)]
+mod image_upload;
 pub mod problem;
 pub mod repository;
 

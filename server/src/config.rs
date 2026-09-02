@@ -3,7 +3,7 @@ use std::{env, net::SocketAddr, num::ParseIntError, str::FromStr};
 use sqlx::mysql::MySqlConnectOptions;
 use thiserror::Error;
 
-const DEFAULT_APP_ADDR: &str = "0.0.0.0:8080";
+const DEFAULT_APP_ADDR: &str = "127.0.0.1:8080";
 const DEFAULT_DEMO_COOKIE_SECURE: bool = true;
 const DEFAULT_DB_USER: &str = "root";
 const DEFAULT_DB_PASS: &str = "pass";
@@ -182,7 +182,7 @@ fn parse_bool(value: &str) -> Option<bool> {
 
 fn normalize_app_addr(value: &str) -> String {
     if value.starts_with(':') {
-        format!("0.0.0.0{value}")
+        format!("127.0.0.1{value}")
     } else {
         value.to_owned()
     }
@@ -210,7 +210,10 @@ impl FromStr for AuthMode {
 mod tests {
     use std::str::FromStr;
 
-    use super::{AuthMode, ConfigError, load_storage_config, parse_bool};
+    use super::{
+        AuthMode, ConfigError, DEFAULT_APP_ADDR, load_storage_config, normalize_app_addr,
+        parse_bool,
+    };
 
     fn storage_value(key: &'static str) -> Result<String, ConfigError> {
         let value = match key {
@@ -298,5 +301,12 @@ mod tests {
                 key: "AWS_SECRET_ACCESS_KEY"
             })
         ));
+    }
+
+    #[test]
+    fn app_addr_defaults_and_shorthand_use_loopback() {
+        assert_eq!(DEFAULT_APP_ADDR, "127.0.0.1:8080");
+        assert_eq!(normalize_app_addr(":8080"), "127.0.0.1:8080");
+        assert_eq!(normalize_app_addr("0.0.0.0:8080"), "0.0.0.0:8080");
     }
 }
