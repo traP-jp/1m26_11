@@ -29,5 +29,6 @@ openapi_generated = { package = "openapi", path = "generated/openapi" }
 serde_yaml = "0.9"
 
 [dev-dependencies]
+futures-util = "0.3"
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }

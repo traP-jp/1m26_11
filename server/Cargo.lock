@@ -2512,6 +2512,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "chrono",
+ "futures-util",
  "http-body-util",
  "image",
  "openapi",

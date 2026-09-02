@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use axum::{
     Router,
-    extract::MatchedPath,
+    extract::{DefaultBodyLimit, MatchedPath},
     routing::{get, post},
 };
 use config::AuthMode;
@@ -32,11 +32,8 @@ mod error;
 )]
 pub(crate) mod game_progress;
 mod handler;
-#[expect(
-    dead_code,
-    reason = "image upload validation and storage will be used by the upload handler"
-)]
 mod image_upload;
+pub use image_upload::{ImageStorage, ImageStorageError, ImageStorageUpload, S3ImageStorage};
 pub mod problem;
 pub mod repository;
 
@@ -48,6 +45,7 @@ pub struct AppState {
     pub(crate) demo_cookie_secure: bool,
     pub(crate) auth_repository: Arc<dyn AuthRepository>,
     pub(crate) asset_url_resolver: Arc<dyn AssetUrlResolver>,
+    pub(crate) image_storage: Option<Arc<dyn ImageStorage>>,
 }
 
 impl AppState {
@@ -58,6 +56,7 @@ impl AppState {
             demo_cookie_secure: true,
             auth_repository,
             asset_url_resolver: Arc::new(UnconfiguredAssetUrlResolver),
+            image_storage: None,
         }
     }
 
@@ -75,10 +74,19 @@ impl AppState {
         self.asset_url_resolver = asset_url_resolver;
         self
     }
+
+    #[must_use]
+    pub fn with_image_storage(mut self, image_storage: Arc<dyn ImageStorage>) -> Self {
+        self.image_storage = Some(image_storage);
+        self
+    }
 }
 
 pub fn app(state: AppState) -> Router {
-    Router::new()
+    let image_upload_route_enabled =
+        state.auth_mode == AuthMode::Demo && state.image_storage.is_some();
+
+    let mut router = Router::new()
         .route(
             "/api/v1/ping",
             get(handler::ping).fallback(handler::method_not_allowed),
@@ -134,7 +142,18 @@ pub fn app(state: AppState) -> Router {
         .route(
             "/api/rooms/{room_id}/problems/{problem_id}/answers",
             post(handler::submit_answer).fallback(handler::method_not_allowed),
-        )
+        );
+    if image_upload_route_enabled {
+        router = router.route(
+            "/api/rooms/{room_id}/problems/{problem_id}/assets",
+            post(handler::upload_problem_asset)
+                .fallback(handler::method_not_allowed)
+                .layer(DefaultBodyLimit::max(
+                    image_upload::MAX_IMAGE_FILE_BYTES + 64 * 1024,
+                )),
+        );
+    }
+    router
         .fallback(handler::not_found)
         .layer(
             TraceLayer::new_for_http()

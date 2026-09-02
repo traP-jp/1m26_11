@@ -51,14 +51,14 @@ pub(crate) enum ImageValidationError {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ImageStorageUpload {
+pub struct ImageStorageUpload {
     pub object_key: String,
     pub bytes: Vec<u8>,
     pub content_type: &'static str,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub(crate) enum ImageStorageError {
+pub enum ImageStorageError {
     #[error("storage provider rejected the upload")]
     ProviderError,
 
@@ -67,17 +67,17 @@ pub(crate) enum ImageStorageError {
 }
 
 #[async_trait]
-pub(crate) trait ImageStorage: Send + Sync {
+pub trait ImageStorage: Send + Sync {
     async fn upload(&self, upload: ImageStorageUpload) -> Result<(), ImageStorageError>;
 }
 
-pub(crate) struct S3ImageStorage {
+pub struct S3ImageStorage {
     client: aws_sdk_s3::Client,
     bucket: String,
 }
 
 impl S3ImageStorage {
-    pub(crate) fn new(config: &StorageConfig) -> Self {
+    pub fn new(config: &StorageConfig) -> Self {
         let credentials = Credentials::new(
             config.access_key_id.clone(),
             config.secret_access_key.clone(),
