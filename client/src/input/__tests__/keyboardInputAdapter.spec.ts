@@ -37,7 +37,7 @@ function dispatchKey(
 }
 
 describe('createKeyboardInputAdapter', () => {
-  it('maps arrow keys and Enter to keyboard events', () => {
+  it('maps all seven controls and Enter to keyboard events', () => {
     const target = document.createElement('div')
     const { dispatcher, events } = createRecordingDispatcher()
     const adapter = createKeyboardInputAdapter({
@@ -53,6 +53,9 @@ describe('createKeyboardInputAdapter', () => {
       dispatchKey(target, 'ArrowDown'),
       dispatchKey(target, 'ArrowLeft'),
       dispatchKey(target, 'ArrowRight'),
+      dispatchKey(target, 'r'),
+      dispatchKey(target, 'y'),
+      dispatchKey(target, 'g'),
       dispatchKey(target, 'Enter'),
     ]
 
@@ -61,6 +64,9 @@ describe('createKeyboardInputAdapter', () => {
       { type: 'condition-changed', source: 'keyboard', control: 'down', count: 1 },
       { type: 'condition-changed', source: 'keyboard', control: 'left', count: 1 },
       { type: 'condition-changed', source: 'keyboard', control: 'right', count: 1 },
+      { type: 'condition-changed', source: 'keyboard', control: 'red', count: 1 },
+      { type: 'condition-changed', source: 'keyboard', control: 'yellow', count: 1 },
+      { type: 'condition-changed', source: 'keyboard', control: 'green', count: 1 },
       { type: 'query-submitted', source: 'keyboard' },
     ])
     expect(keyEvents.every((event) => event.defaultPrevented)).toBe(true)
@@ -87,6 +93,33 @@ describe('createKeyboardInputAdapter', () => {
     expect(unavailable.defaultPrevented).toBe(false)
     expect(available.defaultPrevented).toBe(true)
     expect(unrelated.defaultPrevented).toBe(false)
+  })
+
+  it('accepts color keys with Caps Lock without accepting Shift shortcuts', () => {
+    const target = new EventTarget()
+    const { dispatcher, events } = createRecordingDispatcher()
+    const adapter = createKeyboardInputAdapter({
+      dispatcher,
+      isControlAllowed: () => true,
+      target,
+      getActiveElement: () => null,
+    })
+    adapter.start()
+
+    const capsLockKeys = [
+      dispatchKey(target, 'R'),
+      dispatchKey(target, 'Y'),
+      dispatchKey(target, 'G'),
+    ]
+    const shifted = dispatchKey(target, 'R', { shiftKey: true })
+
+    expect(events).toEqual([
+      { type: 'condition-changed', source: 'keyboard', control: 'red', count: 1 },
+      { type: 'condition-changed', source: 'keyboard', control: 'yellow', count: 1 },
+      { type: 'condition-changed', source: 'keyboard', control: 'green', count: 1 },
+    ])
+    expect(capsLockKeys.every((event) => event.defaultPrevented)).toBe(true)
+    expect(shifted.defaultPrevented).toBe(false)
   })
 
   it('does not fire shortcuts from native or contenteditable text-entry targets', () => {
@@ -139,7 +172,7 @@ describe('createKeyboardInputAdapter', () => {
     expect(acceptedEvent.defaultPrevented).toBe(true)
   })
 
-  it('leaves Enter handling to focused buttons and links', () => {
+  it('leaves Enter to focused actions while keeping control shortcuts available', () => {
     const target = document.createElement('div')
     const button = document.createElement('button')
     const buttonLabel = document.createElement('span')
@@ -159,10 +192,17 @@ describe('createKeyboardInputAdapter', () => {
 
     const buttonEvent = dispatchKey(buttonLabel, 'Enter')
     const linkEvent = dispatchKey(link, 'Enter')
+    const buttonControl = dispatchKey(buttonLabel, 'ArrowUp')
+    const linkControl = dispatchKey(link, 'r')
 
-    expect(events).toEqual([])
+    expect(events).toEqual([
+      { type: 'condition-changed', source: 'keyboard', control: 'up', count: 1 },
+      { type: 'condition-changed', source: 'keyboard', control: 'red', count: 1 },
+    ])
     expect(buttonEvent.defaultPrevented).toBe(false)
     expect(linkEvent.defaultPrevented).toBe(false)
+    expect(buttonControl.defaultPrevented).toBe(true)
+    expect(linkControl.defaultPrevented).toBe(true)
   })
 
   it('uses the focused document element to guard window shortcuts', () => {
@@ -193,11 +233,18 @@ describe('createKeyboardInputAdapter', () => {
       button.focus()
       expect(document.activeElement).toBe(button)
       const buttonEvent = dispatchKey(window, 'Enter')
+      const buttonArrowEvent = dispatchKey(window, 'ArrowUp')
+      const buttonColorEvent = dispatchKey(window, 'g')
 
-      expect(events).toEqual([])
+      expect(events).toEqual([
+        { type: 'condition-changed', source: 'keyboard', control: 'up', count: 1 },
+        { type: 'condition-changed', source: 'keyboard', control: 'green', count: 1 },
+      ])
       expect(inputEvent.defaultPrevented).toBe(false)
       expect(textareaEvent.defaultPrevented).toBe(false)
       expect(buttonEvent.defaultPrevented).toBe(false)
+      expect(buttonArrowEvent.defaultPrevented).toBe(true)
+      expect(buttonColorEvent.defaultPrevented).toBe(true)
     } finally {
       adapter.stop()
       host.remove()
@@ -221,13 +268,19 @@ describe('createKeyboardInputAdapter', () => {
       dispatchKey(target, 'ArrowUp', { ctrlKey: true }),
       dispatchKey(target, 'ArrowUp', { metaKey: true }),
       dispatchKey(target, 'ArrowUp', { shiftKey: true }),
+      dispatchKey(target, 'r', { altKey: true }),
+      dispatchKey(target, 'r', { ctrlKey: true }),
+      dispatchKey(target, 'r', { metaKey: true }),
+      dispatchKey(target, 'R', { shiftKey: true }),
     ]
     const repeatedControl = dispatchKey(target, 'ArrowUp', { repeat: true })
+    const repeatedColor = dispatchKey(target, 'r', { repeat: true })
     const repeatedSubmit = dispatchKey(target, 'Enter', { repeat: true })
 
     expect(events).toEqual([])
     expect(guardedEvents.every((event) => !event.defaultPrevented)).toBe(true)
     expect(repeatedControl.defaultPrevented).toBe(true)
+    expect(repeatedColor.defaultPrevented).toBe(true)
     expect(repeatedSubmit.defaultPrevented).toBe(true)
   })
 

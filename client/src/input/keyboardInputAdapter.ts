@@ -10,6 +10,9 @@ export const keyboardControlByKey: Readonly<Record<string, Control>> = {
   ArrowDown: 'down',
   ArrowLeft: 'left',
   ArrowRight: 'right',
+  r: 'red',
+  y: 'yellow',
+  g: 'green',
 }
 
 export interface KeyboardInputAdapterOptions {
@@ -37,14 +40,14 @@ function getDefaultActiveElement(): EventTarget | null {
   return document.activeElement
 }
 
+function normalizeShortcutKey(key: string): string {
+  return key.length === 1 ? key.toLowerCase() : key
+}
+
 function isActionTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false
 
   return target.closest('button, a[href], summary, [role="button"], [role="link"]') !== null
-}
-
-function shouldIgnoreShortcut(target: EventTarget | null): boolean {
-  return isEditableInputTarget(target) || isActionTarget(target)
 }
 
 /** Converts keyboard shortcuts into the same semantic events as the other input adapters. */
@@ -58,11 +61,12 @@ export function createKeyboardInputAdapter(
   const handleKeydown: EventListener = (event) => {
     if (!(event instanceof KeyboardEvent)) return
     if (event.isComposing || hasModifier(event)) return
-    if (shouldIgnoreShortcut(event.target) || shouldIgnoreShortcut(getActiveElement())) {
+    const activeElement = getActiveElement()
+    if (isEditableInputTarget(event.target) || isEditableInputTarget(activeElement)) {
       return
     }
 
-    const control = keyboardControlByKey[event.key]
+    const control = keyboardControlByKey[normalizeShortcutKey(event.key)]
     if (control !== undefined) {
       if (!options.isControlAllowed(control)) return
 
@@ -79,6 +83,7 @@ export function createKeyboardInputAdapter(
     }
 
     if (event.key !== 'Enter') return
+    if (isActionTarget(event.target) || isActionTarget(activeElement)) return
 
     event.preventDefault()
     if (event.repeat) return

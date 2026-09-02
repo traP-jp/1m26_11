@@ -102,6 +102,23 @@ frameは実機が送ったdataと偽らず、`src/device-poc/__tests__/serialPro
 contract-synthetic testとして区別します。`SerialProtocolPocParser`はWire契約の適合確認用PoCであり、
 製品画面の操作列へはまだ接続していません。
 
+## Keyboard input
+
+keyboard adapterは、問題ごとに許可されたcontrolを次のキーへ割り当てます。
+
+| key | control |
+| --- | --- |
+| `ArrowUp` | `up` |
+| `ArrowDown` | `down` |
+| `ArrowLeft` | `left` |
+| `ArrowRight` | `right` |
+| `R` | `red` |
+| `Y` | `yellow` |
+| `G` | `green` |
+
+`Enter`はquery送信です。input、textarea、select、contenteditableへfocus中はshortcutを無効にします。
+buttonやlinkへfocus中は`Enter`をnative操作へ譲りますが、7 controlのshortcutは利用できます。
+
 mock responseは`../openapi/openapi-v1.yaml`、`../openapi/examples/`、`../openapi/scenarios/p0-cases.yaml`を直接読みます。response payloadをclient内に複製していないため、OpenAPIのexampleとscenarioがmockの正本です。
 
 実backendへ接続する場合は`.env.example`を参考に`client/.env.local`を作成し、`VITE_ENABLE_MSW=false`を設定してください。その場合、Viteは`/api`と`/openapi.yaml`を`API_PROXY_TARGET`（既定は`http://127.0.0.1:8080`）へproxyします。特定の状態からmockを開始する場合は、`VITE_MSW_SCENARIO`へscenarioのcase id（例: `demo_login_and_logout`、`query_correct`）を指定します。production buildではMSWは常に無効です。
