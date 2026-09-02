@@ -568,8 +568,8 @@ canonical frame以外のbyte: なし／あり（内容）
 - Windows上のChrome 150、`http://localhost:5173/device-poc`、115200／8-N-1で実施
 - `button_test.py`をbrowserのraw REPL bootstrapから起動し、全7 GPIOの押下／解放をraw byteで確認
 - 正常停止、読取り中のUSB物理切断、capture保持、利用者操作による再接続、再接続後のGP2を確認
-- 実測captureとSHA-256、script出力区間、操作結果は
-  [`client/samples/web-serial/README.md`](../client/samples/web-serial/README.md)に記録
+- 実測captureはローカル確認にだけ使用し、repositoryやPRには添付しない
+- 実施環境と操作結果はこの節へ記録
 - このcaptureは人向け診断出力であり、Wire v1のJSON frame実測sampleには流用しない
 
 ### 2026-09-02 Wire v1 PoC Web Serial capture
@@ -584,9 +584,8 @@ canonical frame以外のbyte: なし／あり（内容）
   `up / long_press`が出る独立入力を確認
 - 正常停止と、読取り中のUSB物理切断によるcapture保持、BOOTSELなしの再接続、利用者gestureでの
   再起動、再接続後の`up / short_press`、正常停止を確認
-- 実測`.bin`／`.json`、SHA-256、connectionごとのoffset、raw frame列は
-  [`client/samples/web-serial/README.md`](../client/samples/web-serial/README.md)に記録
-- raw REPL制御byteを含むcapture全体と、Wire v1 parserへ渡すhalf-open intervalを分けて保存
+- 実測`.bin`／`.json`はローカル確認にだけ使用し、repositoryやPRには添付しない
+- raw REPL制御byteを含むcapture全体と、Wire v1 parserへ渡すhalf-open intervalを分けて確認
 
 この記録は`poc/serial_protocol_poc.py`とraw REPL bootstrapを使ったIssue #92の実測です。production
 `main.py`の自動起動、直接read、power cycle後の状態初期化を確認した記録ではありません。

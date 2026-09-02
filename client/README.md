@@ -94,25 +94,13 @@ WSLへattachし直してから`MicroPico: Connect`を実行します。詳細な
 SHA-256は、保存した環境に応じて`sha256sum <capture.bin>`またはPowerShellの
 `Get-FileHash <capture.bin> -Algorithm SHA256`で照合できます。
 
-実機Web Serial captureは`client/samples/web-serial/`へ保存します。旧`button_test.py`を使った
-`diagnostic/`とWire v1専用PoCの`protocol-v1/`を分け、`device/samples/`のvREPL実測logへは混在
-させません。保存方針と確認済みhashは
-[`samples/web-serial/README.md`](samples/web-serial/README.md)を参照してください。
+実機Web Serial captureはローカルでの確認にだけ使用し、repositoryへcommitしたりPRへ添付したり
+しません。実機で行った操作、環境、観測結果だけを[`device/README.md`](../device/README.md)へ記録します。
 
 1行を複数chunkへ分ける場合、複数行を1 chunkへまとめる場合、invalid UTF-8／JSON／schema、overlong
 frameは実機が送ったdataと偽らず、`src/device-poc/__tests__/serialProtocolPoc.spec.ts`の
 contract-synthetic testとして区別します。`SerialProtocolPocParser`はWire契約の適合確認用PoCであり、
 製品画面の操作列へはまだ接続していません。
-
-Wire v1実測captureはmetadataのconnection offsetと元のread chunk境界を保ったまま、
-`src/device-poc/__tests__/serialProtocolPoc.hardware.spec.ts`から同じparserへ流します。raw REPL制御byteを
-parser sampleへ混ぜず、切断と再接続のconnection境界ではparser stateをresetします。
-
-Issue #81 production firmwareをraw REPLなしで直接readしたsampleは
-[`device/samples/issue81-production/`](../device/samples/issue81-production/)に保存し、
-`src/device-poc/__tests__/serialProtocolPoc.productionHardware.spec.ts`から同じparserへ入力します。このtestは
-期待event列だけでなく、raw全体がcanonical JSON lineとLF／CRLFだけで構成され、partialや無効lineがないこと、
-保存したSHA-256と一致することも確認します。これはIssue #27のport管理や製品画面への接続完了を意味しません。
 
 mock responseは`../openapi/openapi-v1.yaml`、`../openapi/examples/`、`../openapi/scenarios/p0-cases.yaml`を直接読みます。response payloadをclient内に複製していないため、OpenAPIのexampleとscenarioがmockの正本です。
 

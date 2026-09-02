@@ -56,7 +56,8 @@ byte範囲は開始を含み終了を含まないhalf-open intervalです。
 
 frontendはこの開始offsetでframe bufferを空にしてからv1の処理を始め、終了offsetで残ったpartial frameを
 破棄します。開始offsetより前と終了offset以後のbyteをv1 parserへ渡しません。offsetの意味とraw captureの
-保存方法は[Web Serial sample README](../client/samples/web-serial/README.md)も参照してください。
+取得方法は[client README](../client/README.md)も参照してください。取得したcaptureはローカルでの確認にだけ
+使用し、repositoryやPRには添付しません。
 
 production firmwareでは、このPoC固有のoffset境界は不要です。production sampleへraw REPL制御byteが
 含まれていた場合は、offsetで除外して合格にせず、確認手順または接続方法の誤りとして扱います。
@@ -210,17 +211,16 @@ Issue #27はこのFrontend責任のうちport lifecycle、接続状態、切断�
 production firmwareの起動commandを送ることや、hostのport close／openでdevice状態をresetすることは
 Issue #27の責任に含めません。
 
-## 実測根拠とsampleの区別
+## 実測確認とsynthetic testの区別
 
-2026-09-01の[Web Serial diagnostic captures](../client/samples/web-serial/diagnostic/)では、Raspberry Pi
-Pico Hの全7入力、CRLFを含む診断出力、読取り中のUSB切断と利用者操作による再接続を確認しました。
-これらはraw REPL応答と`button_test.py`の人向け診断行を含む、transportとGPIO挙動の実測記録です。
+2026-09-01のWeb Serial診断では、Raspberry Pi Pico Hの全7入力、CRLFを含む診断出力、読取り中の
+USB切断と利用者操作による再接続を確認しました。raw REPL応答と`button_test.py`の人向け診断行を含む
+transportとGPIO挙動を確認しましたが、取得したcapture自体はrepositoryへ保存しません。
 
 この診断captureはJSON Frame schema、20 ms debounce、700 ms threshold、short／long gestureを送るWire v1
 の実測記録ではなく、protocol parserのcanonical sampleとして流用しません。
 
-2026-09-02の[Wire v1 captures](../client/samples/web-serial/protocol-v1/)では、`poc/serial_protocol_poc.py`を
-raw REPLから実機で実行し、次を確認しました。
+2026-09-02には`poc/serial_protocol_poc.py`をraw REPLから実機で実行し、次を確認しました。
 
 - 全7 controlの`short_press`と、`up`の`long_press`
 - 起動時LOWの最初のreleaseを無視し、次のgestureから出力する動作
@@ -228,9 +228,9 @@ raw REPLから実機で実行し、次を確認しました。
 - compact ASCII JSON、CRLF、1 frameが複数read chunkへ分割されるtransport境界
 - 正常停止、読取り中のUSB切断、capture保持、利用者gestureによる再接続と再開
 
-元の`.bin`とmetadata、SHA-256、取得環境、接続境界を保持し、raw REPL制御を除いたWire v1範囲を
-`scriptActiveObservedOffset`から`stopRequestedOffset`または`endedOffset`までとして記録しています。
-実機sampleを元のchunk境界でparserへ流すtestもこの範囲を使用します。
+実機確認時はraw REPL制御を除いたWire v1範囲を、`scriptActiveObservedOffset`から
+`stopRequestedOffset`または`endedOffset`までとして確認しました。取得した`.bin`とmetadataは
+ローカル確認後にrepositoryやPRへ添付しません。
 
 実機が送信しないLF単独、invalid UTF-8／JSON／schema、overlong、切断時partial frameは
 contract-synthetic fixtureで検証し、実機由来のcaseとは明示的に区別します。
