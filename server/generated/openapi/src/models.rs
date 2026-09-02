@@ -819,6 +819,177 @@ impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<Asset> {
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
 #[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct BestRecord {
+    #[serde(rename = "elapsed_ms")]
+    #[validate(range(min = 0u64))]
+    pub elapsed_ms: u64,
+
+    #[serde(rename = "rank")]
+    #[validate(range(min = 1u32))]
+    pub rank: u32,
+
+    #[serde(rename = "query_count")]
+    #[validate(range(min = 0u64))]
+    pub query_count: u64,
+}
+
+impl BestRecord {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(elapsed_ms: u64, rank: u32, query_count: u64) -> BestRecord {
+        BestRecord {
+            elapsed_ms,
+            rank,
+            query_count,
+        }
+    }
+}
+
+/// Converts the BestRecord value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for BestRecord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            Some("elapsed_ms".to_string()),
+            Some(self.elapsed_ms.to_string()),
+            Some("rank".to_string()),
+            Some(self.rank.to_string()),
+            Some("query_count".to_string()),
+            Some(self.query_count.to_string()),
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a BestRecord value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for BestRecord {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub elapsed_ms: Vec<u64>,
+            pub rank: Vec<u32>,
+            pub query_count: Vec<u64>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing BestRecord".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "elapsed_ms" => intermediate_rep.elapsed_ms.push(
+                        <u64 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "rank" => intermediate_rep.rank.push(
+                        <u32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "query_count" => intermediate_rep.query_count.push(
+                        <u64 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    _ => {
+                        return std::result::Result::Err(
+                            "Unexpected key while parsing BestRecord".to_string(),
+                        );
+                    }
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(BestRecord {
+            elapsed_ms: intermediate_rep
+                .elapsed_ms
+                .into_iter()
+                .next()
+                .ok_or_else(|| "elapsed_ms missing in BestRecord".to_string())?,
+            rank: intermediate_rep
+                .rank
+                .into_iter()
+                .next()
+                .ok_or_else(|| "rank missing in BestRecord".to_string())?,
+            query_count: intermediate_rep
+                .query_count
+                .into_iter()
+                .next()
+                .ok_or_else(|| "query_count missing in BestRecord".to_string())?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<BestRecord> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<BestRecord>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<BestRecord>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for BestRecord - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<BestRecord> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <BestRecord as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into BestRecord - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
 pub struct CorrectAnswerResponse {
     /// Note: inline enums are not fully supported by openapi-generator
     #[serde(rename = "correct")]
@@ -4887,19 +5058,30 @@ impl std::str::FromStr for ProblemType {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
 #[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
 pub struct Progress {
-    #[serde(rename = "cleared_problem_count")]
-    pub cleared_problem_count: i32,
+    #[serde(rename = "status")]
+    #[validate(nested)]
+    pub status: models::ProgressStatus,
 
-    #[serde(rename = "total_problem_count")]
-    pub total_problem_count: i32,
+    #[serde(rename = "cleared_count")]
+    #[validate(range(min = 0u32))]
+    pub cleared_count: u32,
+
+    #[serde(rename = "required_count")]
+    #[validate(range(min = 0u32))]
+    pub required_count: u32,
 }
 
 impl Progress {
     #[allow(clippy::new_without_default, clippy::too_many_arguments)]
-    pub fn new(cleared_problem_count: i32, total_problem_count: i32) -> Progress {
+    pub fn new(
+        status: models::ProgressStatus,
+        cleared_count: u32,
+        required_count: u32,
+    ) -> Progress {
         Progress {
-            cleared_problem_count,
-            total_problem_count,
+            status,
+            cleared_count,
+            required_count,
         }
     }
 }
@@ -4910,10 +5092,11 @@ impl Progress {
 impl std::fmt::Display for Progress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let params: Vec<Option<String>> = vec![
-            Some("cleared_problem_count".to_string()),
-            Some(self.cleared_problem_count.to_string()),
-            Some("total_problem_count".to_string()),
-            Some(self.total_problem_count.to_string()),
+            // Skipping status in query parameter serialization
+            Some("cleared_count".to_string()),
+            Some(self.cleared_count.to_string()),
+            Some("required_count".to_string()),
+            Some(self.required_count.to_string()),
         ];
 
         write!(
@@ -4935,8 +5118,9 @@ impl std::str::FromStr for Progress {
         #[derive(Default)]
         #[allow(dead_code)]
         struct IntermediateRep {
-            pub cleared_problem_count: Vec<i32>,
-            pub total_problem_count: Vec<i32>,
+            pub status: Vec<models::ProgressStatus>,
+            pub cleared_count: Vec<u32>,
+            pub required_count: Vec<u32>,
         }
 
         let mut intermediate_rep = IntermediateRep::default();
@@ -4959,12 +5143,17 @@ impl std::str::FromStr for Progress {
                 #[allow(clippy::match_single_binding)]
                 match key {
                     #[allow(clippy::redundant_clone)]
-                    "cleared_problem_count" => intermediate_rep.cleared_problem_count.push(
-                        <i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    "status" => intermediate_rep.status.push(
+                        <models::ProgressStatus as std::str::FromStr>::from_str(val)
+                            .map_err(|x| x.to_string())?,
                     ),
                     #[allow(clippy::redundant_clone)]
-                    "total_problem_count" => intermediate_rep.total_problem_count.push(
-                        <i32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    "cleared_count" => intermediate_rep.cleared_count.push(
+                        <u32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "required_count" => intermediate_rep.required_count.push(
+                        <u32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
                     ),
                     _ => {
                         return std::result::Result::Err(
@@ -4980,16 +5169,21 @@ impl std::str::FromStr for Progress {
 
         // Use the intermediate representation to return the struct
         std::result::Result::Ok(Progress {
-            cleared_problem_count: intermediate_rep
-                .cleared_problem_count
+            status: intermediate_rep
+                .status
                 .into_iter()
                 .next()
-                .ok_or_else(|| "cleared_problem_count missing in Progress".to_string())?,
-            total_problem_count: intermediate_rep
-                .total_problem_count
+                .ok_or_else(|| "status missing in Progress".to_string())?,
+            cleared_count: intermediate_rep
+                .cleared_count
                 .into_iter()
                 .next()
-                .ok_or_else(|| "total_problem_count missing in Progress".to_string())?,
+                .ok_or_else(|| "cleared_count missing in Progress".to_string())?,
+            required_count: intermediate_rep
+                .required_count
+                .into_iter()
+                .next()
+                .ok_or_else(|| "required_count missing in Progress".to_string())?,
         })
     }
 }
@@ -5032,6 +5226,53 @@ impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<Progress> {
             std::result::Result::Err(e) => std::result::Result::Err(format!(
                 r#"Unable to convert header: {hdr_value:?} to string: {e}"#
             )),
+        }
+    }
+}
+
+/// Enumeration of values.
+/// Since this enum's variants do not hold data, we can easily define them as `#[repr(C)]`
+/// which helps with FFI.
+#[allow(non_camel_case_types, clippy::large_enum_variant)]
+#[repr(C)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+#[cfg_attr(feature = "conversion", derive(frunk_enum_derive::LabelledGenericEnum))]
+pub enum ProgressStatus {
+    #[serde(rename = "not_started")]
+    NotStarted,
+    #[serde(rename = "active")]
+    Active,
+    #[serde(rename = "cleared")]
+    Cleared,
+}
+
+impl validator::Validate for ProgressStatus {
+    fn validate(&self) -> std::result::Result<(), validator::ValidationErrors> {
+        std::result::Result::Ok(())
+    }
+}
+
+impl std::fmt::Display for ProgressStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            ProgressStatus::NotStarted => write!(f, "not_started"),
+            ProgressStatus::Active => write!(f, "active"),
+            ProgressStatus::Cleared => write!(f, "cleared"),
+        }
+    }
+}
+
+impl std::str::FromStr for ProgressStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "not_started" => std::result::Result::Ok(ProgressStatus::NotStarted),
+            "active" => std::result::Result::Ok(ProgressStatus::Active),
+            "cleared" => std::result::Result::Ok(ProgressStatus::Cleared),
+            _ => std::result::Result::Err(format!(r#"Value not valid: {s}"#)),
         }
     }
 }
@@ -5405,6 +5646,406 @@ impl From<models::IncorrectQueryResponse> for QueryResponse {
 impl From<models::CorrectQueryResponse> for QueryResponse {
     fn from(value: models::CorrectQueryResponse) -> Self {
         Self::CorrectQueryResponse(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct RoomItem {
+    #[serde(rename = "room_id")]
+    pub room_id: uuid::Uuid,
+
+    #[serde(rename = "number")]
+    #[validate(range(min = 1u32))]
+    pub number: u32,
+
+    #[serde(rename = "name")]
+    #[validate(custom(function = "check_xss_string"))]
+    pub name: String,
+
+    #[serde(rename = "genre")]
+    #[validate(custom(function = "check_xss_string"))]
+    pub genre: String,
+
+    #[serde(rename = "description")]
+    #[validate(custom(function = "check_xss_string"))]
+    pub description: String,
+
+    #[serde(rename = "problem_count")]
+    #[validate(range(min = 0u32))]
+    pub problem_count: u32,
+
+    #[serde(rename = "progress")]
+    #[validate(nested)]
+    pub progress: models::Progress,
+
+    #[serde(rename = "best_record")]
+    pub best_record: Nullable<models::BestRecord>,
+}
+
+impl RoomItem {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(
+        room_id: uuid::Uuid,
+        number: u32,
+        name: String,
+        genre: String,
+        description: String,
+        problem_count: u32,
+        progress: models::Progress,
+        best_record: Nullable<models::BestRecord>,
+    ) -> RoomItem {
+        RoomItem {
+            room_id,
+            number,
+            name,
+            genre,
+            description,
+            problem_count,
+            progress,
+            best_record,
+        }
+    }
+}
+
+/// Converts the RoomItem value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for RoomItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            // Skipping room_id in query parameter serialization
+            Some("number".to_string()),
+            Some(self.number.to_string()),
+            Some("name".to_string()),
+            Some(self.name.to_string()),
+            Some("genre".to_string()),
+            Some(self.genre.to_string()),
+            Some("description".to_string()),
+            Some(self.description.to_string()),
+            Some("problem_count".to_string()),
+            Some(self.problem_count.to_string()),
+            // Skipping progress in query parameter serialization
+
+            // Skipping best_record in query parameter serialization
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a RoomItem value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for RoomItem {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub room_id: Vec<uuid::Uuid>,
+            pub number: Vec<u32>,
+            pub name: Vec<String>,
+            pub genre: Vec<String>,
+            pub description: Vec<String>,
+            pub problem_count: Vec<u32>,
+            pub progress: Vec<models::Progress>,
+            pub best_record: Vec<models::BestRecord>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing RoomItem".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "room_id" => intermediate_rep.room_id.push(
+                        <uuid::Uuid as std::str::FromStr>::from_str(val)
+                            .map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "number" => intermediate_rep.number.push(
+                        <u32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "name" => intermediate_rep.name.push(
+                        <String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "genre" => intermediate_rep.genre.push(
+                        <String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "description" => intermediate_rep.description.push(
+                        <String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "problem_count" => intermediate_rep.problem_count.push(
+                        <u32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "progress" => intermediate_rep.progress.push(
+                        <models::Progress as std::str::FromStr>::from_str(val)
+                            .map_err(|x| x.to_string())?,
+                    ),
+                    "best_record" => {
+                        return std::result::Result::Err(
+                            "Parsing a nullable type in this style is not supported in RoomItem"
+                                .to_string(),
+                        );
+                    }
+                    _ => {
+                        return std::result::Result::Err(
+                            "Unexpected key while parsing RoomItem".to_string(),
+                        );
+                    }
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(RoomItem {
+            room_id: intermediate_rep
+                .room_id
+                .into_iter()
+                .next()
+                .ok_or_else(|| "room_id missing in RoomItem".to_string())?,
+            number: intermediate_rep
+                .number
+                .into_iter()
+                .next()
+                .ok_or_else(|| "number missing in RoomItem".to_string())?,
+            name: intermediate_rep
+                .name
+                .into_iter()
+                .next()
+                .ok_or_else(|| "name missing in RoomItem".to_string())?,
+            genre: intermediate_rep
+                .genre
+                .into_iter()
+                .next()
+                .ok_or_else(|| "genre missing in RoomItem".to_string())?,
+            description: intermediate_rep
+                .description
+                .into_iter()
+                .next()
+                .ok_or_else(|| "description missing in RoomItem".to_string())?,
+            problem_count: intermediate_rep
+                .problem_count
+                .into_iter()
+                .next()
+                .ok_or_else(|| "problem_count missing in RoomItem".to_string())?,
+            progress: intermediate_rep
+                .progress
+                .into_iter()
+                .next()
+                .ok_or_else(|| "progress missing in RoomItem".to_string())?,
+            best_record: std::result::Result::Err(
+                "Nullable types not supported in RoomItem".to_string(),
+            )?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<RoomItem> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<RoomItem>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<RoomItem>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for RoomItem - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<RoomItem> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <RoomItem as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into RoomItem - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct RoomsResponse {
+    #[serde(rename = "items")]
+    #[validate(nested)]
+    pub items: Vec<models::RoomItem>,
+}
+
+impl RoomsResponse {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(items: Vec<models::RoomItem>) -> RoomsResponse {
+        RoomsResponse { items }
+    }
+}
+
+/// Converts the RoomsResponse value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for RoomsResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            // Skipping items in query parameter serialization
+
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a RoomsResponse value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for RoomsResponse {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub items: Vec<Vec<models::RoomItem>>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing RoomsResponse".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    "items" => {
+                        return std::result::Result::Err(
+                            "Parsing a container in this style is not supported in RoomsResponse"
+                                .to_string(),
+                        );
+                    }
+                    _ => {
+                        return std::result::Result::Err(
+                            "Unexpected key while parsing RoomsResponse".to_string(),
+                        );
+                    }
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(RoomsResponse {
+            items: intermediate_rep
+                .items
+                .into_iter()
+                .next()
+                .ok_or_else(|| "items missing in RoomsResponse".to_string())?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<RoomsResponse> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<RoomsResponse>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<RoomsResponse>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for RoomsResponse - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<RoomsResponse> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <RoomsResponse as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into RoomsResponse - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
     }
 }
 
