@@ -1,8 +1,9 @@
 use openapi_generated::{
     NullValue,
     models::{
-        ActiveRunResponse, CorrectQueryResponse, IncorrectQueryResponse, LeaderboardResponse,
-        MeDemoUnauthenticated, MeProgressResponse, Operation,
+        ActiveRunResponse, Asset, CorrectQueryResponse, IncorrectQueryResponse,
+        LeaderboardResponse, MeDemoUnauthenticated, MeProgressResponse, Operation,
+        UploadProblemAssetHeaderParams, UploadProblemAssetPathParams,
     },
     types::Nullable,
 };
@@ -36,6 +37,11 @@ const ME_PROGRESS_SUMMARY: &str = include_str!(concat!(
 const ME_PROGRESS_EMPTY: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../openapi/examples/progress/response-empty.json"
+));
+
+const PROBLEM_ASSET_CREATED: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../openapi/examples/assets/response-created.json"
 ));
 
 #[test]
@@ -215,6 +221,41 @@ fn generated_me_progress_responses_match_fixtures() {
         serde_json::from_value::<MeProgressResponse>(negative_genre_count).is_err(),
         "negative genre count must not deserialize into the generated u32 field"
     );
+}
+
+#[test]
+fn generated_problem_asset_upload_contract_matches_fixture() {
+    let expected: serde_json::Value =
+        serde_json::from_str(PROBLEM_ASSET_CREATED).expect("asset fixture should be valid JSON");
+
+    let model: Asset = serde_json::from_value(expected.clone())
+        .expect("asset fixture should match generated model");
+
+    assert_eq!(
+        serde_json::to_value(model).expect("generated asset model should serialize"),
+        expected
+    );
+
+    assert!(
+        expected.get("object_key").is_none(),
+        "public asset response must not expose object_key"
+    );
+
+    let idempotency_key = Uuid::parse_str("44444444-4444-4444-8444-444444444444").unwrap();
+
+    let header = UploadProblemAssetHeaderParams { idempotency_key };
+    assert_eq!(header.idempotency_key, idempotency_key);
+
+    let room_id = Uuid::parse_str("11111111-1111-4111-8111-111111111111").unwrap();
+    let problem_id = Uuid::parse_str("22222222-2222-4222-8222-222222222221").unwrap();
+
+    let path = UploadProblemAssetPathParams {
+        room_id,
+        problem_id,
+    };
+
+    assert_eq!(path.room_id, room_id);
+    assert_eq!(path.problem_id, problem_id);
 }
 
 #[test]

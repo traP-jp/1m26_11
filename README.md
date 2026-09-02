@@ -73,6 +73,10 @@ API の共有契約は `openapi/openapi-v1.yaml` です。この1ファイルか
 
 詳細は `openapi/README.md` を参照してください。
 
+## 作問用画像アップロード
+
+開発環境で問題へ画像を追加する手順、必要なstorage設定、対応画像、再送時の扱い、troubleshootingは、[IMAGE_UPLOAD.md](IMAGE_UPLOAD.md)を参照してください。
+
 ## Members
 
 - kaomojikun

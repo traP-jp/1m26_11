@@ -55,6 +55,12 @@ pub(crate) enum AppError {
     DisplayNameRequired,
     #[error("display name is too long")]
     DisplayNameTooLong,
+    #[error("{message}")]
+    Api {
+        status: StatusCode,
+        code: &'static str,
+        message: String,
+    },
 }
 
 impl AppError {
@@ -74,7 +80,15 @@ impl AppError {
         Self::RunNotFound
     }
 
-    fn internal(error: impl Error + Send + Sync + 'static) -> Self {
+    pub(crate) fn api(status: StatusCode, code: &'static str, message: impl Into<String>) -> Self {
+        Self::Api {
+            status,
+            code,
+            message: message.into(),
+        }
+    }
+
+    pub(crate) fn internal(error: impl Error + Send + Sync + 'static) -> Self {
         Self::Internal {
             source: Box::new(error),
         }
@@ -171,6 +185,11 @@ impl IntoResponse for AppError {
                 "DISPLAY_NAME_TOO_LONG",
                 "表示名は32文字以内で入力してください".to_owned(),
             ),
+            Self::Api {
+                status,
+                code,
+                message,
+            } => (*status, *code, message.clone()),
         };
 
         let body = ErrorResponse::new(ErrorResponseError::new(
