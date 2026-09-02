@@ -55,7 +55,7 @@ describe('PortalHeader', () => {
     expect(wrapper.getComponent(UserMenu).props('logoutPending')).toBe(true)
   })
 
-  it('passes the NeoShowcase display name from the shared API fixture to UserMenu', async () => {
+  it('passes the NeoShowcase user and logout URL to UserMenu', async () => {
     const wrapper = mount(PortalHeader, {
       props: portalHeaderFixtures.neoshowcaseAuthenticated,
     })
@@ -63,13 +63,15 @@ describe('PortalHeader', () => {
     const status = wrapper.get('[data-auth-mode="neoshowcase"]')
     const userMenu = wrapper.getComponent(UserMenu)
     expect(userMenu.props('displayName')).toBe('kaomojikun')
+    expect(userMenu.props('logoutHref')).toBe('/_oauth/logout?redirect=/')
     expect(userMenu.props('logoutPending')).toBe(false)
 
-    userMenu.vm.$emit('logout')
+    await userMenu.get('button').trigger('click')
     await nextTick()
 
     expect(status.attributes('data-auth-mode')).toBe('neoshowcase')
-    expect(wrapper.emitted('logout')).toHaveLength(1)
+    expect(userMenu.get('a').attributes('href')).toBe('/_oauth/logout?redirect=/')
+    expect(wrapper.emitted('logout')).toBeUndefined()
   })
 
   it('emits an instruction event when no instruction path is supplied', async () => {

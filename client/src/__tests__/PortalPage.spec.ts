@@ -15,14 +15,29 @@ describe('PortalPage', () => {
     const wrapper = mount(PortalPage, { props: portalPageFixtures.demoUnauthenticated })
 
     expect(wrapper.findComponent(PortalHeader).exists()).toBe(true)
+    expect(wrapper.element.firstElementChild?.tagName).toBe('HEADER')
     expect(wrapper.findComponent(PortalLoginPrompt).exists()).toBe(true)
     expect(wrapper.findComponent(GuestNameForm).exists()).toBe(true)
     expect(wrapper.findComponent(RoomCard).exists()).toBe(false)
     expect(wrapper.findComponent(MinimalProgressSummary).exists()).toBe(false)
   })
 
-  it('shows the NeoShowcase login action and forwards its event', async () => {
-    const wrapper = mount(PortalPage, { props: portalPageFixtures.neoshowcaseUnauthenticated })
+  it('shows the NeoShowcase login URL in the header and prompt', () => {
+    const fixture = portalPageFixtures.neoshowcaseUnauthenticated
+    const wrapper = mount(PortalPage, { props: fixture })
+
+    expect(wrapper.getComponent(PortalHeader).props('userStatus')).toMatchObject({
+      authenticated: false,
+      loginHref: fixture.loginHref,
+    })
+    expect(wrapper.getComponent(AuthActionButton).element.tagName).toBe('A')
+    expect(wrapper.getComponent(AuthActionButton).attributes('href')).toBe(fixture.loginHref)
+  })
+
+  it('forwards the NeoShowcase login action when no login URL is available', async () => {
+    const wrapper = mount(PortalPage, {
+      props: { ...portalPageFixtures.neoshowcaseUnauthenticated, loginHref: null },
+    })
 
     await wrapper.getComponent(AuthActionButton).trigger('click')
 
@@ -58,5 +73,17 @@ describe('PortalPage', () => {
     expect(wrapper.emitted('logout')).toHaveLength(1)
     expect(wrapper.emitted('showInstructions')).toHaveLength(1)
     expect(wrapper.emitted('startRoom')).toEqual([['room-1']])
+  })
+
+  it('focuses the guest name input when Demo login is requested from the header', () => {
+    const wrapper = mount(PortalPage, {
+      props: portalPageFixtures.demoUnauthenticated,
+      attachTo: document.body,
+    })
+
+    wrapper.getComponent(PortalHeader).vm.$emit('login')
+
+    expect(document.activeElement).toBe(wrapper.get('#displayNameInput').element)
+    wrapper.unmount()
   })
 })
