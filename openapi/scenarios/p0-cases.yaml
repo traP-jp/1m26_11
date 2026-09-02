@@ -328,6 +328,8 @@ cases:
         state_after:
           problem_status: cleared
           run_status: cleared
+          active_run_exists: false
+          cleared_run_exists: true
 
   - id: answer_input_too_long
     preconditions:
