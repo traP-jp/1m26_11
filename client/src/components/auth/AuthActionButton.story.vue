@@ -8,6 +8,9 @@ import { authActionButtonFixtures } from './AuthActionButton.fixture'
     <Variant title="Login">
       <AuthActionButton v-bind="authActionButtonFixtures.login" />
     </Variant>
+    <Variant title="Login link">
+      <AuthActionButton v-bind="authActionButtonFixtures.loginLink" />
+    </Variant>
     <Variant title="Logout">
       <AuthActionButton v-bind="authActionButtonFixtures.logout" />
     </Variant>

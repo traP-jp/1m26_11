@@ -36,6 +36,7 @@ const emit = defineEmits<{
   <div v-else class="relative shrink-0" :data-auth-mode="status.authMode">
     <UserMenu
       :display-name="status.displayName"
+      :logout-href="status.logoutHref"
       :logout-pending="status.logoutPending"
       @logout="emit('logout')"
     />

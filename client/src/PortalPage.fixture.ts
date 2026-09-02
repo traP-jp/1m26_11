@@ -2,6 +2,8 @@ import type { PortalPageProps } from './PortalPage.types'
 
 const common = {
   authBusy: false,
+  loginHref: null,
+  logoutHref: null,
   requiredRoom: {
     room_id: '1411824c-d357-4941-af76-c76cb827dda6',
     number: 1,
@@ -24,6 +26,7 @@ export const portalPageFixtures = {
     authenticated: false,
     authMode: 'neoshowcase',
     displayName: null,
+    loginHref: '/_oauth/login?redirect=/',
   },
   demoAuthenticated: {
     ...common,
@@ -37,6 +40,7 @@ export const portalPageFixtures = {
     authenticated: true,
     authMode: 'neoshowcase',
     displayName: 'kaomojikun',
+    logoutHref: '/_oauth/logout?redirect=/',
     progressStatus: 'cleared',
   },
 } satisfies Record<string, PortalPageProps>
