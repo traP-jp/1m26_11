@@ -4,8 +4,9 @@
   "unlocked_problem_ids": [],
   "run_status": "cleared",
   "progress": {
-    "cleared_problem_count": 4,
-    "total_problem_count": 4
+    "status": "cleared",
+    "cleared_count": 4,
+    "required_count": 4
   },
   "elapsed_ms": 119820
 }
