@@ -1,5 +1,5 @@
 <script setup lang="ts">
-export type ProgressStatus = 'not_started' | 'in_progress' | 'cleared'
+export type ProgressStatus = 'not_started' | 'active' | 'cleared'
 
 defineProps<{
   status: ProgressStatus
@@ -7,7 +7,7 @@ defineProps<{
 
 const labels: Record<ProgressStatus, string> = {
   not_started: '未開始',
-  in_progress: '挑戦中',
+  active: '挑戦中',
   cleared: 'クリア済み',
 }
 </script>

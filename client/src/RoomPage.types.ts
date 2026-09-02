@@ -27,7 +27,7 @@ export interface RoomViewModel {
   answerInput: { value: string; maxLength: number }
   queryJudgement: { state: JudgementState }
   answerJudgement: { state: JudgementState }
-  clear: { cleared: boolean; clearedProblemCount: number; totalProblemCount: number }
+  clear: { cleared: boolean; clearedCount: number; requiredCount: number }
 }
 
 export type RoomUiEvent =

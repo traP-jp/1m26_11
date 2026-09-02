@@ -13,7 +13,7 @@ use super::{
     RepositoryError, SqlxUserRepository, apply_problem_clear_in_transaction,
 };
 use crate::{
-    game_progress::{ProblemStatus, Progress, RunStatus},
+    game_progress::{ProblemStatus, Progress, ProgressStatus, RunStatus},
     migrate,
     problem::{Operation, load_problem_data, seed_problem_data},
 };
@@ -264,8 +264,9 @@ async fn mariadb_problem_clear_flow_is_transactional() {
     assert_eq!(
         first_plan.progress,
         Progress {
-            cleared_problem_count: 1,
-            total_problem_count: 4,
+            status: ProgressStatus::Active,
+            cleared_count: 1,
+            required_count: 4,
         }
     );
     assert_eq!(first_plan.run_status, RunStatus::Active);
@@ -306,8 +307,9 @@ async fn mariadb_problem_clear_flow_is_transactional() {
     assert_eq!(
         repeated_plan.progress,
         Progress {
-            cleared_problem_count: 1,
-            total_problem_count: 4,
+            status: ProgressStatus::Active,
+            cleared_count: 1,
+            required_count: 4,
         }
     );
     assert_eq!(repeated_plan.run_status, RunStatus::Active);
@@ -333,8 +335,9 @@ async fn mariadb_problem_clear_flow_is_transactional() {
     assert_eq!(
         final_plan.progress,
         Progress {
-            cleared_problem_count: 2,
-            total_problem_count: 4,
+            status: ProgressStatus::Active,
+            cleared_count: 2,
+            required_count: 4,
         }
     );
 
@@ -367,8 +370,9 @@ async fn mariadb_problem_clear_flow_is_transactional() {
     assert_eq!(
         third_plan.progress,
         Progress {
-            cleared_problem_count: 4,
-            total_problem_count: 4,
+            status: ProgressStatus::Cleared,
+            cleared_count: 4,
+            required_count: 4,
         }
     );
     assert_eq!(third_plan.run_status, RunStatus::Cleared);
@@ -693,14 +697,14 @@ async fn mariadb_answer_judgement_updates_counter_transactionally() {
         AnswerSubmissionResult::Correct {
             unlocked_problem_ids,
             run_status,
-            cleared_problem_count,
-            total_problem_count,
+            cleared_count,
+            required_count,
             elapsed_ms,
         } => {
             assert!(unlocked_problem_ids.is_empty());
             assert_eq!(run_status, AnswerRunStatus::Active);
-            assert_eq!(cleared_problem_count, 1);
-            assert_eq!(total_problem_count, 4);
+            assert_eq!(cleared_count, 1);
+            assert_eq!(required_count, 4);
             assert!(elapsed_ms > 0);
         }
         AnswerSubmissionResult::Incorrect { .. } => {
@@ -788,14 +792,14 @@ async fn mariadb_correct_answer_can_complete_run() {
         AnswerSubmissionResult::Correct {
             unlocked_problem_ids,
             run_status,
-            cleared_problem_count,
-            total_problem_count,
+            cleared_count,
+            required_count,
             ..
         } => {
             assert_eq!(unlocked_problem_ids, vec![third_problem_id]);
             assert_eq!(run_status, AnswerRunStatus::Active);
-            assert_eq!(cleared_problem_count, 2);
-            assert_eq!(total_problem_count, 4);
+            assert_eq!(cleared_count, 2);
+            assert_eq!(required_count, 4);
         }
         AnswerSubmissionResult::Incorrect { .. } => {
             panic!("accepted answer should be correct");
@@ -827,14 +831,14 @@ async fn mariadb_correct_answer_can_complete_run() {
         AnswerSubmissionResult::Correct {
             unlocked_problem_ids,
             run_status,
-            cleared_problem_count,
-            total_problem_count,
+            cleared_count,
+            required_count,
             elapsed_ms,
         } => {
             assert!(unlocked_problem_ids.is_empty());
             assert_eq!(run_status, AnswerRunStatus::Cleared);
-            assert_eq!(cleared_problem_count, 4);
-            assert_eq!(total_problem_count, 4);
+            assert_eq!(cleared_count, 4);
+            assert_eq!(required_count, 4);
             assert!(elapsed_ms > 0);
         }
         AnswerSubmissionResult::Incorrect { .. } => {
