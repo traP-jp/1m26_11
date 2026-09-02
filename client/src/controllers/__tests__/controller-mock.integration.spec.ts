@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { setupServer } from 'msw/node'
 
 import answerRequest from '../../../../openapi/examples/answers/request.json'
+import answerCorrectAndClearsRun from '../../../../openapi/examples/answers/response-correct-cleared.json'
 import problemResponse from '../../../../openapi/examples/problems/available-response.json'
 import queryRequest from '../../../../openapi/examples/queries/request-serial.json'
 import { createApiClient } from '@/api/client'
@@ -68,7 +69,7 @@ describe('controllers with the OpenAPI-backed mock API', () => {
       runStatus: 'cleared',
       elapsedMs: 119820,
       clear: { cleared: true },
-      progress: { cleared_problem_count: 4, total_problem_count: 4 },
+      progress: answerCorrectAndClearsRun.progress,
     })
   })
 })

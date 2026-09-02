@@ -6,6 +6,7 @@ import problemResponse from '../../../../openapi/examples/problems/available-res
 import {
   ApiClientError,
   type ApiClient,
+  type GetCurrentRunResponse,
   type GetProblemResponse,
   type StartOrResumeRunResponse,
 } from '@/api/client'
@@ -52,7 +53,7 @@ describe('RunProblemController', () => {
   it('restores the current run through the current-run endpoint', async () => {
     const getCurrentRun = vi
       .fn<ApiClient['getCurrentRun']>()
-      .mockResolvedValue(currentRun as StartOrResumeRunResponse)
+      .mockResolvedValue(currentRun as GetCurrentRunResponse)
     const controller = new RunProblemController(createClient({ getCurrentRun }))
 
     await controller.restoreCurrentRun(ROOM_ID)
