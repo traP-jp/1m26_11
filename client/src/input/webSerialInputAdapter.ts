@@ -1,22 +1,12 @@
-import { serialInputSource, type Control, type InputAdapterEvent } from './InputAdapter.types'
-import { SerialFrameParser, type SerialProtocolV1Gesture } from './serialFrameParser'
-
-type ConditionChangedInputEvent = Extract<InputAdapterEvent, { type: 'condition-changed' }>
-
-export type SerialInputAdapterEvent = Omit<
-  ConditionChangedInputEvent,
-  'source' | 'count' | 'gesture'
-> & {
-  source: typeof serialInputSource
-  count: 1
-  gesture: SerialProtocolV1Gesture
-}
+import {
+  SerialFrameParser,
+  type SerialProtocolV1Control,
+  type SerialProtocolV1Frame,
+} from './serialFrameParser'
 
 export interface WebSerialInputAdapterOptions {
-  dispatcher: {
-    dispatch(event: InputAdapterEvent): boolean
-  }
-  isControlAllowed: (control: Control) => boolean
+  onFrame: (frame: SerialProtocolV1Frame) => void
+  isControlAllowed: (control: SerialProtocolV1Control) => boolean
 }
 
 export interface WebSerialInputAdapter {
@@ -24,7 +14,10 @@ export interface WebSerialInputAdapter {
   resetSession(): void
 }
 
-/** Converts already debounced Wire v1 frames; port lifecycle remains the caller's responsibility. */
+/**
+ * Parses received chunks and forwards valid Wire v1 frames without deciding how gestures map to
+ * common input events. Port lifecycle remains the caller's responsibility.
+ */
 export function createWebSerialInputAdapter(
   options: WebSerialInputAdapterOptions,
 ): WebSerialInputAdapter {
@@ -34,15 +27,7 @@ export function createWebSerialInputAdapter(
     pushChunk(chunk) {
       for (const frame of parser.pushChunk(chunk)) {
         if (!options.isControlAllowed(frame.control)) continue
-
-        const event: SerialInputAdapterEvent = {
-          type: 'condition-changed',
-          source: serialInputSource,
-          control: frame.control,
-          count: 1,
-          gesture: frame.gesture,
-        }
-        options.dispatcher.dispatch(event)
+        options.onFrame(frame)
       }
     },
 
