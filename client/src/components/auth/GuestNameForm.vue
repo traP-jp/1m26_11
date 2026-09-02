@@ -10,6 +10,11 @@ const emit = defineEmits<{
 }>()
 
 const displayName = ref('')
+const displayNameInput = ref<HTMLInputElement | null>(null)
+
+defineExpose({
+  focus: () => displayNameInput.value?.focus(),
+})
 
 const isSubmitDisabled = computed(() => {
   return props.submitPending || displayName.value.trim() === ''
@@ -34,6 +39,7 @@ const onSubmit = () => {
         <p class="text-xs text-gray-500 mb-2">ゲーム内で使用する表示名です</p>
 
         <input
+          ref="displayNameInput"
           id="displayNameInput"
           v-model="displayName"
           type="text"
