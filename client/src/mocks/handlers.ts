@@ -176,7 +176,7 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
     }),
 
     http.get('/api/rooms', () => {
-      if (!state.get('room_exists')) {
+      if (state.get('published_rooms_count') === 0 || !state.get('room_exists')) {
         const result = responseFromStep<Schemas['RoomsResponse']>(
           contract,
           state,
@@ -194,13 +194,28 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
         )
         return HttpResponse.json(result.body, { status: result.status })
       }
-      const scenarioId = state.get('active_run_exists')
-        ? 'rooms_authenticated_active'
-        : 'rooms_authenticated_cleared'
+      if (state.get('active_run_exists')) {
+        const result = responseFromStep<Schemas['RoomsResponse']>(
+          contract,
+          state,
+          'rooms_authenticated_active',
+          'getRooms',
+        )
+        return HttpResponse.json(result.body, { status: result.status })
+      }
+      if (state.get('cleared_run_exists')) {
+        const result = responseFromStep<Schemas['RoomsResponse']>(
+          contract,
+          state,
+          'rooms_authenticated_cleared',
+          'getRooms',
+        )
+        return HttpResponse.json(result.body, { status: result.status })
+      }
       const result = responseFromStep<Schemas['RoomsResponse']>(
         contract,
         state,
-        scenarioId,
+        'rooms_unauthenticated',
         'getRooms',
       )
       return HttpResponse.json(result.body, { status: result.status })
