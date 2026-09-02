@@ -91,6 +91,10 @@ function errorMessage(error: unknown): string {
   return String(error)
 }
 
+function isPhysicalDisconnectReadError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'NetworkError'
+}
+
 export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
   const serial = options.serial === undefined ? getBrowserSerial() : (options.serial ?? undefined)
   const secureContext = options.secureContext ?? globalThis.isSecureContext === true
@@ -116,6 +120,7 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
   let generation = 0
   const disposed = ref(false)
   let currentPort: SerialPortLike | undefined
+  let currentPortGeneration: number | undefined
   let currentReader: SerialReaderLike | undefined
   let readLoopPromise: Promise<ReadLoopResult> | undefined
   let connectionPromise: Promise<void> | undefined
@@ -144,13 +149,20 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
   )
   const canDisconnect = computed(() => !disposed.value && ownsPort.value && !cleaningUp.value)
 
-  function registerDisconnectListener(): void {
-    if (disconnectListener || !serial?.addEventListener) return
+  function registerDisconnectListener(port: SerialPortLike, portGeneration: number): void {
+    if (!serial?.addEventListener) return
+    unregisterDisconnectListener()
 
     disconnectListener = (event) => {
       const serialEvent = event as Event & { port?: SerialPortLike }
       const disconnectedPort = serialEvent.port ?? serialEvent.target
-      if (!currentPort || disconnectedPort !== currentPort) return
+      if (
+        disconnectedPort !== port ||
+        currentPort !== port ||
+        currentPortGeneration !== portGeneration
+      ) {
+        return
+      }
 
       currentPortPhysicallyDisconnected = true
       void closeCurrentConnection('device-disconnected')
@@ -189,6 +201,10 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
       if (sessionGeneration !== generation || result.reason === 'cancelled') return
 
       if (result.reason === 'error') {
+        if (isPhysicalDisconnectReadError(result.error)) {
+          void closeCurrentConnection('device-disconnected')
+          return
+        }
         void closeCurrentConnection('read-error', {
           phase: 'error',
           operation: 'read',
@@ -211,6 +227,7 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
     generation += 1
     cleaningUp.value = true
     const portToClose = currentPort
+    const portGenerationToClose = currentPortGeneration
     const readerToCancel = currentReader
     const loopToFinish = readLoopPromise
     const shouldResetAdapter = Boolean(readerToCancel || loopToFinish)
@@ -248,19 +265,25 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
         }
       }
 
+      const ownsClosingPortSession =
+        portToClose !== undefined &&
+        portGenerationToClose !== undefined &&
+        currentPort === portToClose &&
+        currentPortGeneration === portGenerationToClose
       const physicallyDisconnected =
         reason === 'device-disconnected' ||
-        (currentPort === portToClose && currentPortPhysicallyDisconnected)
+        (ownsClosingPortSession && currentPortPhysicallyDisconnected)
       const retainPortForCloseRetry =
-        Boolean(closeError) && !physicallyDisconnected && !disposed.value
+        Boolean(closeError) && ownsClosingPortSession && !physicallyDisconnected && !disposed.value
 
-      if (retainPortForCloseRetry) {
-        registerDisconnectListener()
+      if (retainPortForCloseRetry && portToClose && portGenerationToClose !== undefined) {
+        registerDisconnectListener(portToClose, portGenerationToClose)
       } else {
         unregisterDisconnectListener()
       }
-      if (currentPort === portToClose && !retainPortForCloseRetry) {
+      if (ownsClosingPortSession && !retainPortForCloseRetry) {
         currentPort = undefined
+        currentPortGeneration = undefined
         currentPortPhysicallyDisconnected = false
         ownsPort.value = false
       }
@@ -347,9 +370,10 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
         return
       }
       currentPort = port
+      currentPortGeneration = generation
       currentPortPhysicallyDisconnected = false
       ownsPort.value = true
-      registerDisconnectListener()
+      registerDisconnectListener(port, generation)
       if (disposed.value) return
       state.value = {
         phase: 'error',
@@ -396,11 +420,12 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
 
       const reader = readable.getReader()
       currentPort = selectedPort
+      currentPortGeneration = sessionGeneration
       currentPortPhysicallyDisconnected = false
       ownsPort.value = true
       currentReader = reader
       readLoopPromise = runReadLoop(reader, sessionGeneration)
-      registerDisconnectListener()
+      registerDisconnectListener(selectedPort, sessionGeneration)
       state.value = { phase: 'connected', message: 'Serial deviceから入力を読取り中です。' }
       observeReadLoop(readLoopPromise, sessionGeneration)
     } catch (error) {
@@ -428,9 +453,10 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
             return
           }
           currentPort = selectedPort
+          currentPortGeneration = sessionGeneration
           currentPortPhysicallyDisconnected = false
           ownsPort.value = true
-          registerDisconnectListener()
+          registerDisconnectListener(selectedPort, sessionGeneration)
           state.value = {
             phase: 'error',
             operation: 'close-port',

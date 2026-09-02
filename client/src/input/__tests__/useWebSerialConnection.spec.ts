@@ -143,6 +143,14 @@ class FakeWebSerial implements WebSerialLike {
     for (const listener of this.disconnectListeners) listener(event)
   }
 
+  deferDisconnect(port: SerialPortLike): () => void {
+    const event = { target: port } as unknown as Event
+    const listeners = [...this.disconnectListeners]
+    return () => {
+      for (const listener of listeners) listener(event)
+    }
+  }
+
   get listenerCount(): number {
     return this.disconnectListeners.size
   }
@@ -333,7 +341,7 @@ describe('useWebSerialConnection', () => {
     const failedPort = new FakeSerialPort()
     const failed = createConnection(new FakeWebSerial(failedPort))
     await failed.connection.connect()
-    failedPort.reader.fail(new DOMException('Device lost', 'NetworkError'))
+    failedPort.reader.fail(new DOMException('Read failed', 'UnknownError'))
     await vi.waitFor(() => expect(failed.connection.state.value.phase).toBe('error'))
     expect(failed.connection.state.value).toMatchObject({ operation: 'read' })
     expect(failedPort.events).toContain('port-close')
@@ -388,6 +396,35 @@ describe('useWebSerialConnection', () => {
     expect(connection.state.value.phase).toBe('connected')
 
     await connection.disconnect()
+  })
+
+  it('再接続後に遅着した旧sessionの物理切断で同じportの新sessionを閉じない', async () => {
+    const port = new FakeSerialPort()
+    const serial = new FakeWebSerial(port)
+    const { connection, adapter } = createConnection(serial)
+
+    await connection.connect()
+    const emitLateDisconnect = serial.deferDisconnect(port)
+    await connection.disconnect()
+    await connection.retry()
+    expect(connection.state.value.phase).toBe('connected')
+
+    const eventsBeforeLateDisconnect = [...port.events]
+    emitLateDisconnect()
+    await Promise.resolve()
+
+    expect(connection.state.value.phase).toBe('connected')
+    expect(connection.busy.value).toBe(false)
+    expect(port.events).toEqual(eventsBeforeLateDisconnect)
+    expect(adapter.resetSession).toHaveBeenCalledTimes(1)
+
+    const liveChunk = new Uint8Array([7, 8, 9])
+    port.reader.emit(liveChunk)
+    await vi.waitFor(() => expect(adapter.pushChunk).toHaveBeenCalledExactlyOnceWith(liveChunk))
+
+    serial.emitDisconnect(port)
+    await vi.waitFor(() => expect(connection.state.value.phase).toBe('disconnected'))
+    expect(connection.state.value).toMatchObject({ reason: 'device-disconnected' })
   })
 
   it('画面破棄時にreaderとportをcleanupする', async () => {
@@ -495,19 +532,51 @@ describe('useWebSerialConnection', () => {
     expect(connection.canDisconnect.value).toBe(false)
   })
 
-  it('read失敗と物理切断が競合してもcleanupを一度だけ行う', async () => {
+  it('readのNetworkErrorを物理切断として扱い、disconnect eventが遅着してもcleanupを重複しない', async () => {
     const port = new FakeSerialPort()
     const serial = new FakeWebSerial(port)
     const { connection, adapter } = createConnection(serial)
     await connection.connect()
 
+    const emitLateDisconnect = serial.deferDisconnect(port)
     port.reader.fail(new DOMException('Device lost', 'NetworkError'))
-    serial.emitDisconnect(port)
-
     await vi.waitFor(() => expect(connection.state.value.phase).toBe('disconnected'))
     expect(connection.state.value).toMatchObject({ reason: 'device-disconnected' })
     expect(adapter.resetSession).toHaveBeenCalledTimes(1)
     expect(port.events.filter((event) => event === 'port-close')).toHaveLength(1)
+
+    emitLateDisconnect()
+    await vi.waitFor(() => expect(connection.busy.value).toBe(false))
+    expect(connection.state.value).toMatchObject({
+      phase: 'disconnected',
+      reason: 'device-disconnected',
+    })
+    expect(connection.canDisconnect.value).toBe(false)
+    expect(serial.listenerCount).toBe(0)
+    expect(adapter.resetSession).toHaveBeenCalledTimes(1)
+    expect(port.events.filter((event) => event === 'port-close')).toHaveLength(1)
+  })
+
+  it('port close失敗で保持したsessionも現在の物理切断eventで解放する', async () => {
+    const port = new FakeSerialPort()
+    port.closeFailureCount = 1
+    const serial = new FakeWebSerial(port)
+    const { connection, adapter } = createConnection(serial)
+    await connection.connect()
+
+    await connection.disconnect()
+    expect(connection.state.value).toMatchObject({ phase: 'error', operation: 'close-port' })
+    expect(connection.canDisconnect.value).toBe(true)
+    expect(serial.listenerCount).toBe(1)
+
+    serial.emitDisconnect(port)
+    await vi.waitFor(() => expect(connection.state.value.phase).toBe('disconnected'))
+
+    expect(connection.state.value).toMatchObject({ reason: 'device-disconnected' })
+    expect(connection.canDisconnect.value).toBe(false)
+    expect(serial.listenerCount).toBe(0)
+    expect(adapter.resetSession).toHaveBeenCalledTimes(1)
+    expect(port.events.filter((event) => event === 'port-close')).toHaveLength(2)
   })
 
   it('port close失敗を成功扱いせず、解放を再試行できる', async () => {
