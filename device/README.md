@@ -27,11 +27,16 @@ productionのdebounce、repeat抑止、長押し判定を実装しません。
 | 2 script構成の`Upload Project`転送内容 | 2026-09-02 確認済み |
 | スイッチ1～7とgame controlの対応 | 2026-08-29 確定 |
 | `button_test.py`のWeb Serial raw受信・切断・再接続 | 2026-09-01 確認済み |
+<<<<<<< Updated upstream
 | Issue #92 Wire v1契約と専用firmware／parser PoC | 2026-09-02 実装・実機確認済み |
 | Issue #81 production firmwareのhost unit test | 2026-09-02 `mise run device-test` 23 test確認済み |
 | Issue #81 production firmwareの書込み・実機操作matrix | 2026-09-02 確認済み |
 | Issue #81 production firmwareの物理電源再投入・押下中再投入 | 2026-09-02 確認済み（WSLへ再attach） |
 | Issue #81手順の別担当による再現 | 未実施 |
+=======
+| Wire v1契約と専用firmware | 2026-09-02 実機確認済み |
+| Wire v1純粋parser | contract-synthetic unit test済み |
+>>>>>>> Stashed changes
 | Issue #92手順の別担当による再現 | 未実施 |
 
 2026-09-02にはPoCの確認とは別に、`firmware/main.py`から自動起動するproduction版を実機へ書き込み、

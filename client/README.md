@@ -98,9 +98,9 @@ SHA-256は、保存した環境に応じて`sha256sum <capture.bin>`またはPow
 しません。実機で行った操作、環境、観測結果だけを[`device/README.md`](../device/README.md)へ記録します。
 
 1行を複数chunkへ分ける場合、複数行を1 chunkへまとめる場合、invalid UTF-8／JSON／schema、overlong
-frameは実機が送ったdataと偽らず、`src/device-poc/__tests__/serialProtocolPoc.spec.ts`の
-contract-synthetic testとして区別します。`SerialProtocolPocParser`はWire契約の適合確認用PoCであり、
-製品画面の操作列へはまだ接続していません。
+frameは実機が送ったdataと偽らず、`src/input/__tests__/serialFrameParser.spec.ts`の
+contract-synthetic testとして区別します。`SerialFrameParser`はWire v1 frameを復元・検証する純粋な
+parserです。`source`と`count`を持つ共通操作eventへの変換や製品画面への接続はまだ行いません。
 
 mock responseは`../openapi/openapi-v1.yaml`、`../openapi/examples/`、`../openapi/scenarios/p0-cases.yaml`を直接読みます。response payloadをclient内に複製していないため、OpenAPIのexampleとscenarioがmockの正本です。
 
