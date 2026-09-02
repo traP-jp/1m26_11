@@ -1,103 +1,120 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import hardwareSample from '../__fixtures__/serial-protocol-v1-hardware-sample.jsonl?raw'
 import contractSyntheticValidFrames from '../__fixtures__/serial-protocol-v1-valid.jsonl?raw'
-import type { SerialProtocolV1Control, SerialProtocolV1Frame } from '../serialFrameParser'
+import type { Control, InputAdapterDispatcher, InputAdapterEvent } from '../InputAdapter.types'
+import { createOperationBuffer } from '../operationBuffer'
+import { SERIAL_PROTOCOL_V1_CONTROLS } from '../serialFrameParser'
 import { createWebSerialInputAdapter } from '../webSerialInputAdapter'
 
 const encoder = new TextEncoder()
 const upShort = '{"v":1,"control":"up","gesture":"short_press"}'
 const downLong = '{"v":1,"control":"down","gesture":"long_press"}'
 
-function createAdapter(
-  isControlAllowed: (control: SerialProtocolV1Control) => boolean = () => true,
-) {
-  const onFrame = vi.fn<(frame: SerialProtocolV1Frame) => void>()
-  const adapter = createWebSerialInputAdapter({ onFrame, isControlAllowed })
+function createAdapter(isControlAllowed: (control: Control) => boolean = () => true) {
+  const events: InputAdapterEvent[] = []
+  const dispatch = vi.fn<(event: InputAdapterEvent) => boolean>((event) => {
+    events.push(event)
+    return true
+  })
+  const dispatcher: InputAdapterDispatcher = { busy: false, dispatch }
+  const adapter = createWebSerialInputAdapter({ dispatcher, isControlAllowed })
 
-  return { adapter, onFrame }
+  return { adapter, dispatch, events }
 }
 
-// All stream data in this file and the imported JSONL fixture is contract-synthetic.
 describe('WebSerialInputAdapter', () => {
-  it('split／複数frameをshort／longを保ったSerial frameとして順番どおり渡す', () => {
-    const { adapter, onFrame } = createAdapter()
+  // This fixture is the single canonical frame observed by direct read from the production Pico
+  // on 2026-09-03, normalized to an LF-terminated JSONL line. No raw capture is stored here.
+  it('実機sampleをparserから共通eventまで再現する', () => {
+    const { adapter, events } = createAdapter()
 
-    adapter.pushChunk(encoder.encode(upShort.slice(0, 19)))
-    expect(onFrame).not.toHaveBeenCalled()
+    adapter.pushChunk(encoder.encode(hardwareSample))
 
-    adapter.pushChunk(encoder.encode(`${upShort.slice(19)}\r\n${downLong}\n`))
-    expect(onFrame.mock.calls.map(([frame]) => frame)).toEqual([
-      {
-        v: 1,
-        control: 'up',
-        gesture: 'short_press',
-      },
-      {
-        v: 1,
-        control: 'down',
-        gesture: 'long_press',
-      },
+    expect(events).toEqual([
+      { type: 'condition-changed', source: 'serial', control: 'up', count: 1 },
     ])
   })
 
-  it('既存のcontract-synthetic sampleから全Serial frameを再現する', () => {
-    const { adapter, onFrame } = createAdapter()
+  it('分割された複数frameをshort／longともcount 1の共通eventへ順番どおり変換する', () => {
+    const { adapter, events } = createAdapter()
+
+    adapter.pushChunk(encoder.encode(upShort.slice(0, 19)))
+    expect(events).toEqual([])
+
+    adapter.pushChunk(encoder.encode(`${upShort.slice(19)}\r\n${downLong}\n`))
+    expect(events).toEqual([
+      { type: 'condition-changed', source: 'serial', control: 'up', count: 1 },
+      { type: 'condition-changed', source: 'serial', control: 'down', count: 1 },
+    ])
+  })
+
+  it('contract-synthetic sampleの全controlをgestureなしの共通eventへ変換する', () => {
+    const { adapter, events } = createAdapter()
 
     adapter.pushChunk(encoder.encode(contractSyntheticValidFrames))
 
-    expect(onFrame).toHaveBeenCalledTimes(7)
-    expect(onFrame.mock.calls.map(([frame]) => frame.control)).toEqual([
-      'up',
-      'down',
-      'left',
-      'right',
-      'red',
-      'yellow',
-      'green',
-    ])
-    expect(onFrame.mock.calls.map(([frame]) => frame.gesture)).toEqual([
-      'short_press',
-      'long_press',
-      'short_press',
-      'long_press',
-      'short_press',
-      'long_press',
-      'short_press',
-    ])
+    expect(events).toEqual(
+      SERIAL_PROTOCOL_V1_CONTROLS.map((control) => ({
+        type: 'condition-changed',
+        source: 'serial',
+        control,
+        count: 1,
+      })),
+    )
+    expect(events.every((event) => !('gesture' in event))).toBe(true)
   })
 
-  it('invalid frameを無視し、同じvalid frameの連続入力を重複排除しない', () => {
-    const { adapter, onFrame } = createAdapter()
+  it('invalid frameを無視し、同じvalid frameをfrontendでdebounce／重複除去しない', () => {
+    const { adapter, events } = createAdapter()
+    const buffer = createOperationBuffer()
 
     adapter.pushChunk(encoder.encode(`not-json\n${upShort}\n${upShort}\n`))
+    for (const event of events) {
+      if (event.type === 'condition-changed') buffer.append(event)
+    }
 
-    expect(onFrame).toHaveBeenCalledTimes(2)
-    expect(onFrame.mock.calls[0]?.[0]).toEqual(onFrame.mock.calls[1]?.[0])
+    expect(events).toEqual([
+      { type: 'condition-changed', source: 'serial', control: 'up', count: 1 },
+      { type: 'condition-changed', source: 'serial', control: 'up', count: 1 },
+    ])
+    expect(buffer.snapshot()).toEqual([{ control: 'up', count: 2 }])
   })
 
-  it('現在の問題で許可されていないcontrolをhandlerへ渡さない', () => {
-    const { adapter, onFrame } = createAdapter((control) => control === 'up')
+  it('dispatcherがeventを拒否しても後続frameを処理する', () => {
+    const { adapter, dispatch } = createAdapter()
+    dispatch.mockReturnValueOnce(false)
 
-    adapter.pushChunk(encoder.encode(`${downLong}\n${upShort}\n`))
+    adapter.pushChunk(encoder.encode(`${upShort}\n${downLong}\n`))
 
-    expect(onFrame).toHaveBeenCalledExactlyOnceWith({
-      v: 1,
-      control: 'up',
-      gesture: 'short_press',
+    expect(dispatch).toHaveBeenCalledTimes(2)
+    expect(dispatch.mock.calls[1]?.[0]).toEqual({
+      type: 'condition-changed',
+      source: 'serial',
+      control: 'down',
+      count: 1,
     })
   })
 
+  it('現在の問題で許可されていないcontrolをdispatchしない', () => {
+    const { adapter, events } = createAdapter((control) => control === 'up')
+
+    adapter.pushChunk(encoder.encode(`${downLong}\n${upShort}\n`))
+
+    expect(events).toEqual([
+      { type: 'condition-changed', source: 'serial', control: 'up', count: 1 },
+    ])
+  })
+
   it('session resetで切断前のpartial frameを破棄する', () => {
-    const { adapter, onFrame } = createAdapter()
+    const { adapter, events } = createAdapter()
 
     adapter.pushChunk(encoder.encode(upShort.slice(0, 20)))
     adapter.resetSession()
     adapter.pushChunk(encoder.encode(`${downLong}\n`))
 
-    expect(onFrame).toHaveBeenCalledExactlyOnceWith({
-      v: 1,
-      control: 'down',
-      gesture: 'long_press',
-    })
+    expect(events).toEqual([
+      { type: 'condition-changed', source: 'serial', control: 'down', count: 1 },
+    ])
   })
 })

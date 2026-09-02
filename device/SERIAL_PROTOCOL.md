@@ -108,7 +108,8 @@ debounceとgesture判定はdeviceの責任です。各buttonを独立して、�
 
 保持時間は、debounce済みの押下遷移を確定した時刻から、debounce済みの解放遷移を確定した時刻まで
 です。押下保持中のrepeatは送らず、同じ押下に`short_press`と`long_press`の両方を送りません。
-frontendは追加のdebounceや保持時間の再計算を行わず、valid frameの`gesture`をそのまま使用します。
+frontendは追加のdebounceや保持時間の再計算を行わず、valid frameの`gesture`はschema検証にだけ使用し、
+共通入力eventへは追加しません。
 
 device起動時または入力監視開始時にGPIOがLOWだったbuttonは、開始前から押されていたものとして無視
 します。そのbuttonが20 ms以上連続してHIGHとなった最初のreleaseではframeを送らず、以後の押下から
@@ -258,6 +259,10 @@ synthetic入力であり、production実機sampleではありません。
 2026-09-02にproduction `main.py`を書き込んだPicoを直接readし、canonical frame以外がないこと、物理的な
 電源再投入、押下中再投入を確認しました。captureは同日のPoCとは別にローカルで照合し、repositoryやPRへは
 添付しません。別担当による再現は未実施です。
+
+2026-09-03に同じproduction firmwareから直接readした`up`／`short_press`のcanonical frame 1件は、
+raw captureやhost固有情報を含めずLF終端へ正規化し、frontendのparserからAdapterまでを確認する最小fixtureへ
+使用します。このfixtureはtransport境界やdeviceのdebounceを再現するものではありません。
 
 ## 対象外
 

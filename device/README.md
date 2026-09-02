@@ -28,7 +28,7 @@ productionのdebounce、repeat抑止、長押し判定を実装しません。
 | スイッチ1～7とgame controlの対応 | 2026-08-29 確定 |
 | `button_test.py`のWeb Serial raw受信・切断・再接続 | 2026-09-01 確認済み |
 | Issue #92 Wire v1契約と専用firmware | 2026-09-02 実装・実機確認済み |
-| Issue #93 Wire v1純粋parser／WebSerialInputAdapter | contract-synthetic unit test済み |
+| Issue #93 Wire v1純粋parser／WebSerialInputAdapter | contract-synthetic／実機sample unit test済み |
 | Issue #81 production firmwareのhost unit test | 2026-09-02 `mise run device-test` 23 test確認済み |
 | Issue #81 production firmwareの書込み・実機操作matrix | 2026-09-02 確認済み |
 | Issue #81 production firmwareの物理電源再投入・押下中再投入 | 2026-09-02 確認済み（WSLへ再attach） |
