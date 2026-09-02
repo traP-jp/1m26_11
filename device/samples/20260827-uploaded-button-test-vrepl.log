@@ -1,0 +1,11 @@
+[button_test] temporary human-readable hardware diagnostic
+[button_test] NOT the production serial protocol
+[button_test] no debounce, repeat, or long-press logic
+[button_test] polling interval: 1 ms
+[button_test] initial button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] initial button=2 gpio=GP3 level=1 state=RELEASED
+[button_test] initial button=3 gpio=GP4 level=1 state=RELEASED
+[button_test] initial button=4 gpio=GP5 level=1 state=RELEASED
+[button_test] initial button=5 gpio=GP6 level=1 state=RELEASED
+[button_test] initial button=6 gpio=GP7 level=1 state=RELEASED
+[button_test] initial button=7 gpio=GP8 level=1 state=RELEASED
