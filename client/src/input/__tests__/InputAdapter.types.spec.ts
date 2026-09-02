@@ -29,13 +29,14 @@ describe('InputAdapterEvent', () => {
     expect(screenButtonInputSource).toBe('mouse')
   })
 
-  it('uses only the semantic Room UI event fields and input source', () => {
+  it('extends the semantic Room UI event fields with source and optional serial gesture', () => {
     expectTypeOf<InputAdapterEvent>().toMatchTypeOf<RoomUiEvent>()
     expectTypeOf<ConditionChangedEvent>().toEqualTypeOf<{
       type: 'condition-changed'
       source: InputSource
       control: Control
       count: Operation['count']
+      gesture?: 'short_press' | 'long_press'
     }>()
     expectTypeOf<QuerySubmittedEvent>().toEqualTypeOf<{
       type: 'query-submitted'

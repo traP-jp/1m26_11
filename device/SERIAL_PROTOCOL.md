@@ -203,9 +203,23 @@ eventにしません。host close／openだけでは、この起動時規則を�
 - device側のdebounce、長押し判定、control対応を再判定しない
 
 deviceはfrontendの画面状態、event列、query送信を管理しません。frontendはraw GPIO edgeを受け取らず、
-deviceが確定したgestureだけを扱います。Wire v1 eventをOpenAPIの`Operation { control, count }`へ変換する
-製品Adapter、とくに`long_press`を`count`や別の画面動作へどう対応させるかはこの契約では定めません。
-未確定の変換を推測してWire v1 eventをquery APIへ直接送らないでください。
+deviceが確定したgestureだけを扱います。WebSerialInputAdapterは各valid Wire v1 frameを次の共通入力eventへ
+1回ずつ変換します。
+
+```json
+{"type":"condition-changed","source":"serial","control":"up","count":1}
+```
+
+- `source`は`serial`
+- `control`は受理したframeの値をそのまま使用する
+- `short_press`と`long_press`はどちらも、確定した1 gestureとして`count: 1`へ変換する
+- `gesture`は共通入力eventへ追加しない
+- 現在の問題で許可されていない`control`は共通入力eventへ変換しない
+- frontendでdebounce、長押しの再判定、controlの再mapping、重複除去を行わない
+
+隣接する同じ`control`の共通入力eventは、後段のOperationBufferが`count`へまとめます。この集約は
+frontendでbuttonのbounceや重複frameを除去する処理ではありません。`long_press`にも`count: 1`以外の
+特殊な動作を割り当てません。
 
 Issue #27はこのFrontend責任のうちport lifecycle、接続状態、切断復帰、cleanup、代替入力への導線を扱います。
 production firmwareの起動commandを送ることや、hostのport close／openでdevice状態をresetすることは
@@ -248,11 +262,9 @@ synthetic入力であり、production実機sampleではありません。
 ## 対象外
 
 - 製品版の画面や操作UI
-- WebSerialInputAdapter／共通操作eventへの変換
 - Issue #27のport管理、切断復帰、代替入力UI
 - custom UF2やfirmware updaterとしての配布
 - backend処理、HTTP API、query送信処理
 
-frontendの純粋parserはこの契約に従って実装します。この文書は上記のAdapterや製品統合の完了を主張せず、
-それらが従うdevice／frontend間のWire v1契約とIssue #81実装の責任境界を定義します。また、未実施の
-別担当再現の完了を主張しません。
+frontendの純粋parserとWebSerialInputAdapterはこの契約に従って実装します。この文書は対象外の製品統合や
+backendの実装完了、および未実施の別担当再現を主張しません。

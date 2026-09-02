@@ -5,6 +5,7 @@ export type Control = Operation['control']
 /** Kept as the generated API type until the allowed source values are finalized. */
 export type InputSource = SubmitQueryRequest['source']
 
+export const serialInputSource = 'serial' satisfies InputSource
 export const keyboardInputSource = 'keyboard' satisfies InputSource
 /** Screen-button query submissions use the backend's existing `mouse` source value. */
 export const screenButtonInputSource = 'mouse' satisfies InputSource
