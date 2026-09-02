@@ -1981,10 +1981,11 @@ async fn mariadb_rooms_list_http_flow() {
         .unwrap();
 
     sqlx::query(
-        "INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count) VALUES (?, ?, 'cleared', 4)"
+        "INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count, cleared_at) VALUES (?, ?, 'cleared', 4, ?)"
     )
     .bind(run_id)
     .bind(problem1_id)
+    .bind(cleared_at)
     .execute(&pool)
     .await
     .unwrap();

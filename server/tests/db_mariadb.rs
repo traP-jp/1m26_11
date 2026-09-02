@@ -1645,13 +1645,14 @@ async fn mariadb_published_rooms_with_progress_and_ranking_flow() {
     for (p_id, count) in [(p1_id, 3), (p3_id, 2)] {
         sqlx::query(
             r#"
-            INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count)
-            VALUES (?, ?, 'cleared', ?)
+            INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count, cleared_at)
+            VALUES (?, ?, 'cleared', ?, ?)
             "#,
         )
         .bind(active_run_id)
         .bind(p_id)
         .bind(count)
+        .bind(started_at)
         .execute(&pool)
         .await
         .expect("problem progress should be inserted");
@@ -1716,18 +1717,20 @@ async fn mariadb_published_rooms_with_progress_and_ranking_flow() {
     .unwrap();
 
     sqlx::query(
-        "INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count) VALUES (?, ?, 'cleared', 5)",
+        "INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count, cleared_at) VALUES (?, ?, 'cleared', 5, ?)",
     )
     .bind(run_a2_id)
     .bind(p1_id)
+    .bind(base_time)
     .execute(&pool)
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count) VALUES (?, ?, 'cleared', 10)",
+        "INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count, cleared_at) VALUES (?, ?, 'cleared', 10, ?)",
     )
     .bind(run_a2_id)
     .bind(p2_id)
+    .bind(base_time)
     .execute(&pool)
     .await
     .unwrap();
@@ -1747,10 +1750,11 @@ async fn mariadb_published_rooms_with_progress_and_ranking_flow() {
     .unwrap();
 
     sqlx::query(
-        "INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count) VALUES (?, ?, 'cleared', 3)",
+        "INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count, cleared_at) VALUES (?, ?, 'cleared', 3, ?)",
     )
     .bind(run_b1_id)
     .bind(p1_id)
+    .bind(base_time)
     .execute(&pool)
     .await
     .unwrap();
@@ -1770,10 +1774,11 @@ async fn mariadb_published_rooms_with_progress_and_ranking_flow() {
     .unwrap();
 
     sqlx::query(
-        "INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count) VALUES (?, ?, 'cleared', 3)",
+        "INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count, cleared_at) VALUES (?, ?, 'cleared', 3, ?)",
     )
     .bind(run_c1_id)
     .bind(p1_id)
+    .bind(base_time)
     .execute(&pool)
     .await
     .unwrap();
