@@ -18,6 +18,7 @@
 ## リポジトリ構成
 
 - `client/`: Vue 3、Vite、TypeScriptによるフロントエンド
+- `device/`: Raspberry Pi Pico H向けMicroPython firmwareと実機確認資料
 - `server/`: Rust 2024、Axum、Tokio、SQLxによるAPIサーバー
 - `openapi/`: フロントエンドとサーバーが共有するOpenAPI 3.1契約、JSON fixture、scenario
 - `mise.toml`: tool versionと標準taskの正本
@@ -35,12 +36,14 @@ mise install
 
 mise run server-check
 mise run client-check
+mise run device-test
 mise run check
 ```
 
 - `mise run server-check` はDB不要のserver検証をまとめて実行します。
 - `mise run client-check` はformat確認、typecheck、build、Histoire build、lint、unit testを実行します。
-- `mise run check` は上記2つを実行しますが、DB integration test、OpenAPI生成差分検査、Docker buildは
+- `mise run device-test` はhardware不要のfirmware状態machine unit testを実行します。
+- `mise run check` は上記3つを実行しますが、DB integration test、OpenAPI生成差分検査、Docker buildは
   含みません。
 - 自動修正を伴うformat・lint taskは、編集が許可された作業でのみ実行します。
 
@@ -93,6 +96,7 @@ mise run openapi-generate
 | 文書のみ | diff、リンク、command、記載内容の確認 |
 | `server/` | `mise run server-check` |
 | `client/` | `mise run client-check` |
+| `device/` | `mise run device-test` と、変更内容に対応する実機確認 |
 | repository・migration | server checkと、破棄可能なDBで `mise run test-integration` |
 | OpenAPI契約 | `mise run openapi-generate` と関連するclient／server test |
 | Dockerfile・起動構成 | `mise run docker-build` |

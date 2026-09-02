@@ -1,6 +1,6 @@
 {
   "python.terminal.activateEnvironment": false,
-  "micropico.syncFolder": "poc",
+  "micropico.syncFolder": "firmware",
   "micropico.additionalSyncFolders": [],
   "micropico.syncAllFileTypes": false,
   "micropico.syncFileTypes": ["py"]
