@@ -199,6 +199,46 @@ paths:
           $ref: "#/components/responses/ProblemLocked"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /api/rooms/{room_id}/problems/{problem_id}/assets:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+      - $ref: "#/components/parameters/ProblemId"
+    post:
+      summary: 作問用画像をアップロードする
+      description: |
+        dev環境専用の作問支援APIです。
+        AUTH_MODE=demoかつIMAGE_UPLOAD_ENABLED=trueの場合だけrouteを登録します。
+        それ以外の環境ではroute自体を登録せず404を返します。
+        fileの実内容を検査し、storageへのuploadとproblems.assetsへの追加を行います。
+        client filename、object_key、storage credentialはresponseへ返しません。
+      operationId: uploadProblemAsset
+      tags:
+        - problems
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/UploadProblemAsset"
+      responses:
+        "201":
+          $ref: "#/components/responses/ProblemAssetUploadSuccess"
+        "400":
+          $ref: "#/components/responses/ProblemAssetUploadBadRequest"
+        "404":
+          $ref: "#/components/responses/ProblemAssetUploadNotFound"
+        "409":
+          $ref: "#/components/responses/ProblemAssetUploadConflict"
+        "413":
+          $ref: "#/components/responses/ProblemAssetUploadTooLarge"
+        "415":
+          $ref: "#/components/responses/ProblemAssetUploadUnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ProblemAssetUploadValidationError"
+        "500":
+          $ref: "#/components/responses/ProblemAssetUploadInternalServerError"
+        "502":
+          $ref: "#/components/responses/ProblemAssetUploadProviderError"
+        "503":
+          $ref: "#/components/responses/ProblemAssetUploadUnavailable"
   /api/rooms/{room_id}/problems/{problem_id}/hints/{level}:
     parameters:
       - $ref: "#/components/parameters/RoomId"
@@ -308,6 +348,17 @@ components:
         type: integer
         minimum: 1
       example: 1
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        methodとpathごとにrequestを識別するUUID v4です。
+        同じfileとtrim済みaltによる再送では、最初の201 responseを返します。
+      schema:
+        type: string
+        format: uuid
+      example: 44444444-4444-4444-8444-444444444444
   requestBodies:
     GuestLogin:
       required: true
@@ -352,6 +403,27 @@ components:
             too_long_for_example_problem:
               summary: max_lengthが50の例示問題に対する51文字の入力
               externalValue: ./examples/answers/request-too-long.json
+    UploadProblemAsset:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required:
+              - file
+              - alt
+            properties:
+              file:
+                type: string
+                format: binary
+                description: |
+                  5,242,880 bytes以下のPNG、JPEG、WebP画像です。
+                  filenameや申告Content-Typeではなく実内容を検証します。
+              alt:
+                type: string
+                description: |
+                  画像内容を説明する代替テキストです。
+                  Unicode空白を前後からtrimした後、1〜200文字である必要があります。
   responses:
     MeSuccess:
       description: 現在のログイン状態
@@ -481,6 +553,91 @@ components:
             available_problem:
               summary: 挑戦可能な小なぞ
               externalValue: ./examples/problems/available-response.json
+    ProblemAssetUploadSuccess:
+      description: 画像をuploadし、対象problemへの紐付けが完了しました。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Asset"
+          examples:
+            created:
+              summary: PNG画像のupload成功
+              externalValue: ./examples/assets/response-created.json
+    ProblemAssetUploadBadRequest:
+      description: |
+        upload requestの形式が不正です。
+        error.codeはINVALID_PATH_PARAMETER、INVALID_MULTIPART、
+        IDEMPOTENCY_KEY_REQUIRED、INVALID_IDEMPOTENCY_KEYのいずれかです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetUploadNotFound:
+      description: |
+        roomまたはproblemが存在しないか、problemが指定されたroomに属していません。
+        error.codeはROOM_OR_PROBLEM_NOT_FOUNDです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetUploadConflict:
+      description: |
+        公開済みroomまたはidempotencyの状態によりuploadできません。
+        error.codeはPUBLISHED_ROOM_IMMUTABLE、IDEMPOTENCY_KEY_REUSED、
+        IDEMPOTENCY_REQUEST_IN_PROGRESSのいずれかです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetUploadTooLarge:
+      description: |
+        file sizeが5,242,880 bytesを超えています。
+        error.codeはIMAGE_TOO_LARGEです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetUploadUnsupportedMediaType:
+      description: |
+        実file内容がPNG、JPEG、WebPではありません。SVGも許可しません。
+        error.codeはUNSUPPORTED_IMAGE_TYPEです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetUploadValidationError:
+      description: |
+        file内容、画像寸法、またはtrim後のaltが不正です。
+        error.codeはEMPTY_FILE、INVALID_IMAGE、IMAGE_DIMENSIONS_EXCEEDED、
+        INVALID_ALTのいずれかです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetUploadInternalServerError:
+      description: |
+        DB更新失敗などのserver内部エラーです。
+        error.codeはINTERNAL_SERVER_ERRORです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetUploadProviderError:
+      description: |
+        storage providerが4xx responseを返しました。
+        error.codeはSTORAGE_PROVIDER_ERRORです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetUploadUnavailable:
+      description: |
+        storage providerへの接続失敗、10秒のtimeout、またはproviderの5xxです。
+        error.codeはSTORAGE_UNAVAILABLEです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     ProblemHintSuccess:
       description: ヒント本文
       content:

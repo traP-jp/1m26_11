@@ -7,7 +7,10 @@ build = "build.rs"
 
 [dependencies]
 async-trait = "0.1"
-axum = { version = "0.8", features = ["http1", "json", "tokio"] }
+axum = { version = "0.8", features = ["http1", "json", "multipart", "tokio"] }
+aws-sdk-s3 = "=1.60.0"
+image = { version = "=0.25.5", default-features = false, features = ["jpeg", "png", "webp"] }
+sha2 = "0.10"
 axum-extra = { version = "0.12", features = ["cookie"] }
 serde = { version = "1", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
@@ -26,5 +29,6 @@ openapi_generated = { package = "openapi", path = "generated/openapi" }
 serde_yaml = "0.9"
 
 [dev-dependencies]
+futures-util = "0.3"
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }

@@ -238,6 +238,41 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/rooms/{room_id}/problems/{problem_id}/assets': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * 作問用画像をアップロードする
+     * @description dev環境専用の作問支援APIです。
+     *     AUTH_MODE=demoかつIMAGE_UPLOAD_ENABLED=trueの場合だけrouteを登録します。
+     *     それ以外の環境ではroute自体を登録せず404を返します。
+     *     fileの実内容を検査し、storageへのuploadとproblems.assetsへの追加を行います。
+     *     client filename、object_key、storage credentialはresponseへ返しません。
+     */
+    post: operations['uploadProblemAsset']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/rooms/{room_id}/problems/{problem_id}/hints/{level}': {
     parameters: {
       query?: never
@@ -669,6 +704,126 @@ export interface components {
         'application/json': components['schemas']['ProblemResponse']
       }
     }
+    /** @description 画像をuploadし、対象problemへの紐付けが完了しました。 */
+    ProblemAssetUploadSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['Asset']
+      }
+    }
+    /**
+     * @description upload requestの形式が不正です。
+     *     error.codeはINVALID_PATH_PARAMETER、INVALID_MULTIPART、
+     *     IDEMPOTENCY_KEY_REQUIRED、INVALID_IDEMPOTENCY_KEYのいずれかです。
+     */
+    ProblemAssetUploadBadRequest: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description roomまたはproblemが存在しないか、problemが指定されたroomに属していません。
+     *     error.codeはROOM_OR_PROBLEM_NOT_FOUNDです。
+     */
+    ProblemAssetUploadNotFound: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description 公開済みroomまたはidempotencyの状態によりuploadできません。
+     *     error.codeはPUBLISHED_ROOM_IMMUTABLE、IDEMPOTENCY_KEY_REUSED、
+     *     IDEMPOTENCY_REQUEST_IN_PROGRESSのいずれかです。
+     */
+    ProblemAssetUploadConflict: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description file sizeが5,242,880 bytesを超えています。
+     *     error.codeはIMAGE_TOO_LARGEです。
+     */
+    ProblemAssetUploadTooLarge: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description 実file内容がPNG、JPEG、WebPではありません。SVGも許可しません。
+     *     error.codeはUNSUPPORTED_IMAGE_TYPEです。
+     */
+    ProblemAssetUploadUnsupportedMediaType: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description file内容、画像寸法、またはtrim後のaltが不正です。
+     *     error.codeはEMPTY_FILE、INVALID_IMAGE、IMAGE_DIMENSIONS_EXCEEDED、
+     *     INVALID_ALTのいずれかです。
+     */
+    ProblemAssetUploadValidationError: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description DB更新失敗などのserver内部エラーです。
+     *     error.codeはINTERNAL_SERVER_ERRORです。
+     */
+    ProblemAssetUploadInternalServerError: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description storage providerが4xx responseを返しました。
+     *     error.codeはSTORAGE_PROVIDER_ERRORです。
+     */
+    ProblemAssetUploadProviderError: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description storage providerへの接続失敗、10秒のtimeout、またはproviderの5xxです。
+     *     error.codeはSTORAGE_UNAVAILABLEです。
+     */
+    ProblemAssetUploadUnavailable: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
     /** @description ヒント本文 */
     ProblemHintSuccess: {
       headers: {
@@ -803,6 +958,12 @@ export interface components {
      * @example 1
      */
     HintLevel: number
+    /**
+     * @description methodとpathごとにrequestを識別するUUID v4です。
+     *     同じfileとtrim済みaltによる再送では、最初の201 responseを返します。
+     * @example 44444444-4444-4444-8444-444444444444
+     */
+    IdempotencyKey: string
   }
   requestBodies: {
     GuestLogin: {
@@ -818,6 +979,23 @@ export interface components {
     SubmitAnswer: {
       content: {
         'application/json': components['schemas']['AnswerRequest']
+      }
+    }
+    UploadProblemAsset: {
+      content: {
+        'multipart/form-data': {
+          /**
+           * Format: binary
+           * @description 5,242,880 bytes以下のPNG、JPEG、WebP画像です。
+           *     filenameや申告Content-Typeではなく実内容を検証します。
+           */
+          file: string
+          /**
+           * @description 画像内容を説明する代替テキストです。
+           *     Unicode空白を前後からtrimした後、1〜200文字である必要があります。
+           */
+          alt: string
+        }
       }
     }
   }
@@ -1024,6 +1202,45 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['ProblemLocked']
       500: components['responses']['InternalServerError']
+    }
+  }
+  uploadProblemAsset: {
+    parameters: {
+      query?: never
+      header: {
+        /**
+         * @description methodとpathごとにrequestを識別するUUID v4です。
+         *     同じfileとtrim済みaltによる再送では、最初の201 responseを返します。
+         * @example 44444444-4444-4444-8444-444444444444
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+      }
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    requestBody: components['requestBodies']['UploadProblemAsset']
+    responses: {
+      201: components['responses']['ProblemAssetUploadSuccess']
+      400: components['responses']['ProblemAssetUploadBadRequest']
+      404: components['responses']['ProblemAssetUploadNotFound']
+      409: components['responses']['ProblemAssetUploadConflict']
+      413: components['responses']['ProblemAssetUploadTooLarge']
+      415: components['responses']['ProblemAssetUploadUnsupportedMediaType']
+      422: components['responses']['ProblemAssetUploadValidationError']
+      500: components['responses']['ProblemAssetUploadInternalServerError']
+      502: components['responses']['ProblemAssetUploadProviderError']
+      503: components['responses']['ProblemAssetUploadUnavailable']
     }
   }
   getProblemHint: {

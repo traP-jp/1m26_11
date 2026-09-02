@@ -87,6 +87,21 @@ pub enum RepositoryError {
     #[error("run update affected an unexpected number of rows")]
     RunUpdateConflict,
 
+    #[error("stored asset upload idempotency record is invalid")]
+    InvalidAssetUploadIdempotencyRecord,
+
+    #[error("asset upload target changed during processing")]
+    AssetUploadTargetChanged,
+
+    #[error("published room cannot be modified")]
+    PublishedRoomImmutable,
+
+    #[error("problem assets update affected an unexpected number of rows")]
+    ProblemAssetsUpdateConflict,
+
+    #[error("asset upload idempotency update affected an unexpected number of rows")]
+    AssetUploadIdempotencyUpdateConflict,
+
     #[error("stored auth provider is invalid")]
     InvalidAuthProvider,
 }
@@ -286,6 +301,63 @@ pub struct ProblemRecord {
     pub is_required: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, FromRow)]
+pub struct AssetUploadTargetRecord {
+    pub is_published: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AssetUploadClaimRequest {
+    pub request_method: String,
+    pub request_path: String,
+    pub idempotency_key: Uuid,
+    pub file_sha256: [u8; 32],
+    pub alt: String,
+    pub expires_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AssetUploadClaimOutcome {
+    Acquired { claim_token: Uuid },
+    InProgress,
+    Reused,
+    Completed { asset: Asset },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CompleteAssetUploadRequest {
+    pub request_method: String,
+    pub request_path: String,
+    pub idempotency_key: Uuid,
+    pub claim_token: Uuid,
+    pub room_id: Uuid,
+    pub problem_id: Uuid,
+    pub asset: Asset,
+    pub completed_at: DateTime<Utc>,
+}
+
+#[derive(FromRow)]
+struct AssetUploadIdempotencyRow {
+    claim_token: Uuid,
+    file_sha256: Vec<u8>,
+    alt: String,
+    status: String,
+    object_key: Option<String>,
+}
+
+#[derive(FromRow)]
+struct AssetUploadCompletionTargetRow {
+    is_published: bool,
+    assets: sqlx::types::Json<Vec<Asset>>,
+}
+
+#[derive(FromRow)]
+struct AssetUploadCompletionRow {
+    claim_token: Uuid,
+    alt: String,
+    status: String,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, FromRow)]
 pub struct ProblemProgressRecord {
     pub run_id: Uuid,
@@ -448,6 +520,38 @@ pub trait AuthRepository: Send + Sync {
 
     async fn find_room_by_id(&self, _room_id: Uuid) -> Result<Option<RoomRecord>, RepositoryError> {
         unimplemented!("find_room_by_id is not implemented for this repository")
+    }
+
+    async fn find_asset_upload_target(
+        &self,
+        _room_id: Uuid,
+        _problem_id: Uuid,
+    ) -> Result<Option<AssetUploadTargetRecord>, RepositoryError> {
+        unimplemented!("find_asset_upload_target is not implemented for this repository")
+    }
+
+    async fn claim_asset_upload(
+        &self,
+        _request: &AssetUploadClaimRequest,
+    ) -> Result<AssetUploadClaimOutcome, RepositoryError> {
+        unimplemented!("claim_asset_upload is not implemented for this repository")
+    }
+
+    async fn complete_asset_upload(
+        &self,
+        _request: &CompleteAssetUploadRequest,
+    ) -> Result<(), RepositoryError> {
+        unimplemented!("complete_asset_upload is not implemented for this repository")
+    }
+
+    async fn release_asset_upload_claim(
+        &self,
+        _request_method: &str,
+        _request_path: &str,
+        _idempotency_key: Uuid,
+        _claim_token: Uuid,
+    ) -> Result<(), RepositoryError> {
+        unimplemented!("release_asset_upload_claim is not implemented for this repository")
     }
 
     async fn find_active_run(
@@ -1064,6 +1168,302 @@ impl AuthRepository for SqlxUserRepository {
         .fetch_optional(&self.pool)
         .await
         .map_err(RepositoryError::Database)
+    }
+
+    async fn find_asset_upload_target(
+        &self,
+        room_id: Uuid,
+        problem_id: Uuid,
+    ) -> Result<Option<AssetUploadTargetRecord>, RepositoryError> {
+        sqlx::query_as::<_, AssetUploadTargetRecord>(
+            r#"
+            SELECT rooms.is_published
+            FROM rooms
+            INNER JOIN problems
+                ON problems.room_id = rooms.room_id
+            WHERE rooms.room_id = ?
+              AND problems.problem_id = ?
+            "#,
+        )
+        .bind(room_id)
+        .bind(problem_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)
+    }
+
+    async fn claim_asset_upload(
+        &self,
+        request: &AssetUploadClaimRequest,
+    ) -> Result<AssetUploadClaimOutcome, RepositoryError> {
+        let claim_token = Uuid::new_v4();
+        let mut transaction = self.pool.begin().await.map_err(RepositoryError::Database)?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO asset_upload_idempotency (
+                request_method,
+                request_path,
+                idempotency_key,
+                claim_token,
+                file_sha256,
+                alt,
+                status,
+                expires_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, 'processing', ?)
+            ON DUPLICATE KEY UPDATE
+                claim_token = IF(
+                    expires_at <= CURRENT_TIMESTAMP(3),
+                    VALUES(claim_token),
+                    claim_token
+                ),
+                file_sha256 = IF(
+                    expires_at <= CURRENT_TIMESTAMP(3),
+                    VALUES(file_sha256),
+                    file_sha256
+                ),
+                alt = IF(
+                    expires_at <= CURRENT_TIMESTAMP(3),
+                    VALUES(alt),
+                    alt
+                ),
+                status = IF(
+                    expires_at <= CURRENT_TIMESTAMP(3),
+                    VALUES(status),
+                    status
+                ),
+                object_key = IF(
+                    expires_at <= CURRENT_TIMESTAMP(3),
+                    NULL,
+                    object_key
+                ),
+                created_at = IF(
+                    expires_at <= CURRENT_TIMESTAMP(3),
+                    CURRENT_TIMESTAMP(3),
+                    created_at
+                ),
+                completed_at = IF(
+                    expires_at <= CURRENT_TIMESTAMP(3),
+                    NULL,
+                    completed_at
+                ),
+                expires_at = IF(
+                    expires_at <= CURRENT_TIMESTAMP(3),
+                    VALUES(expires_at),
+                    expires_at
+                )
+            "#,
+        )
+        .bind(&request.request_method)
+        .bind(&request.request_path)
+        .bind(request.idempotency_key)
+        .bind(claim_token)
+        .bind(request.file_sha256.as_slice())
+        .bind(&request.alt)
+        .bind(request.expires_at.to_owned())
+        .execute(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        let row = sqlx::query_as::<_, AssetUploadIdempotencyRow>(
+            r#"
+            SELECT
+                claim_token,
+                file_sha256,
+                alt,
+                status,
+                CAST(
+                    object_key AS CHAR CHARACTER SET utf8mb4
+                ) AS object_key
+            FROM asset_upload_idempotency
+            WHERE request_method = ?
+              AND request_path = ?
+              AND idempotency_key = ?
+            FOR UPDATE
+            "#,
+        )
+        .bind(&request.request_method)
+        .bind(&request.request_path)
+        .bind(request.idempotency_key)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?
+        .ok_or(RepositoryError::InvalidAssetUploadIdempotencyRecord)?;
+
+        let same_payload = row.file_sha256.as_slice() == request.file_sha256.as_slice()
+            && row.alt.as_str() == request.alt.as_str();
+
+        let outcome = if row.claim_token == claim_token {
+            AssetUploadClaimOutcome::Acquired { claim_token }
+        } else if !same_payload {
+            AssetUploadClaimOutcome::Reused
+        } else {
+            match row.status.as_str() {
+                "processing" => AssetUploadClaimOutcome::InProgress,
+                "completed" => {
+                    let object_key = row
+                        .object_key
+                        .ok_or(RepositoryError::InvalidAssetUploadIdempotencyRecord)?;
+
+                    AssetUploadClaimOutcome::Completed {
+                        asset: Asset {
+                            asset_type: "image".to_owned(),
+                            object_key,
+                            alt: row.alt,
+                        },
+                    }
+                }
+                _ => return Err(RepositoryError::InvalidAssetUploadIdempotencyRecord),
+            }
+        };
+
+        transaction
+            .commit()
+            .await
+            .map_err(RepositoryError::Database)?;
+
+        Ok(outcome)
+    }
+
+    async fn complete_asset_upload(
+        &self,
+        request: &CompleteAssetUploadRequest,
+    ) -> Result<(), RepositoryError> {
+        let mut transaction = self.pool.begin().await.map_err(RepositoryError::Database)?;
+
+        let target = sqlx::query_as::<_, AssetUploadCompletionTargetRow>(
+            r#"
+            SELECT
+                rooms.is_published,
+                problems.assets
+            FROM rooms
+            INNER JOIN problems
+                ON problems.room_id = rooms.room_id
+            WHERE rooms.room_id = ?
+              AND problems.problem_id = ?
+            FOR UPDATE
+            "#,
+        )
+        .bind(request.room_id)
+        .bind(request.problem_id)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?
+        .ok_or(RepositoryError::AssetUploadTargetChanged)?;
+
+        if target.is_published {
+            return Err(RepositoryError::PublishedRoomImmutable);
+        }
+
+        let claim = sqlx::query_as::<_, AssetUploadCompletionRow>(
+            r#"
+            SELECT claim_token, alt, status
+            FROM asset_upload_idempotency
+            WHERE request_method = ?
+              AND request_path = ?
+              AND idempotency_key = ?
+            FOR UPDATE
+            "#,
+        )
+        .bind(&request.request_method)
+        .bind(&request.request_path)
+        .bind(request.idempotency_key)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?
+        .ok_or(RepositoryError::InvalidAssetUploadIdempotencyRecord)?;
+
+        if claim.claim_token != request.claim_token
+            || claim.status != "processing"
+            || claim.alt != request.asset.alt
+        {
+            return Err(RepositoryError::InvalidAssetUploadIdempotencyRecord);
+        }
+
+        let mut assets = target.assets.0;
+        assets.push(request.asset.clone());
+
+        let problem_update = sqlx::query(
+            r#"
+            UPDATE problems
+            SET assets = ?
+            WHERE room_id = ?
+              AND problem_id = ?
+            "#,
+        )
+        .bind(sqlx::types::Json(assets))
+        .bind(request.room_id)
+        .bind(request.problem_id)
+        .execute(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        if problem_update.rows_affected() != 1 {
+            return Err(RepositoryError::ProblemAssetsUpdateConflict);
+        }
+
+        let idempotency_update = sqlx::query(
+            r#"
+            UPDATE asset_upload_idempotency
+            SET status = 'completed',
+                object_key = ?,
+                completed_at = ?
+            WHERE request_method = ?
+              AND request_path = ?
+              AND idempotency_key = ?
+              AND claim_token = ?
+              AND status = 'processing'
+            "#,
+        )
+        .bind(&request.asset.object_key)
+        .bind(request.completed_at.to_owned())
+        .bind(&request.request_method)
+        .bind(&request.request_path)
+        .bind(request.idempotency_key)
+        .bind(request.claim_token)
+        .execute(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        if idempotency_update.rows_affected() != 1 {
+            return Err(RepositoryError::AssetUploadIdempotencyUpdateConflict);
+        }
+
+        transaction
+            .commit()
+            .await
+            .map_err(RepositoryError::Database)?;
+
+        Ok(())
+    }
+
+    async fn release_asset_upload_claim(
+        &self,
+        request_method: &str,
+        request_path: &str,
+        idempotency_key: Uuid,
+        claim_token: Uuid,
+    ) -> Result<(), RepositoryError> {
+        sqlx::query(
+            r#"
+            DELETE FROM asset_upload_idempotency
+            WHERE request_method = ?
+              AND request_path = ?
+              AND idempotency_key = ?
+              AND claim_token = ?
+              AND status = 'processing'
+            "#,
+        )
+        .bind(request_method)
+        .bind(request_path)
+        .bind(idempotency_key)
+        .bind(claim_token)
+        .execute(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        Ok(())
     }
 
     async fn find_active_run(
