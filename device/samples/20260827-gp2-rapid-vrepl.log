@@ -1,0 +1,6 @@
+[button_test] elapsed_us=16415910 button=1 gpio=GP2 level=0 state=PRESSED
+[button_test] elapsed_us=16867308 button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] elapsed_us=17547365 button=1 gpio=GP2 level=0 state=PRESSED
+[button_test] elapsed_us=17549162 button=1 gpio=GP2 level=1 state=RELEASED
+[button_test] elapsed_us=17550915 button=1 gpio=GP2 level=0 state=PRESSED
+[button_test] elapsed_us=17946504 button=1 gpio=GP2 level=1 state=RELEASED
