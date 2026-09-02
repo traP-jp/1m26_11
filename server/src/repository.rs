@@ -78,6 +78,9 @@ pub enum RepositoryError {
     #[error("stored problem status is invalid: {status}")]
     InvalidProblemStatus { status: String },
 
+    #[error("stored run status is invalid: {status}")]
+    InvalidRunStatus { status: String },
+
     #[error("problem progress update affected an unexpected number of rows")]
     ProblemProgressUpdateConflict,
 
@@ -796,7 +799,7 @@ impl AuthRepository for SqlxUserRepository {
             match run.status.as_str() {
                 "active" => {
                     if user_cleared_rooms.contains(&run.room_id) {
-                        return Err(RepositoryError::InvalidProblemStatus {
+                        return Err(RepositoryError::InvalidRunStatus {
                             status: "active and cleared run conflict".to_owned(),
                         });
                     }
@@ -804,7 +807,7 @@ impl AuthRepository for SqlxUserRepository {
                 }
                 "cleared" => {
                     if user_active_rooms.contains_key(&run.room_id) {
-                        return Err(RepositoryError::InvalidProblemStatus {
+                        return Err(RepositoryError::InvalidRunStatus {
                             status: "active and cleared run conflict".to_owned(),
                         });
                     }
@@ -859,7 +862,7 @@ impl AuthRepository for SqlxUserRepository {
         }
 
         let cleared_run_rows = if !user_cleared_rooms.is_empty() {
-            sqlx::query_as::<_, ClearedRunRow>(
+            let mut query_builder = sqlx::QueryBuilder::<sqlx::MySql>::new(
                 r#"
                 SELECT
                     runs.user_id,
@@ -876,16 +879,29 @@ impl AuthRepository for SqlxUserRepository {
                 FROM runs
                 INNER JOIN rooms ON rooms.room_id = runs.room_id
                 LEFT JOIN problem_progress ON problem_progress.run_id = runs.run_id
-                LEFT JOIN problems ON problems.problem_id = problem_progress.problem_id
+                LEFT JOIN problems
+                    ON problems.problem_id = problem_progress.problem_id
+                   AND problems.room_id = runs.room_id
                 WHERE rooms.is_published = 1
                   AND runs.status = 'cleared'
                   AND runs.cleared_at IS NOT NULL
-                GROUP BY runs.run_id, runs.user_id, runs.room_id, runs.started_at, runs.cleared_at
+                  AND runs.room_id IN (
                 "#,
-            )
-            .fetch_all(&self.pool)
-            .await
-            .map_err(RepositoryError::Database)?
+            );
+            let mut separated = query_builder.separated(", ");
+            for room_id in &user_cleared_rooms {
+                separated.push_bind(*room_id);
+            }
+            separated.push_unseparated(")");
+            query_builder.push(
+                " GROUP BY runs.run_id, runs.user_id, runs.room_id, runs.started_at, runs.cleared_at",
+            );
+
+            query_builder
+                .build_query_as::<ClearedRunRow>()
+                .fetch_all(&self.pool)
+                .await
+                .map_err(RepositoryError::Database)?
         } else {
             Vec::new()
         };

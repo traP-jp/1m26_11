@@ -10,7 +10,7 @@ type QueryRequest = components['schemas']['QueryRequest']
 interface RoomFixture {
   room_id: string
   name: string
-  total_problem_count: number
+  required_count: number
 }
 
 export function roomViewModelFromFixtures(
@@ -49,8 +49,8 @@ export function roomViewModelFromFixtures(
     answerJudgement: { state: 'idle' },
     clear: {
       cleared: false,
-      clearedProblemCount: run.cleared_problem_ids.length,
-      totalProblemCount: room.total_problem_count,
+      clearedCount: run.cleared_problem_ids.length,
+      requiredCount: room.required_count,
     },
   }
 }
@@ -58,7 +58,7 @@ export function roomViewModelFromFixtures(
 const room = {
   room_id: '1411824c-d357-4941-af76-c76cb827dda6',
   name: '最初の部屋',
-  total_problem_count: 4,
+  required_count: 4,
 }
 const run = mockContract.getResponseExample(
   'getCurrentRun',

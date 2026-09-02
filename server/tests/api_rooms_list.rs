@@ -267,3 +267,68 @@ async fn rooms_database_error_returns_500_without_details() {
     assert_eq!(body["error"]["code"], "INTERNAL_SERVER_ERROR");
     assert_eq!(body["error"]["message"], "internal server error");
 }
+
+#[tokio::test]
+async fn rooms_invalid_progress_status_returns_500() {
+    struct InvalidStatusRoomsRepo;
+
+    #[async_trait]
+    impl AuthRepository for InvalidStatusRoomsRepo {
+        async fn find_user_by_demo_session(
+            &self,
+            _session_id: Uuid,
+        ) -> Result<Option<AuthUserRecord>, RepositoryError> {
+            Ok(None)
+        }
+
+        async fn find_user_by_provider_subject(
+            &self,
+            _auth_provider: AuthProvider,
+            _provider_subject: &str,
+        ) -> Result<Option<AuthUserRecord>, RepositoryError> {
+            Ok(None)
+        }
+
+        async fn get_or_create_user(
+            &self,
+            auth_provider: AuthProvider,
+            _provider_subject: &str,
+            display_name: &str,
+        ) -> Result<AuthUserRecord, RepositoryError> {
+            Ok(AuthUserRecord {
+                user_id: Uuid::new_v4(),
+                auth_provider,
+                display_name: display_name.to_owned(),
+            })
+        }
+
+        async fn find_published_rooms_with_progress(
+            &self,
+            _user_id: Option<Uuid>,
+        ) -> Result<Vec<RoomSummaryRecord>, RepositoryError> {
+            Ok(vec![RoomSummaryRecord {
+                room_id: Uuid::new_v4(),
+                number: 1,
+                name: "test".to_owned(),
+                genre: "test".to_owned(),
+                description: "test".to_owned(),
+                problem_count: 1,
+                progress_status: "invalid_status".to_owned(),
+                cleared_count: 0,
+                required_count: 1,
+                best_record: None,
+            }])
+        }
+    }
+
+    let app = app(AppState::new(
+        AuthMode::Demo,
+        Arc::new(InvalidStatusRoomsRepo),
+    ));
+
+    let req = Request::get("/api/rooms").body(Body::empty()).unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}

@@ -17,6 +17,7 @@ use crate::{
     auth::current_user::{CurrentUser, OptionalCurrentUser},
     error::AppError,
     problem::build_problem_response,
+    repository::RepositoryError,
 };
 
 pub(crate) async fn get_rooms(
@@ -36,7 +37,12 @@ pub(crate) async fn get_rooms(
                 "not_started" => ProgressStatus::NotStarted,
                 "active" => ProgressStatus::Active,
                 "cleared" => ProgressStatus::Cleared,
-                _ => ProgressStatus::NotStarted,
+                other => {
+                    return Err(RepositoryError::InvalidRunStatus {
+                        status: format!("unexpected progress status: {other}"),
+                    }
+                    .into());
+                }
             };
 
             let progress = Progress::new(
@@ -54,7 +60,7 @@ pub(crate) async fn get_rooms(
                 None => Nullable::Null,
             };
 
-            RoomItem::new(
+            Ok(RoomItem::new(
                 summary.room_id,
                 summary.number as u32,
                 summary.name,
@@ -63,9 +69,9 @@ pub(crate) async fn get_rooms(
                 summary.problem_count,
                 progress,
                 best_record,
-            )
+            ))
         })
-        .collect();
+        .collect::<Result<Vec<_>, AppError>>()?;
 
     Ok(Json(RoomsResponse::new(items)))
 }
