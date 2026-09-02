@@ -16,7 +16,7 @@ describe('Portal auth parts', () => {
 
   it.each([
     ['not_started', '未開始'],
-    ['in_progress', '挑戦中'],
+    ['active', '挑戦中'],
     ['cleared', 'クリア済み'],
   ] as const)('shows %s progress without emitting events', (status, label) => {
     const wrapper = mount(MinimalProgressSummary, { props: { status } })
