@@ -82,7 +82,7 @@ jobs:
                 integration=true
                 docker=true
                 ;;
-              server/migrations/*|server/src/repository/*|server/src/problem/*|server/tests/*|mock-problem-data/*)
+              server/migrations/*|server/src/repository.rs|server/src/repository/*|server/src/problem/*|server/tests/*|mock-problem-data/*)
                 server=true
                 integration=true
                 ;;
