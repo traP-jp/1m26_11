@@ -113,4 +113,10 @@ describe('App', () => {
 
     expect(wrapper.get('h1').text()).toBe('Clear')
   })
+
+  it('renders the development device PoC page without changing App composition', async () => {
+    const { wrapper } = await mountAt('/device-poc')
+
+    expect(wrapper.get('h1').text()).toBe('Device Web Serial raw viewer')
+  })
 })

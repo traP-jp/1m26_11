@@ -1,0 +1,8 @@
+# MicroPico / VS Code local generated state
+device.code-workspace
+.vscode/Pico-W-Stub/
+.picowgo
+
+# Ignore ordinary logs, but retain measured hardware logs
+*.log
+!samples/*.log
