@@ -142,6 +142,10 @@ class FakeWebSerial implements WebSerialLike {
     const event = { target: port } as unknown as Event
     for (const listener of this.disconnectListeners) listener(event)
   }
+
+  get listenerCount(): number {
+    return this.disconnectListeners.size
+  }
 }
 
 function createAdapter() {
@@ -304,6 +308,18 @@ describe('useWebSerialConnection', () => {
     expect(connection.canRetry.value).toBe(true)
   })
 
+  it('disconnect開始前にreadが解決していても古いsessionのchunkを渡さない', async () => {
+    const port = new FakeSerialPort()
+    const { connection, adapter } = createConnection(new FakeWebSerial(port))
+    await connection.connect()
+
+    port.reader.emit(new Uint8Array([1, 2, 3]))
+    await connection.disconnect()
+
+    expect(adapter.pushChunk).not.toHaveBeenCalled()
+    expect(adapter.resetSession).toHaveBeenCalledTimes(1)
+  })
+
   it('stream終了とread失敗を別の状態として通知し、resourceを解放する', async () => {
     const endedPort = new FakeSerialPort()
     const ended = createConnection(new FakeWebSerial(endedPort))
@@ -376,10 +392,11 @@ describe('useWebSerialConnection', () => {
 
   it('画面破棄時にreaderとportをcleanupする', async () => {
     const port = new FakeSerialPort()
+    const serial = new FakeWebSerial(port)
     const adapter = createAdapter()
     const scope = effectScope()
     const connection = scope.run(() =>
-      useWebSerialConnection({ serial: new FakeWebSerial(port), secureContext: true, adapter }),
+      useWebSerialConnection({ serial, secureContext: true, adapter }),
     )!
     await connection.connect()
 
@@ -388,9 +405,10 @@ describe('useWebSerialConnection', () => {
     await vi.waitFor(() => expect(port.events).toContain('port-close'))
     expect(port.events.indexOf('reader-release')).toBeLessThan(port.events.indexOf('port-close'))
     expect(adapter.resetSession).toHaveBeenCalledTimes(1)
+    expect(serial.listenerCount).toBe(0)
   })
 
-  it('画面破棄中にcloseが失敗し続けた場合は、物理切断までportの所有を保持する', async () => {
+  it('画面破棄中にcloseが失敗し続けてもport参照とlistenerを残さない', async () => {
     const port = new FakeSerialPort()
     port.closeFailureCount = 2
     const serial = new FakeWebSerial(port)
@@ -410,11 +428,8 @@ describe('useWebSerialConnection', () => {
       expect(port.events.filter((event) => event === 'port-close')).toHaveLength(2),
     )
     expect(port.isOpen).toBe(true)
-    expect(connection.canDisconnect.value).toBe(true)
-
-    serial.emitDisconnect(port)
-    await vi.waitFor(() => expect(port.isOpen).toBe(false))
     expect(connection.canDisconnect.value).toBe(false)
+    expect(serial.listenerCount).toBe(0)
   })
 
   it('open待機中の画面破棄後にopenされても、portのcloseを再試行する', async () => {

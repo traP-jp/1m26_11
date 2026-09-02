@@ -1,7 +1,5 @@
 import { computed, getCurrentScope, onScopeDispose, readonly, ref } from 'vue'
 
-import type { WebSerialInputAdapter } from './webSerialInputAdapter'
-
 export const WEB_SERIAL_OPEN_OPTIONS = {
   baudRate: 115_200,
   dataBits: 8,
@@ -17,6 +15,11 @@ export const RASPBERRY_PI_PICO_PORT_FILTER = {
 
 interface SerialPortRequestOptionsLike {
   filters: readonly [typeof RASPBERRY_PI_PICO_PORT_FILTER]
+}
+
+export interface SerialInputAdapterLike {
+  pushChunk(chunk: Uint8Array): void
+  resetSession(): void
 }
 
 export interface SerialReaderLike {
@@ -64,8 +67,8 @@ export type SerialConnectionState =
       message: string
     }
 
-interface UseWebSerialConnectionOptions {
-  adapter: Pick<WebSerialInputAdapter, 'pushChunk' | 'resetSession'>
+export interface UseWebSerialConnectionOptions {
+  adapter: SerialInputAdapterLike
   serial?: WebSerialLike | null
   secureContext?: boolean
 }
@@ -111,7 +114,7 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
   const ownsPort = ref(false)
 
   let generation = 0
-  let disposed = false
+  const disposed = ref(false)
   let currentPort: SerialPortLike | undefined
   let currentReader: SerialReaderLike | undefined
   let readLoopPromise: Promise<ReadLoopResult> | undefined
@@ -124,6 +127,7 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
   const canConnect = computed(
     () =>
       state.value.phase === 'idle' &&
+      !disposed.value &&
       !busy.value &&
       !ownsPort.value &&
       Boolean(serial) &&
@@ -132,12 +136,13 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
   const canRetry = computed(
     () =>
       (state.value.phase === 'disconnected' || state.value.phase === 'error') &&
+      !disposed.value &&
       !busy.value &&
       !ownsPort.value &&
       Boolean(serial) &&
       secureContext,
   )
-  const canDisconnect = computed(() => ownsPort.value && !cleaningUp.value)
+  const canDisconnect = computed(() => !disposed.value && ownsPort.value && !cleaningUp.value)
 
   function registerDisconnectListener(): void {
     if (disconnectListener || !serial?.addEventListener) return
@@ -168,6 +173,7 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
         if (result.done) {
           return { reason: sessionGeneration === generation ? 'ended' : 'cancelled' }
         }
+        if (sessionGeneration !== generation || disposed.value) return { reason: 'cancelled' }
         if (result.value.length > 0) options.adapter.pushChunk(result.value)
       }
     } catch (error) {
@@ -207,6 +213,7 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
     const portToClose = currentPort
     const readerToCancel = currentReader
     const loopToFinish = readLoopPromise
+    const shouldResetAdapter = Boolean(readerToCancel || loopToFinish)
 
     const cleanup = (async () => {
       let closeError: unknown
@@ -224,7 +231,7 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
       }
 
       if (readerToCancel && !loopToFinish) readerToCancel.releaseLock()
-      options.adapter.resetSession()
+      if (shouldResetAdapter) options.adapter.resetSession()
 
       try {
         await portToClose?.close()
@@ -232,7 +239,7 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
         closeError = error
       }
 
-      if (closeError && disposed && portToClose) {
+      if (closeError && disposed.value && portToClose) {
         try {
           await portToClose.close()
           closeError = undefined
@@ -244,7 +251,8 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
       const physicallyDisconnected =
         reason === 'device-disconnected' ||
         (currentPort === portToClose && currentPortPhysicallyDisconnected)
-      const retainPortForCloseRetry = Boolean(closeError) && !physicallyDisconnected
+      const retainPortForCloseRetry =
+        Boolean(closeError) && !physicallyDisconnected && !disposed.value
 
       if (retainPortForCloseRetry) {
         registerDisconnectListener()
@@ -259,7 +267,7 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
       if (currentReader === readerToCancel) currentReader = undefined
       if (readLoopPromise === loopToFinish) readLoopPromise = undefined
 
-      if (disposed) return
+      if (disposed.value) return
       if (physicallyDisconnected) {
         state.value = {
           phase: 'disconnected',
@@ -329,19 +337,20 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
     try {
       await port.close()
     } catch (error) {
-      if (disposed) {
+      if (disposed.value) {
         try {
           await port.close()
           return
         } catch {
-          // Keep ownership below so a later physical disconnect can release the stale port.
+          // The component no longer has a retry path, so do not retain its global listener.
         }
+        return
       }
       currentPort = port
       currentPortPhysicallyDisconnected = false
       ownsPort.value = true
       registerDisconnectListener()
-      if (disposed) return
+      if (disposed.value) return
       state.value = {
         phase: 'error',
         operation: 'close-port',
@@ -351,7 +360,7 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
   }
 
   async function runConnection(attempt: ConnectionAttempt): Promise<void> {
-    if (!serial) return
+    if (!serial || disposed.value) return
 
     connecting.value = true
     generation += 1
@@ -371,30 +380,31 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
       }
 
       selectedPort = await serial.requestPort({ filters: [RASPBERRY_PI_PICO_PORT_FILTER] })
-      if (sessionGeneration !== generation || disposed) return
+      if (sessionGeneration !== generation || disposed.value) return
 
       operation = 'open-port'
       await selectedPort.open(WEB_SERIAL_OPEN_OPTIONS)
       selectedPortOpened = true
-      if (sessionGeneration !== generation || disposed) {
+      if (sessionGeneration !== generation || disposed.value) {
         await closeStaleOpenedPort(selectedPort)
         return
       }
 
+      operation = 'read'
       const readable = selectedPort.readable
       if (!readable) throw new Error('Serial readable streamを取得できませんでした')
 
-      operation = 'read'
+      const reader = readable.getReader()
       currentPort = selectedPort
       currentPortPhysicallyDisconnected = false
       ownsPort.value = true
-      currentReader = readable.getReader()
-      readLoopPromise = runReadLoop(currentReader, sessionGeneration)
+      currentReader = reader
+      readLoopPromise = runReadLoop(reader, sessionGeneration)
       registerDisconnectListener()
       state.value = { phase: 'connected', message: 'Serial deviceから入力を読取り中です。' }
       observeReadLoop(readLoopPromise, sessionGeneration)
     } catch (error) {
-      if (sessionGeneration !== generation || disposed) return
+      if (sessionGeneration !== generation || disposed.value) return
       const failureState = connectionFailureState(attempt, operation, error)
 
       if (selectedPortOpened && currentPort === selectedPort) {
@@ -402,8 +412,21 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
       } else if (selectedPortOpened && selectedPort) {
         try {
           await selectedPort.close()
+          if (sessionGeneration !== generation || disposed.value) return
           state.value = failureState
         } catch (closeError) {
+          if (disposed.value) {
+            try {
+              await selectedPort.close()
+            } catch {
+              // The component no longer has a retry path; do not retain its listener.
+            }
+            return
+          }
+          if (sessionGeneration !== generation) {
+            await closeStaleOpenedPort(selectedPort)
+            return
+          }
           currentPort = selectedPort
           currentPortPhysicallyDisconnected = false
           ownsPort.value = true
@@ -423,6 +446,7 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
   }
 
   function startConnection(attempt: ConnectionAttempt): Promise<void> {
+    if (disposed.value) return Promise.resolve()
     if (connectionPromise) return connectionPromise
     if (attempt === 'connect' ? !canConnect.value : !canRetry.value) return Promise.resolve()
 
@@ -451,7 +475,7 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
 
     if (connectionPromise) {
       generation += 1
-      if (!disposed) {
+      if (!disposed.value) {
         state.value = {
           phase: 'disconnected',
           reason: 'user',
@@ -463,8 +487,9 @@ export function useWebSerialConnection(options: UseWebSerialConnectionOptions) {
 
   if (getCurrentScope()) {
     onScopeDispose(() => {
-      disposed = true
+      disposed.value = true
       generation += 1
+      unregisterDisconnectListener()
       if (currentPort || currentReader || readLoopPromise) {
         void closeCurrentConnection('user')
       }

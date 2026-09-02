@@ -109,8 +109,8 @@ Adapterはserial port、reader、接続状態を所有しません。`useWebSeri
 選択・openし、受信chunkを`pushChunk()`へ渡します。正常終了、切断、読取り失敗、Room画面の破棄時には
 readerとportを解放して`resetSession()`を呼びます。自動再接続は行わず、Room画面の独立した
 `SerialConnectControl`から再接続またはkeyboard／画面ボタンでの続行を選択します。代替入力を選ぶと
-Serialを解放します。keyboard adapterの起動と同一dispatcherへの接続は、前提となる入力adapter変更の
-取込み後に行います。
+keyboard listenerを開始して画面操作ボタンを表示し、同時にSerialを解放します。再接続を選ぶと代替入力を
+停止してSerial入力へ戻します。いずれも同じ共通入力eventをRoomへ渡します。
 
 製品接続は自動起動済みfirmwareをreadするだけで、開発用PoCのraw REPL操作、script起動、captureは行いません。
 共通eventからOpenAPI operationへの変換とAPI送信は別の責任です。
@@ -124,8 +124,7 @@ Windows側の対応Chromium browserから`localhost`のRoom画面を開き、Ras
 - 利用者操作でSerialを切断した後、同じ画面から再度接続できる
 - 読取り中にUSBを抜くと`The device has been lost.`を含む読取りエラーを表示し、再接続と代替入力の導線を残す
 
-この確認ではcaptureやlogを保存していません。keyboard／画面ボタンによる代替入力の実動作は、上記の
-前提adapterを統合するまで未確認です。unmount時cleanupなどの競合経路はstubを使ったunit testで確認します。
+この確認ではcaptureやlogを保存していません。
 
 2026-09-03にproduction Picoから直接readした`up`／`short_press`のcanonical frame 1件は、raw captureや
 host固有情報を含めず、LF終端へ正規化した最小fixtureとして
