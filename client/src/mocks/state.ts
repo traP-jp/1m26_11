@@ -6,6 +6,8 @@ const DEFAULT_STATE: MockState = {
   room_exists: true,
   room_id_format: 'valid_uuid',
   active_run_exists: false,
+  cleared_run_exists: false,
+  published_rooms_count: 1,
   problem_exists: true,
   problem_status: 'available',
   next_problem_status: 'locked',

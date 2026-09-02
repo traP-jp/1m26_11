@@ -101,6 +101,28 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/rooms': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 公開部屋一覧を取得する
+     * @description 公開されている部屋の一覧をnumber昇順で取得します。
+     *     未認証時は進捗がnot_started、best_recordがnullで返ります。
+     *     認証時は現在のユーザーの進捗とベストレコードを含めて返します。
+     */
+    get: operations['getRooms']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/rooms/{room_id}/runs': {
     parameters: {
       query?: never
@@ -527,9 +549,33 @@ export interface components {
       /** Format: int64 */
       elapsed_ms: number
     }
+    /** @enum {string} */
+    ProgressStatus: 'not_started' | 'active' | 'cleared'
     Progress: {
-      cleared_problem_count: number
-      total_problem_count: number
+      status: components['schemas']['ProgressStatus']
+      cleared_count: number
+      required_count: number
+    }
+    BestRecord: {
+      /** Format: int64 */
+      elapsed_ms: number
+      rank: number
+      /** Format: int64 */
+      query_count: number
+    }
+    RoomItem: {
+      /** Format: uuid */
+      room_id: string
+      number: number
+      name: string
+      genre: string
+      description: string
+      problem_count: number
+      progress: components['schemas']['Progress']
+      best_record: components['schemas']['BestRecord'] | null
+    }
+    RoomsResponse: {
+      items: components['schemas']['RoomItem'][]
     }
     ErrorResponse: {
       error: {
@@ -547,6 +593,15 @@ export interface components {
       }
       content: {
         'application/json': components['schemas']['MeResponse']
+      }
+    }
+    /** @description 公開部屋一覧の取得成功 */
+    RoomsSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['RoomsResponse']
       }
     }
     /** @description ログイン中のユーザーの公開room全体に対する進捗 */
@@ -853,6 +908,19 @@ export interface operations {
         content?: never
       }
       404: components['responses']['NotFound']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  getRooms: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['RoomsSuccess']
       500: components['responses']['InternalServerError']
     }
   }

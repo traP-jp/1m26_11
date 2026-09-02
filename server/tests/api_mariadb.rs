@@ -33,6 +33,8 @@ const GAME_PROBLEM_IDS: [&str; 4] = [
 ];
 const PROGRESS_HTTP_TEST_SUBJECT_PREFIX: &str = "issue89-progress-http-";
 const PROGRESS_HTTP_TEST_ROOM_PREFIX: &str = "issue89-progress-http-room-";
+const ROOMS_HTTP_TEST_SUBJECT_PREFIX: &str = "issue46-rooms-http-";
+const ROOMS_HTTP_TEST_ROOM_PREFIX: &str = "issue46-rooms-http-room-";
 
 const PROGRESS_SUMMARY_RESPONSE: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -797,8 +799,9 @@ async fn mariadb_problem_query_and_answer_http_flow() {
     assert_eq!(
         correct_answer_body["progress"],
         json!({
-            "cleared_problem_count": 2,
-            "total_problem_count": 4
+            "status": "active",
+            "cleared_count": 2,
+            "required_count": 4
         })
     );
     assert!(correct_answer_body["elapsed_ms"].as_u64().is_some());
@@ -861,8 +864,9 @@ async fn mariadb_final_problem_first_then_room_clear_http_flow() {
     assert_eq!(
         final_answer_body["progress"],
         json!({
-            "cleared_problem_count": 1,
-            "total_problem_count": 4
+            "status": "active",
+            "cleared_count": 1,
+            "required_count": 4
         })
     );
 
@@ -922,8 +926,9 @@ async fn mariadb_final_problem_first_then_room_clear_http_flow() {
     assert_eq!(
         second_answer_body["progress"],
         json!({
-            "cleared_problem_count": 3,
-            "total_problem_count": 4
+            "status": "active",
+            "cleared_count": 3,
+            "required_count": 4
         })
     );
 
@@ -1788,6 +1793,226 @@ async fn cleanup_progress_http_test_data(pool: &MySqlPool) {
     .expect("progress HTTP rooms should be removable");
 
     cleanup_users_with_subject_prefix(pool, PROGRESS_HTTP_TEST_SUBJECT_PREFIX).await;
+}
+
+async fn cleanup_rooms_http_test_data(pool: &MySqlPool) {
+    let subject_pattern = format!("{ROOMS_HTTP_TEST_SUBJECT_PREFIX}%");
+    let room_pattern = format!("{ROOMS_HTTP_TEST_ROOM_PREFIX}%");
+
+    sqlx::query(
+        r#"
+        DELETE FROM runs
+        WHERE user_id IN (
+            SELECT user_id
+            FROM users
+            WHERE provider_subject LIKE ?
+        )
+        OR room_id IN (
+            SELECT room_id
+            FROM rooms
+            WHERE name LIKE ?
+        )
+        "#,
+    )
+    .bind(&subject_pattern)
+    .bind(&room_pattern)
+    .execute(pool)
+    .await
+    .expect("rooms HTTP runs should be removable");
+
+    sqlx::query(
+        r#"
+        DELETE FROM problems
+        WHERE room_id IN (
+            SELECT room_id
+            FROM rooms
+            WHERE name LIKE ?
+        )
+        "#,
+    )
+    .bind(&room_pattern)
+    .execute(pool)
+    .await
+    .expect("rooms HTTP problems should be removable");
+
+    sqlx::query(
+        r#"
+        DELETE FROM rooms
+        WHERE name LIKE ?
+        "#,
+    )
+    .bind(&room_pattern)
+    .execute(pool)
+    .await
+    .expect("rooms HTTP rooms should be removable");
+
+    cleanup_users_with_subject_prefix(pool, ROOMS_HTTP_TEST_SUBJECT_PREFIX).await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_rooms_list_http_flow() {
+    let pool = connect_test_database().await;
+    migrate(&pool).await.expect("migration should succeed");
+    cleanup_rooms_http_test_data(&pool).await;
+
+    let suffix = Uuid::new_v4().simple().to_string();
+    let display_name = format!("{ROOMS_HTTP_TEST_SUBJECT_PREFIX}{}", &suffix[..8]);
+
+    let repository = Arc::new(SqlxUserRepository::new(pool.clone()));
+    let app = app(AppState::new(AuthMode::Demo, repository).with_demo_cookie_secure(false));
+
+    let (user_id, _session_id, cookie) = login_guest(&app, &display_name).await;
+
+    let room_number_base = (Uuid::new_v4().as_u128() % 1_900_000_000) as i32 + 1;
+    let room_id = Uuid::new_v4();
+    let problem1_id = Uuid::new_v4();
+    let problem2_id = Uuid::new_v4();
+
+    sqlx::query(
+        r#"
+        INSERT INTO rooms (
+            room_id, number, name, genre, description, is_published
+        )
+        VALUES (?, ?, ?, 'OSINT', 'rooms HTTP test description', 1)
+        "#,
+    )
+    .bind(room_id)
+    .bind(room_number_base)
+    .bind(format!("{ROOMS_HTTP_TEST_ROOM_PREFIX}{room_id}"))
+    .execute(&pool)
+    .await
+    .expect("test room should be inserted");
+
+    for (p_id, num, is_req) in [(problem1_id, 1, 1), (problem2_id, 2, 0)] {
+        sqlx::query(
+            r#"
+            INSERT INTO problems (
+                problem_id, room_id, number, problem_type, title, body_markdown,
+                submission_type, assets, input_schema, hints, judge_config, is_required
+            )
+            VALUES (?, ?, ?, 'small', 'Problem Title', 'Markdown body', 'operation_sequence', '[]', '{"query":{"allowed_controls":[],"max_operations":10},"answer":{"max_length":50}}', '[]', '{}', ?)
+            "#,
+        )
+        .bind(p_id)
+        .bind(room_id)
+        .bind(num)
+        .bind(is_req)
+        .execute(&pool)
+        .await
+        .expect("test problem should be inserted");
+    }
+
+    // 1. Unauthenticated GET /api/rooms
+    let unauth_req = Request::get("/api/rooms").body(Body::empty()).unwrap();
+    let unauth_res = request(&app, unauth_req).await;
+    assert_eq!(unauth_res.status(), StatusCode::OK);
+    let unauth_body: Value = body_json(unauth_res).await;
+    let items = unauth_body["items"]
+        .as_array()
+        .expect("items should be array");
+    let test_item = items
+        .iter()
+        .find(|item| item["room_id"] == room_id.to_string())
+        .expect("created room should be in unauthenticated list");
+    assert_eq!(test_item["problem_count"], 2);
+    assert_eq!(test_item["progress"]["status"], "not_started");
+    assert_eq!(test_item["progress"]["cleared_count"], 0);
+    assert_eq!(test_item["progress"]["required_count"], 1);
+    assert!(test_item["best_record"].is_null());
+
+    // 2. Authenticated GET /api/rooms (no runs yet)
+    let auth_req = Request::get("/api/rooms")
+        .header(header::COOKIE, &cookie)
+        .body(Body::empty())
+        .unwrap();
+    let auth_res = request(&app, auth_req).await;
+    assert_eq!(auth_res.status(), StatusCode::OK);
+    let auth_body: Value = body_json(auth_res).await;
+    let test_item_auth = auth_body["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["room_id"] == room_id.to_string())
+        .unwrap();
+    assert_eq!(test_item_auth["progress"]["status"], "not_started");
+    assert_eq!(test_item_auth["progress"]["cleared_count"], 0);
+    assert_eq!(test_item_auth["progress"]["required_count"], 1);
+    assert!(test_item_auth["best_record"].is_null());
+
+    // 3. Authenticated GET /api/rooms (with active run)
+    let run_id = Uuid::new_v4();
+    let started_at = Utc::now();
+    sqlx::query(
+        "INSERT INTO runs (run_id, user_id, room_id, status, started_at) VALUES (?, ?, ?, 'active', ?)"
+    )
+    .bind(run_id)
+    .bind(user_id)
+    .bind(room_id)
+    .bind(started_at)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let active_req = Request::get("/api/rooms")
+        .header(header::COOKIE, &cookie)
+        .body(Body::empty())
+        .unwrap();
+    let active_res = request(&app, active_req).await;
+    assert_eq!(active_res.status(), StatusCode::OK);
+    let active_body: Value = body_json(active_res).await;
+    let test_item_active = active_body["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["room_id"] == room_id.to_string())
+        .unwrap();
+    assert_eq!(test_item_active["progress"]["status"], "active");
+    assert_eq!(test_item_active["progress"]["cleared_count"], 0);
+    assert!(test_item_active["best_record"].is_null());
+
+    // 4. Authenticated GET /api/rooms (with cleared run)
+    let cleared_at = started_at + chrono::Duration::milliseconds(15000);
+    sqlx::query("UPDATE runs SET status = 'cleared', cleared_at = ? WHERE run_id = ?")
+        .bind(cleared_at)
+        .bind(run_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    sqlx::query(
+        "INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count, cleared_at) VALUES (?, ?, 'cleared', 4, ?)"
+    )
+    .bind(run_id)
+    .bind(problem1_id)
+    .bind(cleared_at)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let cleared_req = Request::get("/api/rooms")
+        .header(header::COOKIE, &cookie)
+        .body(Body::empty())
+        .unwrap();
+    let cleared_res = request(&app, cleared_req).await;
+    assert_eq!(cleared_res.status(), StatusCode::OK);
+    let cleared_body: Value = body_json(cleared_res).await;
+    let test_item_cleared = cleared_body["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["room_id"] == room_id.to_string())
+        .unwrap();
+    assert_eq!(test_item_cleared["progress"]["status"], "cleared");
+    assert_eq!(test_item_cleared["progress"]["cleared_count"], 1);
+    assert_eq!(test_item_cleared["progress"]["required_count"], 1);
+    let best_record = &test_item_cleared["best_record"];
+    assert_eq!(best_record["elapsed_ms"], 15000);
+    assert_eq!(best_record["query_count"], 4);
+    assert_eq!(best_record["rank"], 1);
+
+    cleanup_rooms_http_test_data(&pool).await;
+    pool.close().await;
 }
 
 fn parse_uuid(value: &str) -> Uuid {

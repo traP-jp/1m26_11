@@ -19,7 +19,7 @@ describe('roomPageFixture', () => {
       { control: 'up', count: 1 },
     ])
     expect(roomPageFixture.answerInput.maxLength).toBe(50)
-    expect(roomPageFixture.clear.clearedProblemCount).toBe(1)
-    expect(roomPageFixture.clear.totalProblemCount).toBe(4)
+    expect(roomPageFixture.clear.clearedCount).toBe(1)
+    expect(roomPageFixture.clear.requiredCount).toBe(4)
   })
 })

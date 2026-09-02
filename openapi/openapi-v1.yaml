@@ -87,6 +87,21 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /api/rooms:
+    get:
+      summary: 公開部屋一覧を取得する
+      description: |
+        公開されている部屋の一覧をnumber昇順で取得します。
+        未認証時は進捗がnot_started、best_recordがnullで返ります。
+        認証時は現在のユーザーの進捗とベストレコードを含めて返します。
+      operationId: getRooms
+      tags:
+        - rooms
+      responses:
+        "200":
+          $ref: "#/components/responses/RoomsSuccess"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
   /api/rooms/{room_id}/runs:
     parameters:
       - $ref: "#/components/parameters/RoomId"
@@ -357,6 +372,25 @@ components:
             demo_unauthenticated:
               summary: デモで未ログイン
               externalValue: ./examples/auth/me-demo-unauthenticated.json
+    RoomsSuccess:
+      description: 公開部屋一覧の取得成功
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/RoomsResponse"
+          examples:
+            authenticated_cleared:
+              summary: 認証済みユーザー・部屋クリア済み
+              externalValue: ./examples/rooms/response-authenticated-cleared.json
+            authenticated_active:
+              summary: 認証済みユーザー・挑戦中
+              externalValue: ./examples/rooms/response-authenticated-active.json
+            unauthenticated:
+              summary: 未ログイン
+              externalValue: ./examples/rooms/response-unauthenticated.json
+            empty:
+              summary: 公開部屋が0件
+              externalValue: ./examples/rooms/response-empty.json
     MeProgressSuccess:
       description: ログイン中のユーザーの公開room全体に対する進捗
       content:
@@ -1084,16 +1118,87 @@ components:
           type: integer
           format: int64
           minimum: 0
+    ProgressStatus:
+      type: string
+      enum:
+        - not_started
+        - active
+        - cleared
     Progress:
       type: object
       required:
-        - cleared_problem_count
-        - total_problem_count
+        - status
+        - cleared_count
+        - required_count
       properties:
-        cleared_problem_count:
+        status:
+          $ref: "#/components/schemas/ProgressStatus"
+        cleared_count:
           type: integer
-        total_problem_count:
+          minimum: 0
+        required_count:
           type: integer
+          minimum: 0
+    BestRecord:
+      type: object
+      required:
+        - elapsed_ms
+        - rank
+        - query_count
+      properties:
+        elapsed_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        rank:
+          type: integer
+          minimum: 1
+        query_count:
+          type: integer
+          format: int64
+          minimum: 0
+    RoomItem:
+      type: object
+      required:
+        - room_id
+        - number
+        - name
+        - genre
+        - description
+        - problem_count
+        - progress
+        - best_record
+      properties:
+        room_id:
+          type: string
+          format: uuid
+        number:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+        genre:
+          type: string
+        description:
+          type: string
+        problem_count:
+          type: integer
+          minimum: 0
+        progress:
+          $ref: "#/components/schemas/Progress"
+        best_record:
+          oneOf:
+            - $ref: "#/components/schemas/BestRecord"
+            - type: "null"
+    RoomsResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RoomItem"
     ErrorResponse:
       type: object
       required:
