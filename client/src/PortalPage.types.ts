@@ -8,6 +8,8 @@ export interface PortalPageProps {
   authMode: PortalAuthMode
   displayName: string | null
   authBusy: boolean
+  loginHref: string | null
+  logoutHref: string | null
   requiredRoom: Room
   progressStatus: ProgressStatus
 }
