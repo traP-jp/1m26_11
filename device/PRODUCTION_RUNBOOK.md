@@ -7,10 +7,14 @@
 - Serial frameの契約: [`SERIAL_PROTOCOL.md`](SERIAL_PROTOCOL.md)
 - Room画面の接続・代替入力: [`../client/README.md`](../client/README.md)
 
-この文書は現物へ合わせて埋めるtemplateです。使用前提をすべて満たし、機材の実数、写真、確定構成を
-記録し、受入全caseと別担当確認がすべてPASSになるまでは本番使用可と扱いません。
+この文書は、Issue #82で本番前／当日の接続確認と復旧手順を整備するrunbookです。このPRの完了は、
+前提IssueでmergeされたSerialの状態表示、再試行、keyboard／画面button切替と本書の文言・操作が一致し、
+確認済み事項と本番前の未確認事項が区別されていることを基準とします。
 
-## 使用前提
+PRのmergeまたはIssue #82のcloseは、本番候補環境でのsmoke PASSを意味しません。次の使用前確認と
+「本番前smoke」は、実際に使用するPC、browser、origin、Roomが決まった後に一度だけ行います。
+
+## 本番使用前の確認
 
 - [ ] Serialの接続、切断、状態通知と、keyboard／画面buttonへの切替が本番buildへmergeされている
 - [ ] Roomの共通入力eventが既存の操作列へ接続され、操作結果を画面で確認できる
@@ -91,25 +95,38 @@ main.py
 serial_protocol_poc.py
 ```
 
-| 項目                               | 確定値 |
-| ---------------------------------- | ------ |
-| repository commit SHA              |        |
-| MicroPython build／UF2             |        |
-| `CTRL-MAIN`のfirmware元commit      |        |
-| `CTRL-SPARE`のfirmware元commit     |        |
-| browser名／version                 |        |
-| OS                                 |        |
-| 本番origin（HTTPSまたはlocalhost） |        |
-| 使用USB port label                 |        |
-| 試験Room／問題                     |        |
-| 試験開始時の操作列／許可control    |        |
-| 送信buttonの表示名                 |        |
-| 送信後に期待する判定表示           |        |
-| `CTRL-MAIN`書込み・試験担当／日時  |        |
-| `CTRL-SPARE`書込み・試験担当／日時 |        |
+| 項目                               | 確定値                                                     |
+| ---------------------------------- | ---------------------------------------------------------- |
+| repository commit SHA              | `5534dc427d50ab47756d5513179a69f54a90a8cc`（実機再確認時） |
+| MicroPython build／UF2             | v1.29.0／`RPI_PICO`                                        |
+| `CTRL-MAIN`のfirmware元commit      | `c87632274aee3f158f097f40460d3c1eef278005`                 |
+| `CTRL-SPARE`のfirmware元commit     | 未確認（本番前に確認）                                     |
+| browser名／version                 | 未確認（本番前に確認）                                     |
+| OS                                 | Windows＋WSL2 Ubuntu 24.04.2（直接read確認時）             |
+| 本番origin（HTTPSまたはlocalhost） | 未確認（本番前に確認）                                     |
+| 使用USB port label                 | COM3／USB serial `e665385447753326`（browser未確認）       |
+| 試験Room／問題                     | 未確認（本番前に確認）                                     |
+| 試験開始時の操作列／許可control    | 未確認（本番前に確認）                                     |
+| 送信buttonの表示名                 | 未確認（本番前に確認）                                     |
+| 送信後に期待する判定表示           | 未確認（本番前に確認）                                     |
+| `CTRL-MAIN`書込み・試験担当／日時  | 現物担当／2026-09-03                                       |
+| `CTRL-SPARE`書込み・試験担当／日時 | 未確認（本番前に確認）                                     |
 
 転送は[`README.md`のUpload Project手順](README.md#upload-project)に従います。転送後はMicroPicoを
 Disconnectし、BOOTSELを押さずにUSBを物理的に抜き差しして`main.py`を自動起動します。
+
+### 2026-09-03の実機再確認
+
+- Raspberry Pi Pico H、MicroPython v1.29.0、USB serial `e665385447753326`を確認しました。
+- Pico上のproduction 3 fileとrepositoryのSHA-256が一致しました。
+  - `button_firmware.py`: `f226a9753715044eee491edab648804cc4ecdd18ba982972a0b1b64b3d4b7282`
+  - `main.py`: `b3f6f4b505eb80df84b9e47da145f09083860a0d746eebd98090f1c1a66e3001`
+  - `serial_protocol_poc.py`: `e4d521a296994859acec6e03c740623327e4a3b69fe906f5acfcc40b3db5e049`
+- production `main.py`をhard resetで起動し、直接readで`up`／`short_press`が1 frameだけ出力されることを
+  確認しました。
+- 全7 controlなどの厳密な再試験は行わず、同一firmwareで確認済みの2026-09-02 Production手動確認matrixを
+  継承します。
+- 生captureとraw logは保存していません。
 
 ## 開場前の接続手順
 
@@ -122,7 +139,7 @@ Disconnectし、BOOTSELを押さずにUSBを物理的に抜き差しして`main.
 6. 対応Chromium browserから記録済みの本番originと試験Roomを開きます。
 7. 「接続する」を押し、接続中のPicoをdevice pickerで選びます。
 8. 「Serialに接続しました」を確認します。
-9. 試験Roomで許可されているbuttonを各1回押し、対応する操作が1回ずつ反映されることを確認します。
+9. 試験Roomで代表の許可controlを1回押し、対応する操作が1回だけ反映されることを確認します。
 
 device pickerが自動で開いた場合、異なるdeviceしか表示されない場合、操作が重複する場合は開始せず、
 代替入力へ切り替えて担当者へ連絡します。
@@ -175,38 +192,40 @@ keyboardではRoomに表示されたキーだけを使用します。画面butto
 USBを抜き差しするとPicoは電源再投入され、`main.py`が自動起動します。browserがportをcloseして再び
 openしただけではPicoは再起動されません。
 
-## 本番前に一度だけ行う受入確認
+## 本番前smoke
 
 firmwareのdebounce境界、全7 button、power cycle、parserのinvalid frameは既存のunit testと
 [`README.md`のProduction手動確認matrix](README.md#production手動確認matrix)を正とし、このrunbookでは
-繰り返しません。確定構成へ記録した試験Roomを初期状態にし、次の表を上から順に実施します。
-ゲーム経路caseまでは操作列をresetせず、各caseの開始前後に表示中の操作列を記録します。
+繰り返しません。controllerのUSB serial、MicroPython、production 3 fileのSHA-256が既受入記録と一致する
+場合は、代表の許可control 1件だけをsmoke確認します。画面の操作列の前後値と実施環境を記録し、結果欄は
+実施後だけPASSまたはFAILへ変更します。
 
-| case             | 操作                                                             | 合格条件                                                                       | 結果     |
-| ---------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------ | -------- |
-| 拒否と再接続失敗 | 初回pickerを閉じ、続けて「再試行する」のpickerも閉じる           | 順に「Serial接続が許可されませんでした」「Serialの再接続に失敗しました」となる | [ ] PASS |
-| 本番機           | 次の「再試行する」で`CTRL-MAIN`を選び、許可controlを1回押す      | 「Serialに接続しました」となり、操作が1回だけ増える                            | [ ] PASS |
-| cable切断        | 接続中にUSB cableを抜く                                          | 「Serialは接続されていません」となり、device pickerが自動では開かない          | [ ] PASS |
-| 代替入力         | 同じ試験Roomでkeyboardと画面buttonから許可controlを各1回操作する | 既存の操作が消えず、各操作が1回ずつ増える                                      | [ ] PASS |
-| 予備交換         | `CABLE-SPARE`と`CTRL-SPARE`へ交換し、「接続する」から選択する    | 接続済みとなり、許可controlの操作が1回だけ増える                               | [ ] PASS |
-| ゲーム経路       | 確定構成に記録した送信buttonを1回押す                            | 記録した判定表示となり、Serial固有の操作を要求されない                         | [ ] PASS |
-| browser終了      | 接続中のRoomを閉じ、同じRoomを開き直す                           | 利用者操作で同じPicoへ再接続できる                                             | [ ] PASS |
+| case           | 操作                                                                      | 合格条件                                                              | 結果   |
+| -------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------ |
+| Serial経路     | `CTRL-MAIN`へ接続し、試験Roomの許可controlを1回操作する                   | 接続済み表示となり、対応する操作が1回だけ増える                       | 未実施 |
+| 切断・代替経路 | cableを抜き、同じRoomでkeyboardと画面buttonから許可controlを各1回操作する | 切断表示となり、自動pickerなし。既存操作が消えず各入力で1回ずつ増える | 未実施 |
+| ゲーム経路     | 記録した送信buttonを1回押す                                               | 表示中の操作列が送信され、記録した判定表示となる                      | 未実施 |
 
-最後に実装担当者以外の担当者が、このrunbookだけを見て本番機の設置から試験操作までを1回行います。
+### 当日smoke
 
-| 実施記録                | 内容        |
-| ----------------------- | ----------- |
-| 実施者／日時            |             |
-| 対象commit              |             |
-| 使用機材label           |             |
-| PC／OS／browser／origin |             |
-| 不足していた手順        | なし／あり: |
-| 総合結果                | PASS／FAIL  |
+1. 記録済みのcontroller、USB serial、browser、origin、Roomを照合します。
+2. Serialへ接続し、代表の許可controlを1回だけ操作して、操作が1回だけ増えることを確認します。
+3. keyboard／画面buttonへの切替操作が表示されていることを確認します。Serialが使えない場合だけ一方へ
+   切り替え、許可controlを1回操作して継続できることを確認します。
+4. 実施者、日時、対象commit、`Serial PASS`／`代替入力で運用`／`FAIL`を記録します。
 
-FAILの場合はその場でfrontendやfirmwareを修正せず、該当領域のIssueを作成します。手順の修正または
-受入済みのlabel付き予備機材への交換だけで解消した場合は、失敗したcaseと前後の経路を再確認します。
-firmware、MicroPython、配線を変更した場合は`mise run device-test`を通してから、`README.md`の
-Production手動確認matrixを先頭から実施します。
+| 実施記録                | 内容                        |
+| ----------------------- | --------------------------- |
+| 実施者／日時            |                             |
+| 対象commit              |                             |
+| 使用機材label           |                             |
+| PC／OS／browser／origin |                             |
+| 操作列（確認前→確認後） |                             |
+| 総合結果                | Serial PASS／代替入力／FAIL |
+
+FAILの場合はその場でfrontendやfirmwareを修正せず、該当領域のIssueを作成します。firmware、MicroPython、
+配線を変更した場合は`mise run device-test`を通してから、`README.md`のProduction手動確認matrixを先頭から
+実施します。
 
 ## 終了・保管
 
