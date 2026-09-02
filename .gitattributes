@@ -1,0 +1,6 @@
+# Hardware captures are byte-exact evidence; never normalize their CRLF bytes.
+*.bin binary
+
+# Keep production capture metadata and parser expectations stable on Windows.
+device/samples/issue81-production/*.expected.jsonl text eol=lf
+device/samples/issue81-production/*.sha256 text eol=lf

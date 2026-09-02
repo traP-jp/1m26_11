@@ -115,7 +115,7 @@ run = "echo Client checks passed"
 [tasks.device-test]
 description = "Run host-side tests for the MicroPython device firmware"
 dir = "device"
-run = "python -m unittest discover -s tests -p 'test_*.py' -v"
+run = "python3 -m unittest discover -s tests -p 'test_*.py' -v"
 
 [tasks.check]
 description = "Run all server, client, and device checks"

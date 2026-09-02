@@ -108,6 +108,12 @@ Wire v1実測captureはmetadataのconnection offsetと元のread chunk境界を�
 `src/device-poc/__tests__/serialProtocolPoc.hardware.spec.ts`から同じparserへ流します。raw REPL制御byteを
 parser sampleへ混ぜず、切断と再接続のconnection境界ではparser stateをresetします。
 
+Issue #81 production firmwareをraw REPLなしで直接readしたsampleは
+[`device/samples/issue81-production/`](../device/samples/issue81-production/)に保存し、
+`src/device-poc/__tests__/serialProtocolPoc.productionHardware.spec.ts`から同じparserへ入力します。このtestは
+期待event列だけでなく、raw全体がcanonical JSON lineとLF／CRLFだけで構成され、partialや無効lineがないこと、
+保存したSHA-256と一致することも確認します。これはIssue #27のport管理や製品画面への接続完了を意味しません。
+
 mock responseは`../openapi/openapi-v1.yaml`、`../openapi/examples/`、`../openapi/scenarios/p0-cases.yaml`を直接読みます。response payloadをclient内に複製していないため、OpenAPIのexampleとscenarioがmockの正本です。
 
 実backendへ接続する場合は`.env.example`を参考に`client/.env.local`を作成し、`VITE_ENABLE_MSW=false`を設定してください。その場合、Viteは`/api`と`/openapi.yaml`を`API_PROXY_TARGET`（既定は`http://127.0.0.1:8080`）へproxyします。特定の状態からmockを開始する場合は、`VITE_MSW_SCENARIO`へscenarioのcase id（例: `demo_login_and_logout`、`query_correct`）を指定します。production buildではMSWは常に無効です。

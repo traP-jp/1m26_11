@@ -241,10 +241,10 @@ Issue #81の`firmware/`はhardware非依存の状態機械testを`mise run devic
 19／20 ms、699／700 ms、bounce、連打、長押し、起動時LOW、複数button、tick wrapなどを決定的に確認する
 synthetic入力であり、production実機sampleではありません。
 
-production `main.py`をPicoへ書き込んだ後の直接read、canonical frame以外がないこと、物理的な電源再投入、
-押下中再投入、別担当による再現は未実施です。完了後は[device README](README.md)の手動matrixと記録templateに
-従い、無加工raw byte、期待event列、SHA-256を対応付けます。2026-09-02のPoC captureをproduction実機確認の
-代わりにしません。
+2026-09-02にproduction `main.py`を書き込んだPicoを直接readし、canonical frame以外がないこと、物理的な
+電源再投入、押下中再投入を確認しました。無加工raw byte、期待event列、SHA-256、制約は
+[production hardware samples](samples/issue81-production/)に対応付けます。これは同日のPoC captureとは
+別の実測です。別担当による再現は未実施です。
 
 ## 対象外
 
@@ -255,4 +255,4 @@ production `main.py`をPicoへ書き込んだ後の直接read、canonical frame�
 - backend処理、HTTP API、query送信処理
 
 この文書はIssue #92のWire v1規範とIssue #81実装の責任境界を定義します。対象外の製品frontendやbackendの
-実装完了、および未実施のproduction実機確認を主張しません。
+実装完了、および未実施の別担当再現を主張しません。

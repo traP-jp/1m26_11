@@ -29,14 +29,15 @@ productionのdebounce、repeat抑止、長押し判定を実装しません。
 | `button_test.py`のWeb Serial raw受信・切断・再接続 | 2026-09-01 確認済み |
 | Issue #92 Wire v1契約と専用firmware／parser PoC | 2026-09-02 実装・実機確認済み |
 | Issue #81 production firmwareのhost unit test | 2026-09-02 `mise run device-test` 23 test確認済み |
-| Issue #81 production firmwareの書込み・実機操作matrix | 未実施 |
-| Issue #81 production firmwareの電源再投入・別担当再現 | 未実施 |
+| Issue #81 production firmwareの書込み・実機操作matrix | 2026-09-02 確認済み |
+| Issue #81 production firmwareの物理電源再投入・押下中再投入 | 2026-09-02 確認済み（WSLへ再attach） |
+| Issue #81手順の別担当による再現 | 未実施 |
 | Issue #92手順の別担当による再現 | 未実施 |
 
-2026-09-02の確認は`poc/serial_protocol_poc.py`を手動起動したPoCの結果です。short／long press、
-全7 control、切断・再接続まで確認済みですが、`firmware/main.py`から自動起動するproduction版の
-確認結果には流用しません。production版の実機matrixと別担当による再現が完了するまで、Issue #81の
-実機完了条件を確認済みとは扱いません。
+2026-09-02にはPoCの確認とは別に、`firmware/main.py`から自動起動するproduction版を実機へ書き込み、
+直接readで手動matrixと物理電源再投入を確認しました。無加工raw byte、期待event列、SHA-256、環境と
+判定は[`samples/issue81-production/README.md`](samples/issue81-production/README.md)に記録します。
+別担当がREADMEだけを使って行う再現確認は引き続き未実施です。
 
 ## 使用機材
 
@@ -369,7 +370,8 @@ REPLの`os.listdir()`で確認しました。これは履歴であり、producti
 ['button_test.py', 'serial_protocol_poc.py']
 ```
 
-production書込み後の期待値は次の3 fileです。実機での確認結果と日時は、確認完了後に記録します。
+production書込み後の期待値は次の3 fileです。2026-09-02にPico rootがこの3 fileだけであることと、
+local source／実機fileのSHA-256が一致することを確認しました。
 
 ```text
 ['button_firmware.py', 'main.py', 'serial_protocol_poc.py']
@@ -591,8 +593,13 @@ canonical frame以外のbyte: なし／あり（内容）
 
 ### Issue #81 production実機記録
 
-未実施です。production 3 fileの書込み、手動確認matrix、raw／期待event／SHA-256の保存、別担当による
-再現が完了した後に、上記templateを使って事実だけを追記します。
+2026-09-02にproduction 3 fileを書き込み、raw REPLを使わない直接readで全7 control、連打、長押し、
+重なったbutton操作、無操作時の余分な出力、物理電源再投入、押下中再投入を確認しました。採用した
+raw／期待event／SHA-256とcaseごとの結果は
+[`samples/issue81-production/README.md`](samples/issue81-production/README.md)を参照してください。
+
+実装・capture担当とは別の担当者がREADMEだけを使って行う再現確認は未実施です。再現完了までは
+「別担当再現済み」とは扱いません。
 
 ## 参照資料
 
