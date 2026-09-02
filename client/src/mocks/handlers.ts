@@ -175,6 +175,52 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
       )
     }),
 
+    http.get('/api/rooms', () => {
+      if (state.get('published_rooms_count') === 0 || !state.get('room_exists')) {
+        const result = responseFromStep<Schemas['RoomsResponse']>(
+          contract,
+          state,
+          'rooms_empty',
+          'getRooms',
+        )
+        return HttpResponse.json(result.body, { status: result.status })
+      }
+      if (!state.get('authenticated')) {
+        const result = responseFromStep<Schemas['RoomsResponse']>(
+          contract,
+          state,
+          'rooms_unauthenticated',
+          'getRooms',
+        )
+        return HttpResponse.json(result.body, { status: result.status })
+      }
+      if (state.get('active_run_exists')) {
+        const result = responseFromStep<Schemas['RoomsResponse']>(
+          contract,
+          state,
+          'rooms_authenticated_active',
+          'getRooms',
+        )
+        return HttpResponse.json(result.body, { status: result.status })
+      }
+      if (state.get('cleared_run_exists')) {
+        const result = responseFromStep<Schemas['RoomsResponse']>(
+          contract,
+          state,
+          'rooms_authenticated_cleared',
+          'getRooms',
+        )
+        return HttpResponse.json(result.body, { status: result.status })
+      }
+      const result = responseFromStep<Schemas['RoomsResponse']>(
+        contract,
+        state,
+        'rooms_unauthenticated',
+        'getRooms',
+      )
+      return HttpResponse.json(result.body, { status: result.status })
+    }),
+
     http.post('/api/rooms/{room_id}/runs', ({ params, response }) => {
       if (!requestHasValidResourceIds(params)) return response(400).json(errorBody(400))
       if (!state.get('authenticated')) {

@@ -15,6 +15,14 @@ pub(crate) enum RunStatus {
     Cleared,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[allow(dead_code)]
+pub(crate) enum ProgressStatus {
+    NotStarted,
+    Active,
+    Cleared,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ProblemState {
     pub(crate) problem_id: Uuid,
@@ -33,8 +41,9 @@ pub(crate) struct ActiveRunState {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Progress {
-    pub(crate) cleared_problem_count: usize,
-    pub(crate) total_problem_count: usize,
+    pub(crate) status: ProgressStatus,
+    pub(crate) cleared_count: usize,
+    pub(crate) required_count: usize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -109,12 +118,12 @@ pub(crate) fn plan_problem_clear(
         Vec::new()
     };
 
-    let total_problem_count = problems
+    let required_count = problems
         .iter()
         .filter(|problem| problem.room_id == run.room_id && problem.is_required)
         .count();
 
-    let cleared_problem_count = problems
+    let cleared_count = problems
         .iter()
         .filter(|problem| {
             if problem.room_id != run.room_id || !problem.is_required {
@@ -126,17 +135,18 @@ pub(crate) fn plan_problem_clear(
         })
         .count();
 
-    let progress = Progress {
-        cleared_problem_count,
-        total_problem_count,
+    let should_clear_run = required_count > 0 && cleared_count == required_count;
+
+    let (run_status, run_cleared_at, progress_status) = if should_clear_run {
+        (RunStatus::Cleared, Some(now), ProgressStatus::Cleared)
+    } else {
+        (RunStatus::Active, None, ProgressStatus::Active)
     };
 
-    let should_clear_run = total_problem_count > 0 && cleared_problem_count == total_problem_count;
-
-    let (run_status, run_cleared_at) = if should_clear_run {
-        (RunStatus::Cleared, Some(now))
-    } else {
-        (RunStatus::Active, None)
+    let progress = Progress {
+        status: progress_status,
+        cleared_count,
+        required_count,
     };
 
     Ok(ClearProblemPlan {
@@ -161,8 +171,8 @@ mod tests {
     use uuid::Uuid;
 
     use super::{
-        ActiveRunState, ClearProblemError, ProblemState, ProblemStatus, Progress, RunStatus,
-        duration_to_elapsed_ms, plan_problem_clear,
+        ActiveRunState, ClearProblemError, ProblemState, ProblemStatus, Progress, ProgressStatus,
+        RunStatus, duration_to_elapsed_ms, plan_problem_clear,
     };
 
     fn id(value: u128) -> Uuid {
@@ -338,8 +348,9 @@ mod tests {
         assert_eq!(
             plan.progress,
             Progress {
-                cleared_problem_count: 1,
-                total_problem_count: 4,
+                status: ProgressStatus::Active,
+                cleared_count: 1,
+                required_count: 4,
             }
         );
         assert_eq!(plan.run_status, RunStatus::Active);
@@ -377,8 +388,9 @@ mod tests {
         assert_eq!(
             plan.progress,
             Progress {
-                cleared_problem_count: 1,
-                total_problem_count: 4,
+                status: ProgressStatus::Active,
+                cleared_count: 1,
+                required_count: 4,
             }
         );
         assert_eq!(plan.run_status, RunStatus::Active);
@@ -395,8 +407,9 @@ mod tests {
         assert_eq!(
             plan.progress,
             Progress {
-                cleared_problem_count: 1,
-                total_problem_count: 4,
+                status: ProgressStatus::Active,
+                cleared_count: 1,
+                required_count: 4,
             }
         );
         assert_eq!(plan.run_status, RunStatus::Active);
@@ -420,8 +433,9 @@ mod tests {
         assert_eq!(
             plan.progress,
             Progress {
-                cleared_problem_count: 4,
-                total_problem_count: 4,
+                status: ProgressStatus::Cleared,
+                cleared_count: 4,
+                required_count: 4,
             }
         );
         assert_eq!(plan.run_status, RunStatus::Cleared);
@@ -478,8 +492,9 @@ mod tests {
         assert_eq!(
             plan.progress,
             Progress {
-                cleared_problem_count: 4,
-                total_problem_count: 4,
+                status: ProgressStatus::Cleared,
+                cleared_count: 4,
+                required_count: 4,
             }
         );
         assert_eq!(plan.run_status, RunStatus::Cleared);

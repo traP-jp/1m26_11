@@ -1491,3 +1491,396 @@ async fn mariadb_user_progress_counts_public_rooms_by_genre_without_duplicate_cl
 
     pool.close().await;
 }
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_published_rooms_with_progress_and_ranking_flow() {
+    let pool = connect_test_database().await;
+    migrate(&pool).await.expect("migration should succeed");
+
+    let repository = SqlxUserRepository::new(pool.clone());
+
+    let room1_id = Uuid::new_v4();
+    let room2_id = Uuid::new_v4();
+    let private_room_id = Uuid::new_v4();
+
+    let user_a_id = Uuid::new_v4();
+    let user_b_id = Uuid::new_v4();
+    let user_c_id = Uuid::new_v4();
+
+    let room_number_base = (Uuid::new_v4().as_u128() % 1_900_000_000) as i32 + 1;
+
+    for (user_id, name) in [
+        (user_a_id, "UserA"),
+        (user_b_id, "UserB"),
+        (user_c_id, "UserC"),
+    ] {
+        sqlx::query(
+            r#"
+            INSERT INTO users (user_id, auth_provider, provider_subject, display_name)
+            VALUES (?, 'demo', ?, ?)
+            "#,
+        )
+        .bind(user_id)
+        .bind(format!("rooms-test-{user_id}"))
+        .bind(name)
+        .execute(&pool)
+        .await
+        .expect("user should be inserted");
+    }
+
+    // Insert rooms (reverse numbers to test ASC ordering: room2 has lower number than room1)
+    sqlx::query(
+        r#"
+        INSERT INTO rooms (room_id, number, name, genre, description, is_published)
+        VALUES (?, ?, 'Room 1', 'OSINT', 'Desc 1', 1)
+        "#,
+    )
+    .bind(room1_id)
+    .bind(room_number_base + 2)
+    .execute(&pool)
+    .await
+    .expect("room1 should be inserted");
+
+    sqlx::query(
+        r#"
+        INSERT INTO rooms (room_id, number, name, genre, description, is_published)
+        VALUES (?, ?, 'Room 2', 'Web', 'Desc 2', 1)
+        "#,
+    )
+    .bind(room2_id)
+    .bind(room_number_base + 1)
+    .execute(&pool)
+    .await
+    .expect("room2 should be inserted");
+
+    sqlx::query(
+        r#"
+        INSERT INTO rooms (room_id, number, name, genre, description, is_published)
+        VALUES (?, ?, 'Private Room', 'Web', 'Private Desc', 0)
+        "#,
+    )
+    .bind(private_room_id)
+    .bind(room_number_base + 3)
+    .execute(&pool)
+    .await
+    .expect("private room should be inserted");
+
+    // Insert problems for room2 (2 required, 1 optional)
+    let p1_id = Uuid::new_v4();
+    let p2_id = Uuid::new_v4();
+    let p3_id = Uuid::new_v4();
+
+    for (p_id, num, is_req, sub_type) in [
+        (p1_id, 1, 1, "operation_sequence"),
+        (p2_id, 2, 1, "string"),
+        (p3_id, 3, 0, "operation_sequence"),
+    ] {
+        sqlx::query(
+            r#"
+            INSERT INTO problems (
+                problem_id, room_id, number, problem_type, title, body_markdown,
+                submission_type, assets, input_schema, hints, judge_config, is_required
+            )
+            VALUES (?, ?, ?, 'small', 'Title', 'Body', ?, '[]', '{"query":{"allowed_controls":[],"max_operations":10},"answer":{"max_length":50}}', '[]', '{}', ?)
+            "#,
+        )
+        .bind(p_id)
+        .bind(room2_id)
+        .bind(num)
+        .bind(sub_type)
+        .bind(is_req)
+        .execute(&pool)
+        .await
+        .expect("problem should be inserted");
+    }
+
+    // 1. Test unauthenticated (user_id = None)
+    let unauth_rooms = repository
+        .find_published_rooms_with_progress(None)
+        .await
+        .expect("find_published_rooms_with_progress should succeed for unauthenticated");
+
+    let matching_rooms: Vec<_> = unauth_rooms
+        .iter()
+        .filter(|r| r.room_id == room1_id || r.room_id == room2_id || r.room_id == private_room_id)
+        .collect();
+    assert_eq!(matching_rooms.len(), 2);
+    assert_eq!(matching_rooms[0].room_id, room2_id);
+    assert_eq!(matching_rooms[0].problem_count, 3);
+    assert_eq!(matching_rooms[0].required_count, 2);
+    assert_eq!(matching_rooms[0].progress_status, "not_started");
+    assert_eq!(matching_rooms[0].cleared_count, 0);
+    assert!(matching_rooms[0].best_record.is_none());
+
+    // 2. Test authenticated with no runs (User A)
+    let user_a_rooms = repository
+        .find_published_rooms_with_progress(Some(user_a_id))
+        .await
+        .expect("find_published_rooms_with_progress should succeed for User A");
+    let room2_a = user_a_rooms.iter().find(|r| r.room_id == room2_id).unwrap();
+    assert_eq!(room2_a.progress_status, "not_started");
+    assert_eq!(room2_a.cleared_count, 0);
+    assert_eq!(room2_a.required_count, 2);
+    assert!(room2_a.best_record.is_none());
+
+    // 3. Test active run on room2 with 1 required + 1 optional problem cleared
+    let active_run_id = Uuid::new_v4();
+    let started_at = Utc::now();
+    sqlx::query(
+        r#"
+        INSERT INTO runs (run_id, user_id, room_id, status, started_at)
+        VALUES (?, ?, ?, 'active', ?)
+        "#,
+    )
+    .bind(active_run_id)
+    .bind(user_a_id)
+    .bind(room2_id)
+    .bind(started_at)
+    .execute(&pool)
+    .await
+    .expect("active run should be inserted");
+
+    // Clear p1 (required) and p3 (optional)
+    for (p_id, count) in [(p1_id, 3), (p3_id, 2)] {
+        sqlx::query(
+            r#"
+            INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count, cleared_at)
+            VALUES (?, ?, 'cleared', ?, ?)
+            "#,
+        )
+        .bind(active_run_id)
+        .bind(p_id)
+        .bind(count)
+        .bind(started_at)
+        .execute(&pool)
+        .await
+        .expect("problem progress should be inserted");
+    }
+
+    let user_a_active = repository
+        .find_published_rooms_with_progress(Some(user_a_id))
+        .await
+        .expect("find_published_rooms_with_progress should succeed with active run");
+    let room2_active = user_a_active
+        .iter()
+        .find(|r| r.room_id == room2_id)
+        .unwrap();
+    assert_eq!(room2_active.progress_status, "active");
+    assert_eq!(room2_active.cleared_count, 1);
+    assert_eq!(room2_active.required_count, 2);
+    assert!(room2_active.best_record.is_none());
+
+    // Clean up active run before testing cleared runs & rankings
+    sqlx::query("DELETE FROM problem_progress WHERE run_id = ?")
+        .bind(active_run_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM runs WHERE run_id = ?")
+        .bind(active_run_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // 4. Test multiple cleared runs and rankings
+    let base_time = DateTime::parse_from_rfc3339("2026-08-01T12:00:00Z")
+        .unwrap()
+        .with_timezone(&Utc);
+
+    // Run A1: 50000ms
+    let run_a1_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO runs (run_id, user_id, room_id, status, started_at, cleared_at) VALUES (?, ?, ?, 'cleared', ?, ?)",
+    )
+    .bind(run_a1_id)
+    .bind(user_a_id)
+    .bind(room2_id)
+    .bind(base_time)
+    .bind(base_time + chrono::Duration::milliseconds(50000))
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Run A2: 40000ms, query count = 5
+    let run_a2_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO runs (run_id, user_id, room_id, status, started_at, cleared_at) VALUES (?, ?, ?, 'cleared', ?, ?)",
+    )
+    .bind(run_a2_id)
+    .bind(user_a_id)
+    .bind(room2_id)
+    .bind(base_time)
+    .bind(base_time + chrono::Duration::milliseconds(40000))
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count, cleared_at) VALUES (?, ?, 'cleared', 5, ?)",
+    )
+    .bind(run_a2_id)
+    .bind(p1_id)
+    .bind(base_time)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count, cleared_at) VALUES (?, ?, 'cleared', 10, ?)",
+    )
+    .bind(run_a2_id)
+    .bind(p2_id)
+    .bind(base_time)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Run B1: 40000ms, query count = 3
+    let run_b1_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO runs (run_id, user_id, room_id, status, started_at, cleared_at) VALUES (?, ?, ?, 'cleared', ?, ?)",
+    )
+    .bind(run_b1_id)
+    .bind(user_b_id)
+    .bind(room2_id)
+    .bind(base_time)
+    .bind(base_time + chrono::Duration::milliseconds(40000))
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count, cleared_at) VALUES (?, ?, 'cleared', 3, ?)",
+    )
+    .bind(run_b1_id)
+    .bind(p1_id)
+    .bind(base_time)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Run C1: 40000ms, query count = 3, same cleared_at
+    let run_c1_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO runs (run_id, user_id, room_id, status, started_at, cleared_at) VALUES (?, ?, ?, 'cleared', ?, ?)",
+    )
+    .bind(run_c1_id)
+    .bind(user_c_id)
+    .bind(room2_id)
+    .bind(base_time)
+    .bind(base_time + chrono::Duration::milliseconds(40000))
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "INSERT INTO problem_progress (run_id, problem_id, status, answer_attempt_count, cleared_at) VALUES (?, ?, 'cleared', 3, ?)",
+    )
+    .bind(run_c1_id)
+    .bind(p1_id)
+    .bind(base_time)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Verify User A best record
+    let user_a_cleared = repository
+        .find_published_rooms_with_progress(Some(user_a_id))
+        .await
+        .unwrap();
+    let room2_cleared_a = user_a_cleared
+        .iter()
+        .find(|r| r.room_id == room2_id)
+        .unwrap();
+    assert_eq!(room2_cleared_a.progress_status, "cleared");
+    assert_eq!(room2_cleared_a.cleared_count, 2);
+    let best_a = room2_cleared_a.best_record.as_ref().unwrap();
+    assert_eq!(best_a.elapsed_ms, 40000);
+    assert_eq!(best_a.query_count, 5);
+    assert_eq!(best_a.rank, 3);
+
+    // Verify User B best record
+    let user_b_cleared = repository
+        .find_published_rooms_with_progress(Some(user_b_id))
+        .await
+        .unwrap();
+    let room2_cleared_b = user_b_cleared
+        .iter()
+        .find(|r| r.room_id == room2_id)
+        .unwrap();
+    let best_b = room2_cleared_b.best_record.as_ref().unwrap();
+    assert_eq!(best_b.elapsed_ms, 40000);
+    assert_eq!(best_b.query_count, 3);
+    assert_eq!(best_b.rank, 1);
+
+    // Verify User C best record
+    let user_c_cleared = repository
+        .find_published_rooms_with_progress(Some(user_c_id))
+        .await
+        .unwrap();
+    let room2_cleared_c = user_c_cleared
+        .iter()
+        .find(|r| r.room_id == room2_id)
+        .unwrap();
+    let best_c = room2_cleared_c.best_record.as_ref().unwrap();
+    assert_eq!(best_c.elapsed_ms, 40000);
+    assert_eq!(best_c.query_count, 3);
+    assert_eq!(best_c.rank, 1);
+
+    // 5. Test active and cleared conflict error
+    let conflict_active_run_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO runs (run_id, user_id, room_id, status, started_at) VALUES (?, ?, ?, 'active', ?)",
+    )
+    .bind(conflict_active_run_id)
+    .bind(user_a_id)
+    .bind(room2_id)
+    .bind(Utc::now())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let conflict_result = repository
+        .find_published_rooms_with_progress(Some(user_a_id))
+        .await;
+    assert!(matches!(
+        conflict_result,
+        Err(RepositoryError::InvalidRunStatus { .. })
+    ));
+
+    // Cleanup
+    sqlx::query("DELETE FROM problem_progress WHERE run_id IN (?, ?, ?, ?)")
+        .bind(run_a1_id)
+        .bind(run_a2_id)
+        .bind(run_b1_id)
+        .bind(run_c1_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM runs WHERE room_id = ?")
+        .bind(room2_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM problems WHERE room_id = ?")
+        .bind(room2_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    for r_id in [room1_id, room2_id, private_room_id] {
+        sqlx::query("DELETE FROM rooms WHERE room_id = ?")
+            .bind(r_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    for u_id in [user_a_id, user_b_id, user_c_id] {
+        sqlx::query("DELETE FROM users WHERE user_id = ?")
+            .bind(u_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    pool.close().await;
+}

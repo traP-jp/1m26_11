@@ -4,6 +4,7 @@ pub mod leaderboard;
 pub mod problems;
 pub mod progress;
 pub mod queries;
+pub mod rooms;
 pub mod runs;
 pub mod tooling;
 

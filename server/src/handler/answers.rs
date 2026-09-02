@@ -4,7 +4,7 @@ use axum::{
 };
 use openapi_generated::models::{
     AnswerRequest, AnswerResponse, CorrectAnswerResponse, IncorrectAnswerResponse, Progress,
-    RunStatus as ApiRunStatus,
+    ProgressStatus as ApiProgressStatus, RunStatus as ApiRunStatus,
 };
 use uuid::Uuid;
 
@@ -57,22 +57,22 @@ pub(crate) async fn submit_answer(
         AnswerSubmissionResult::Correct {
             unlocked_problem_ids,
             run_status,
-            cleared_problem_count,
-            total_problem_count,
+            cleared_count,
+            required_count,
             elapsed_ms,
         } => {
-            let run_status = match run_status {
-                AnswerRunStatus::Active => ApiRunStatus::Active,
-                AnswerRunStatus::Cleared => ApiRunStatus::Cleared,
+            let (api_run_status, api_progress_status) = match run_status {
+                AnswerRunStatus::Active => (ApiRunStatus::Active, ApiProgressStatus::Active),
+                AnswerRunStatus::Cleared => (ApiRunStatus::Cleared, ApiProgressStatus::Cleared),
             };
 
-            let progress = Progress::new(cleared_problem_count, total_problem_count);
+            let progress = Progress::new(api_progress_status, cleared_count, required_count);
 
             AnswerResponse::CorrectAnswerResponse(CorrectAnswerResponse::new(
                 true,
                 "cleared".to_owned(),
                 unlocked_problem_ids,
-                run_status,
+                api_run_status,
                 progress,
                 elapsed_ms,
             ))
