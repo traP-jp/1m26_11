@@ -14,6 +14,9 @@ Wire v1の規範はIssue #92と[`SERIAL_PROTOCOL.md`](SERIAL_PROTOCOL.md)、そ�
 firmwareはIssue #81として追跡します。`poc/button_test.py`の人向け表示は最終serial protocolではなく、
 productionのdebounce、repeat抑止、長押し判定を実装しません。
 
+本番当日の設置、接続確認、故障時の代替入力、予備機交換には、技術検証手順を抜粋した
+[`PRODUCTION_RUNBOOK.md`](PRODUCTION_RUNBOOK.md)を使用します。
+
 ## 現在の確認状況
 
 | 項目 | 状態 |
@@ -71,6 +74,7 @@ device/
 │   └── serial_protocol_poc.py # Issue #92時点のWire v1実機確認用script
 ├── samples/                   # 過去のPoCで取得したvREPL transcript
 ├── tests/                     # hardware非依存のproduction状態機械test
+├── PRODUCTION_RUNBOOK.md      # 本番設置、接続、代替入力、予備機交換の当日手順
 ├── README.md
 └── SERIAL_PROTOCOL.md         # device／frontend間のWire v1規範
 ```
