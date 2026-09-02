@@ -46,7 +46,8 @@ byte範囲は開始を含み終了を含まないhalf-open intervalです。
 
 frontendはこの開始offsetでframe bufferを空にしてからv1の処理を始め、終了offsetで残ったpartial frameを
 破棄します。開始offsetより前と終了offset以後のbyteをv1 parserへ渡しません。offsetの意味とraw captureの
-保存方法は[Web Serial sample README](../client/samples/web-serial/README.md)も参照してください。
+取得方法は[client README](../client/README.md)も参照してください。取得したcaptureはローカルでの確認にだけ
+使用し、repositoryやPRには添付しません。
 
 製品用firmwareがraw REPLを介さずWire v1だけを送る構成では、このPoC固有のoffset境界は不要です。
 
@@ -178,17 +179,16 @@ deviceが確定したgestureだけを扱います。Wire v1 eventをOpenAPIの`O
 製品Adapter、とくに`long_press`を`count`や別の画面動作へどう対応させるかはこの契約では定めません。
 未確定の変換を推測してWire v1 eventをquery APIへ直接送らないでください。
 
-## 実測根拠とsampleの区別
+## 実測確認とsynthetic testの区別
 
-2026-09-01の[Web Serial diagnostic captures](../client/samples/web-serial/diagnostic/)では、Raspberry Pi
-Pico Hの全7入力、CRLFを含む診断出力、読取り中のUSB切断と利用者操作による再接続を確認しました。
-これらはraw REPL応答と`button_test.py`の人向け診断行を含む、transportとGPIO挙動の実測記録です。
+2026-09-01のWeb Serial診断では、Raspberry Pi Pico Hの全7入力、CRLFを含む診断出力、読取り中の
+USB切断と利用者操作による再接続を確認しました。raw REPL応答と`button_test.py`の人向け診断行を含む
+transportとGPIO挙動を確認しましたが、取得したcapture自体はrepositoryへ保存しません。
 
 この診断captureはJSON Frame schema、20 ms debounce、700 ms threshold、short／long gestureを送るWire v1
 の実測記録ではなく、protocol parserのcanonical sampleとして流用しません。
 
-2026-09-02の[Wire v1 captures](../client/samples/web-serial/protocol-v1/)では、専用PoCを実機で実行し、
-次を確認しました。
+2026-09-02には専用PoCを実機で実行し、次を確認しました。
 
 - 全7 controlの`short_press`と、`up`の`long_press`
 - 起動時LOWの最初のreleaseを無視し、次のgestureから出力する動作
@@ -196,9 +196,9 @@ Pico Hの全7入力、CRLFを含む診断出力、読取り中のUSB切断と利
 - compact ASCII JSON、CRLF、1 frameが複数read chunkへ分割されるtransport境界
 - 正常停止、読取り中のUSB切断、capture保持、利用者gestureによる再接続と再開
 
-元の`.bin`とmetadata、SHA-256、取得環境、接続境界を保持し、raw REPL制御を除いたWire v1範囲を
-`scriptActiveObservedOffset`から`stopRequestedOffset`または`endedOffset`までとして記録しています。
-実機sampleを元のchunk境界でparserへ流すtestもこの範囲を使用します。
+実機確認時はraw REPL制御を除いたWire v1範囲を、`scriptActiveObservedOffset`から
+`stopRequestedOffset`または`endedOffset`までとして確認しました。取得した`.bin`とmetadataは
+ローカル確認後にrepositoryやPRへ添付しません。
 
 実機が送信しないLF単独、invalid UTF-8／JSON／schema、overlong、切断時partial frameは
 contract-synthetic fixtureで検証し、実機由来のcaseとは明示的に区別します。
