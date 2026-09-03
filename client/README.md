@@ -108,12 +108,14 @@ parserです。`WebSerialInputAdapter`はparserへchunkを渡し、valid frame�
 Adapterはserial port、reader、接続状態を所有しません。`useWebSerialConnection`が利用者の操作からPicoを
 選択・openし、受信chunkを`pushChunk()`へ渡します。正常終了、切断、読取り失敗、Room画面の破棄時には
 readerとportを解放して`resetSession()`を呼びます。自動再接続は行わず、Room画面の独立した
-`SerialConnectControl`から再接続またはkeyboard／画面ボタンでの続行を選択します。代替入力を選ぶと
-keyboard listenerを開始して画面操作ボタンを表示し、同時にSerialを解放します。再接続を選ぶと代替入力を
-停止してSerial入力へ戻します。いずれも同じ共通入力eventをRoomへ渡します。
+`SerialStatusNotice`から再接続、keyboard、画面ボタンのいずれかを選択します。keyboardを選ぶとlistenerを
+開始し、画面入力を選ぶとcontrol、操作列送信、文字列回答のbuttonを表示します。いずれの代替入力もSerialを
+解放し、再接続を選ぶと停止してSerial入力へ戻ります。3入力元は同じguardを通して共通入力eventをRoomへ
+渡します。
 
 製品接続は自動起動済みfirmwareをreadするだけで、開発用PoCのraw REPL操作、script起動、captureは行いません。
-共通eventからOpenAPI operationへの変換とAPI送信は別の責任です。
+画面入力の操作列送信と文字列回答は共通の`query-submitted`／`answer-submitted` eventまで接続します。
+`OperationBuffer`からOpenAPI requestを組み立てる処理とAPI送信は別の責任です。
 
 ### 製品Room接続UIの実機確認（2026-09-03）
 
