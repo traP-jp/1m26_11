@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useId } from 'vue'
+import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 
 import SerialStatusNotice from './components/room/SerialStatusNotice.vue'
 import type { SerialStatus } from './components/room/SerialStatusNotice.types'
@@ -25,7 +25,9 @@ const emit = defineEmits<{ uiEvent: [event: RoomUiEvent] }>()
 const inputMode = ref<InputMode>('serial')
 const screenAnswer = ref(props.viewModel.answerInput.value)
 const inputError = ref<string | null>(null)
-const inputDisabled = computed(() => props.viewModel.selectedProblem === null)
+const inputDisabled = computed(
+  () => props.viewModel.selectedProblem === null || props.viewModel.clear.cleared,
+)
 
 const roomDispatcher = createGuardedInputDispatcher(
   (event: InputAdapterEvent) => {
@@ -74,6 +76,16 @@ const serialInput = createWebSerialInputAdapter({
   isControlAllowed,
 })
 const serialConnection = useWebSerialConnection({ adapter: serialInput })
+
+watch(
+  () => props.viewModel.clear.cleared,
+  (cleared) => {
+    if (!cleared) return
+    keyboardInput.stop()
+    void serialConnection.disconnect()
+  },
+  { immediate: true },
+)
 
 function toNoticeStatus(state: SerialConnectionState): SerialStatus {
   switch (state.phase) {
