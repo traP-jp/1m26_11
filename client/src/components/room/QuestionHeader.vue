@@ -26,10 +26,13 @@ withDefaults(defineProps<Props>(), {
     </div>
 
     <div class="shrink-0">
-      <div v-if="problemType === 'small'" class="text-sm font-bold text-blue-600">
+      <div
+        v-if="problemType === 'small' && smallIndex !== undefined"
+        class="text-sm font-bold text-blue-600"
+      >
         小なぞ {{ smallIndex }} / {{ smallTotal }}
       </div>
-      <div v-else class="text-sm font-bold text-blue-600">大なぞ</div>
+      <div v-else-if="problemType === 'final'" class="text-sm font-bold text-blue-600">大なぞ</div>
     </div>
   </div>
 </template>
