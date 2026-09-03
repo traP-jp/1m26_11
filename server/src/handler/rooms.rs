@@ -3,11 +3,20 @@ use axum::{
     extract::{Path, State},
 };
 use chrono::Utc;
-use openapi_generated::models::{ActiveRunResponse, ProblemHintResponse, ProblemResponse};
+use openapi_generated::{
+    models::{
+        ActiveRunResponse, ProblemHintResponse, ProblemResponse, RoomRankingSummary, RoomResponse,
+        RoomRunStatus,
+    },
+    types::Nullable,
+};
 use uuid::Uuid;
 
 use crate::{
-    AppState, auth::current_user::CurrentUser, error::AppError, problem::build_problem_response,
+    AppState,
+    auth::current_user::{CurrentUser, OptionalCurrentUser},
+    error::AppError,
+    problem::build_problem_response,
 };
 
 pub(crate) async fn start_or_resume_run(
@@ -170,6 +179,82 @@ pub(crate) async fn get_current_run(
         run_record.started_at,
         elapsed_ms,
         cleared_problem_ids,
+    );
+
+    Ok(Json(response))
+}
+
+pub(crate) async fn get_room(
+    State(state): State<AppState>,
+    OptionalCurrentUser(current_user): OptionalCurrentUser,
+    Path(room_id): Path<String>,
+) -> Result<Json<RoomResponse>, AppError> {
+    let room_id =
+        Uuid::parse_str(&room_id).map_err(|_| AppError::bad_request("invalid room_id"))?;
+
+    let Some(room) = state.auth_repository.find_room_by_id(room_id).await? else {
+        return Err(AppError::not_found("room not found"));
+    };
+
+    if !room.is_published {
+        return Err(AppError::not_found("room not found"));
+    }
+
+    let problem_count = state
+        .auth_repository
+        .count_problems_by_room_id(room_id)
+        .await?;
+
+    let run_status = match current_user.as_ref() {
+        Some(user) => {
+            let active_run = state
+                .auth_repository
+                .find_active_run(user.user_id, room_id)
+                .await?;
+            if active_run.is_some() {
+                RoomRunStatus::Active
+            } else {
+                let cleared_run = state
+                    .auth_repository
+                    .find_cleared_run(user.user_id, room_id)
+                    .await?;
+                if cleared_run.is_some() {
+                    RoomRunStatus::Cleared
+                } else {
+                    RoomRunStatus::NotStarted
+                }
+            }
+        }
+        None => RoomRunStatus::NotStarted,
+    };
+
+    let leaderboard_records = state
+        .auth_repository
+        .find_leaderboard_by_room_id(room_id)
+        .await?;
+
+    let player_count = u32::try_from(leaderboard_records.len()).map_err(AppError::internal)?;
+
+    let my_rank = current_user
+        .as_ref()
+        .and_then(|user| {
+            leaderboard_records
+                .iter()
+                .find(|record| record.user_id == user.user_id)
+        })
+        .map_or(Nullable::Null, |record| Nullable::Present(record.rank));
+
+    let room_number = u32::try_from(room.number).map_err(AppError::internal)?;
+
+    let response = RoomResponse::new(
+        room.id,
+        room_number,
+        room.name,
+        room.genre,
+        room.description,
+        problem_count,
+        run_status,
+        RoomRankingSummary::new(player_count, my_rank),
     );
 
     Ok(Json(response))

@@ -95,6 +95,10 @@ pub fn app(state: AppState) -> Router {
             post(handler::logout_demo).fallback(handler::method_not_allowed),
         )
         .route(
+            "/api/rooms/{room_id}",
+            get(handler::get_room).fallback(handler::method_not_allowed),
+        )
+        .route(
             "/api/rooms/{room_id}/runs",
             post(handler::start_or_resume_run).fallback(handler::method_not_allowed),
         )

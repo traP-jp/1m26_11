@@ -45,8 +45,6 @@ pub enum LogoutDemoResponse {
     Status204 { set_cookie: Option<String> },
     /// 対象resourceが存在しないか、現在のAUTH_MODEではendpointが有効ではありません。具体的なerror.codeは未確定です。
     Status404(models::ErrorResponse),
-    /// server内部エラー。具体的なerror.codeは未確定です。
-    Status500_Server(models::ErrorResponse),
 }
 
 /// Auth

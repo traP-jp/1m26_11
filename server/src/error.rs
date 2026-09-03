@@ -74,7 +74,7 @@ impl AppError {
         Self::RunNotFound
     }
 
-    fn internal(error: impl Error + Send + Sync + 'static) -> Self {
+    pub(crate) fn internal(error: impl Error + Send + Sync + 'static) -> Self {
         Self::Internal {
             source: Box::new(error),
         }

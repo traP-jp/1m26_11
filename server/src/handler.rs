@@ -10,7 +10,9 @@ pub(crate) use auth::{login_guest, logout_demo};
 pub(crate) use leaderboard::get_room_leaderboard;
 pub(crate) use me::get_me;
 pub(crate) use queries::submit_query;
-pub(crate) use rooms::{get_current_run, get_problem, get_problem_hint, start_or_resume_run};
+pub(crate) use rooms::{
+    get_current_run, get_problem, get_problem_hint, get_room, start_or_resume_run,
+};
 
 use axum::{
     http::{StatusCode, header},
