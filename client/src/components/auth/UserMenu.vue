@@ -18,21 +18,25 @@ const emit = defineEmits<{
 
 <template>
   <Menu as="div" class="relative inline-block text-left" v-slot="{ open }">
-    <MenuButton as="LogoutMenuButton">
-      <LogoutMenuButton :displayName="displayName" :open="open" />
-    </MenuButton>
+    <MenuButton
+      :as="LogoutMenuButton"
+      :display-name="displayName"
+      :open="open"
+      :disabled="logoutPending"
+    />
 
     <MenuItems
       class="absolute right-0 mt-2 w-auto bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 overflow-hidden"
     >
       <MenuItem v-slot="{ active }">
         <a
-          v-if="logoutHref"
+          v-if="logoutHref && !logoutPending"
           :href="logoutHref"
           :class="[
             active ? 'bg-blue-500 text-white' : 'text-gray-900',
             'block w-full px-4 py-2 text-left text-sm no-underline',
           ]"
+          @click.prevent="emit('logout')"
         >
           ログアウト
         </a>

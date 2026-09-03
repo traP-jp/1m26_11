@@ -22,7 +22,7 @@ describe('PortalPage', () => {
     expect(wrapper.findComponent(MinimalProgressSummary).exists()).toBe(false)
   })
 
-  it('shows the NeoShowcase login URL in the header and prompt', () => {
+  it('shows the NeoShowcase login URL and delegates its activation', async () => {
     const fixture = portalPageFixtures.neoshowcaseUnauthenticated
     const wrapper = mount(PortalPage, { props: fixture })
 
@@ -32,6 +32,8 @@ describe('PortalPage', () => {
     })
     expect(wrapper.getComponent(AuthActionButton).element.tagName).toBe('A')
     expect(wrapper.getComponent(AuthActionButton).attributes('href')).toBe(fixture.loginHref)
+    await wrapper.getComponent(AuthActionButton).trigger('click')
+    expect(wrapper.emitted('login')).toHaveLength(1)
   })
 
   it('forwards the NeoShowcase login action when no login URL is available', async () => {
