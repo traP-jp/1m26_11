@@ -78,11 +78,29 @@ pub enum RepositoryError {
     #[error("stored problem status is invalid: {status}")]
     InvalidProblemStatus { status: String },
 
+    #[error("stored run status is invalid: {status}")]
+    InvalidRunStatus { status: String },
+
     #[error("problem progress update affected an unexpected number of rows")]
     ProblemProgressUpdateConflict,
 
     #[error("run update affected an unexpected number of rows")]
     RunUpdateConflict,
+
+    #[error("stored asset upload idempotency record is invalid")]
+    InvalidAssetUploadIdempotencyRecord,
+
+    #[error("asset upload target changed during processing")]
+    AssetUploadTargetChanged,
+
+    #[error("published room cannot be modified")]
+    PublishedRoomImmutable,
+
+    #[error("problem assets update affected an unexpected number of rows")]
+    ProblemAssetsUpdateConflict,
+
+    #[error("asset upload idempotency update affected an unexpected number of rows")]
+    AssetUploadIdempotencyUpdateConflict,
 
     #[error("stored auth provider is invalid")]
     InvalidAuthProvider,
@@ -222,6 +240,45 @@ impl TryFrom<LeaderboardRow> for LeaderboardRecord {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UserProgressRecord {
+    pub cleared_room_count: u32,
+    pub total_room_count: u32,
+    pub by_genre: Vec<GenreProgressRecord>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GenreProgressRecord {
+    pub genre: String,
+    pub cleared_room_count: u32,
+    pub total_room_count: u32,
+}
+
+#[derive(FromRow)]
+struct GenreProgressRow {
+    genre: String,
+    cleared_room_count: i64,
+    total_room_count: i64,
+}
+
+impl TryFrom<GenreProgressRow> for GenreProgressRecord {
+    type Error = RepositoryError;
+
+    fn try_from(row: GenreProgressRow) -> Result<Self, Self::Error> {
+        let cleared_room_count = u32::try_from(row.cleared_room_count)
+            .map_err(|_| RepositoryError::InvalidProgressCount)?;
+
+        let total_room_count = u32::try_from(row.total_room_count)
+            .map_err(|_| RepositoryError::InvalidProgressCount)?;
+
+        Ok(Self {
+            genre: row.genre,
+            cleared_room_count,
+            total_room_count,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HintRecord {
     pub level: i32,
     pub body_markdown: String,
@@ -242,6 +299,63 @@ pub struct ProblemRecord {
     pub judge_config: sqlx::types::Json<serde_json::Value>,
     pub depends_on_problem_id: Option<Uuid>,
     pub is_required: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, FromRow)]
+pub struct AssetUploadTargetRecord {
+    pub is_published: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AssetUploadClaimRequest {
+    pub request_method: String,
+    pub request_path: String,
+    pub idempotency_key: Uuid,
+    pub file_sha256: [u8; 32],
+    pub alt: String,
+    pub expires_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AssetUploadClaimOutcome {
+    Acquired { claim_token: Uuid },
+    InProgress,
+    Reused,
+    Completed { asset: Asset },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CompleteAssetUploadRequest {
+    pub request_method: String,
+    pub request_path: String,
+    pub idempotency_key: Uuid,
+    pub claim_token: Uuid,
+    pub room_id: Uuid,
+    pub problem_id: Uuid,
+    pub asset: Asset,
+    pub completed_at: DateTime<Utc>,
+}
+
+#[derive(FromRow)]
+struct AssetUploadIdempotencyRow {
+    claim_token: Uuid,
+    file_sha256: Vec<u8>,
+    alt: String,
+    status: String,
+    object_key: Option<String>,
+}
+
+#[derive(FromRow)]
+struct AssetUploadCompletionTargetRow {
+    is_published: bool,
+    assets: sqlx::types::Json<Vec<Asset>>,
+}
+
+#[derive(FromRow)]
+struct AssetUploadCompletionRow {
+    claim_token: Uuid,
+    alt: String,
+    status: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, FromRow)]
@@ -301,6 +415,27 @@ pub enum AnswerRunStatus {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoomBestRecordRecord {
+    pub elapsed_ms: u64,
+    pub rank: u32,
+    pub query_count: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoomSummaryRecord {
+    pub room_id: Uuid,
+    pub number: i32,
+    pub name: String,
+    pub genre: String,
+    pub description: String,
+    pub problem_count: u32,
+    pub progress_status: String,
+    pub cleared_count: u32,
+    pub required_count: u32,
+    pub best_record: Option<RoomBestRecordRecord>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AnswerSubmissionResult {
     Incorrect {
         answer_attempt_count: i32,
@@ -308,8 +443,8 @@ pub enum AnswerSubmissionResult {
     Correct {
         unlocked_problem_ids: Vec<Uuid>,
         run_status: AnswerRunStatus,
-        cleared_problem_count: i32,
-        total_problem_count: i32,
+        cleared_count: u32,
+        required_count: u32,
         elapsed_ms: u64,
     },
 }
@@ -376,8 +511,47 @@ pub trait AuthRepository: Send + Sync {
         unimplemented!("delete_demo_session is not implemented for this repository")
     }
 
+    async fn find_published_rooms_with_progress(
+        &self,
+        _user_id: Option<Uuid>,
+    ) -> Result<Vec<RoomSummaryRecord>, RepositoryError> {
+        unimplemented!("find_published_rooms_with_progress is not implemented for this repository")
+    }
+
     async fn find_room_by_id(&self, _room_id: Uuid) -> Result<Option<RoomRecord>, RepositoryError> {
         unimplemented!("find_room_by_id is not implemented for this repository")
+    }
+
+    async fn find_asset_upload_target(
+        &self,
+        _room_id: Uuid,
+        _problem_id: Uuid,
+    ) -> Result<Option<AssetUploadTargetRecord>, RepositoryError> {
+        unimplemented!("find_asset_upload_target is not implemented for this repository")
+    }
+
+    async fn claim_asset_upload(
+        &self,
+        _request: &AssetUploadClaimRequest,
+    ) -> Result<AssetUploadClaimOutcome, RepositoryError> {
+        unimplemented!("claim_asset_upload is not implemented for this repository")
+    }
+
+    async fn complete_asset_upload(
+        &self,
+        _request: &CompleteAssetUploadRequest,
+    ) -> Result<(), RepositoryError> {
+        unimplemented!("complete_asset_upload is not implemented for this repository")
+    }
+
+    async fn release_asset_upload_claim(
+        &self,
+        _request_method: &str,
+        _request_path: &str,
+        _idempotency_key: Uuid,
+        _claim_token: Uuid,
+    ) -> Result<(), RepositoryError> {
+        unimplemented!("release_asset_upload_claim is not implemented for this repository")
     }
 
     async fn find_active_run(
@@ -434,6 +608,13 @@ pub trait AuthRepository: Send + Sync {
         _room_id: Uuid,
     ) -> Result<Vec<LeaderboardRecord>, RepositoryError> {
         unimplemented!("find_leaderboard_by_room_id is not implemented for this repository")
+    }
+
+    async fn find_user_progress(
+        &self,
+        _user_id: Uuid,
+    ) -> Result<UserProgressRecord, RepositoryError> {
+        unimplemented!("find_user_progress is not implemented for this repository")
     }
 
     async fn find_problems_by_room_id(
@@ -628,6 +809,356 @@ impl AuthRepository for SqlxUserRepository {
         Ok(())
     }
 
+    async fn find_published_rooms_with_progress(
+        &self,
+        user_id: Option<Uuid>,
+    ) -> Result<Vec<RoomSummaryRecord>, RepositoryError> {
+        #[derive(FromRow)]
+        struct RoomRow {
+            room_id: Uuid,
+            number: i32,
+            name: String,
+            genre: String,
+            description: String,
+            problem_count: i64,
+            required_count: i64,
+        }
+
+        let room_rows = sqlx::query_as::<_, RoomRow>(
+            r#"
+            SELECT
+                rooms.room_id,
+                rooms.number,
+                rooms.name,
+                rooms.genre,
+                rooms.description,
+                COUNT(problems.problem_id) AS problem_count,
+                CAST(
+                    COALESCE(
+                        SUM(CASE WHEN problems.is_required = 1 THEN 1 ELSE 0 END),
+                        0
+                    ) AS SIGNED
+                ) AS required_count
+            FROM rooms
+            LEFT JOIN problems ON problems.room_id = rooms.room_id
+            WHERE rooms.is_published = 1
+            GROUP BY rooms.room_id, rooms.number, rooms.name, rooms.genre, rooms.description
+            ORDER BY rooms.number ASC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        if room_rows.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let user_id = match user_id {
+            Some(uid) => uid,
+            None => {
+                return room_rows
+                    .into_iter()
+                    .map(|row| {
+                        Ok(RoomSummaryRecord {
+                            room_id: row.room_id,
+                            number: row.number,
+                            name: row.name,
+                            genre: row.genre,
+                            description: row.description,
+                            problem_count: u32::try_from(row.problem_count)
+                                .map_err(|_| RepositoryError::InvalidProgressCount)?,
+                            progress_status: "not_started".to_owned(),
+                            cleared_count: 0,
+                            required_count: u32::try_from(row.required_count)
+                                .map_err(|_| RepositoryError::InvalidProgressCount)?,
+                            best_record: None,
+                        })
+                    })
+                    .collect();
+            }
+        };
+
+        #[derive(FromRow)]
+        struct UserRunRow {
+            run_id: Uuid,
+            room_id: Uuid,
+            status: String,
+        }
+
+        let user_runs = sqlx::query_as::<_, UserRunRow>(
+            r#"
+            SELECT
+                runs.run_id,
+                runs.room_id,
+                runs.status
+            FROM runs
+            INNER JOIN rooms ON rooms.room_id = runs.room_id
+            WHERE runs.user_id = ?
+              AND rooms.is_published = 1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        let mut user_active_rooms: std::collections::HashMap<Uuid, Uuid> =
+            std::collections::HashMap::new();
+        let mut user_cleared_rooms: std::collections::HashSet<Uuid> =
+            std::collections::HashSet::new();
+
+        for run in &user_runs {
+            match run.status.as_str() {
+                "active" => {
+                    if user_cleared_rooms.contains(&run.room_id) {
+                        return Err(RepositoryError::InvalidRunStatus {
+                            status: "active and cleared run conflict".to_owned(),
+                        });
+                    }
+                    user_active_rooms.insert(run.room_id, run.run_id);
+                }
+                "cleared" => {
+                    if user_active_rooms.contains_key(&run.room_id) {
+                        return Err(RepositoryError::InvalidRunStatus {
+                            status: "active and cleared run conflict".to_owned(),
+                        });
+                    }
+                    user_cleared_rooms.insert(run.room_id);
+                }
+                _ => {}
+            }
+        }
+
+        #[derive(FromRow)]
+        struct ActiveProgressRow {
+            room_id: Uuid,
+            cleared_count: i64,
+        }
+
+        let active_progress_rows = sqlx::query_as::<_, ActiveProgressRow>(
+            r#"
+            SELECT
+                runs.room_id,
+                COUNT(problem_progress.problem_id) AS cleared_count
+            FROM runs
+            INNER JOIN problem_progress ON problem_progress.run_id = runs.run_id
+            INNER JOIN problems ON problems.problem_id = problem_progress.problem_id
+            WHERE runs.user_id = ?
+              AND runs.status = 'active'
+              AND problem_progress.status = 'cleared'
+              AND problems.is_required = 1
+            GROUP BY runs.room_id
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        let active_cleared_counts: std::collections::HashMap<Uuid, u32> = active_progress_rows
+            .into_iter()
+            .map(|r| {
+                let count = u32::try_from(r.cleared_count)
+                    .map_err(|_| RepositoryError::InvalidProgressCount)?;
+                Ok((r.room_id, count))
+            })
+            .collect::<Result<_, RepositoryError>>()?;
+
+        #[derive(FromRow)]
+        struct UserRoomBestRow {
+            room_id: Uuid,
+            rank: i64,
+            elapsed_ms: i64,
+            query_count: i64,
+        }
+
+        let user_room_best_rows = if !user_cleared_rooms.is_empty() {
+            let mut query_builder = sqlx::QueryBuilder::<sqlx::MySql>::new(
+                r#"
+                WITH run_records AS (
+                    SELECT
+                        runs.run_id,
+                        runs.user_id,
+                        runs.room_id,
+                        runs.started_at,
+                        CAST(
+                            TIMESTAMPDIFF(
+                                MICROSECOND,
+                                runs.started_at,
+                                runs.cleared_at
+                            ) DIV 1000
+                            AS SIGNED
+                        ) AS elapsed_ms,
+                        CAST(
+                            COALESCE(
+                                SUM(
+                                    CASE
+                                        WHEN problems.submission_type = 'operation_sequence'
+                                        THEN problem_progress.answer_attempt_count
+                                        ELSE 0
+                                    END
+                                ),
+                                0
+                            )
+                            AS SIGNED
+                        ) AS query_count,
+                        runs.cleared_at
+                    FROM runs
+                    INNER JOIN rooms ON rooms.room_id = runs.room_id
+                    LEFT JOIN problem_progress ON problem_progress.run_id = runs.run_id
+                    LEFT JOIN problems
+                        ON problems.problem_id = problem_progress.problem_id
+                       AND problems.room_id = runs.room_id
+                    WHERE rooms.is_published = 1
+                      AND runs.status = 'cleared'
+                      AND runs.cleared_at IS NOT NULL
+                      AND runs.room_id IN (
+                "#,
+            );
+            let mut separated = query_builder.separated(", ");
+            for room_id in &user_cleared_rooms {
+                separated.push_bind(*room_id);
+            }
+            separated.push_unseparated(
+                r#")
+                    GROUP BY
+                        runs.run_id,
+                        runs.user_id,
+                        runs.room_id,
+                        runs.started_at,
+                        runs.cleared_at
+                ),
+                user_best_candidates AS (
+                    SELECT
+                        run_id,
+                        user_id,
+                        room_id,
+                        started_at,
+                        elapsed_ms,
+                        query_count,
+                        cleared_at,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY room_id, user_id
+                            ORDER BY
+                                elapsed_ms,
+                                query_count,
+                                cleared_at,
+                                run_id
+                        ) AS user_position
+                    FROM run_records
+                ),
+                best_runs AS (
+                    SELECT
+                        run_id,
+                        user_id,
+                        room_id,
+                        started_at,
+                        elapsed_ms,
+                        query_count,
+                        cleared_at
+                    FROM user_best_candidates
+                    WHERE user_position = 1
+                ),
+                ranked_best_runs AS (
+                    SELECT
+                        room_id,
+                        user_id,
+                        elapsed_ms,
+                        query_count,
+                        CAST(
+                            RANK() OVER (
+                                PARTITION BY room_id
+                                ORDER BY
+                                    elapsed_ms,
+                                    query_count,
+                                    cleared_at
+                            )
+                            AS SIGNED
+                        ) AS leaderboard_rank
+                    FROM best_runs
+                )
+                SELECT
+                    room_id,
+                    leaderboard_rank AS `rank`,
+                    elapsed_ms,
+                    query_count
+                FROM ranked_best_runs
+                WHERE user_id = "#,
+            );
+            query_builder.push_bind(user_id);
+
+            query_builder
+                .build_query_as::<UserRoomBestRow>()
+                .fetch_all(&self.pool)
+                .await
+                .map_err(RepositoryError::Database)?
+        } else {
+            Vec::new()
+        };
+
+        let mut user_room_best_records: std::collections::HashMap<Uuid, RoomBestRecordRecord> =
+            std::collections::HashMap::new();
+
+        for row in user_room_best_rows {
+            if row.elapsed_ms < 0 {
+                return Err(RepositoryError::InvalidElapsed);
+            }
+            let elapsed_ms =
+                u64::try_from(row.elapsed_ms).map_err(|_| RepositoryError::InvalidElapsed)?;
+            let query_count =
+                u64::try_from(row.query_count).map_err(|_| RepositoryError::InvalidQueryCount)?;
+            let rank =
+                u32::try_from(row.rank).map_err(|_| RepositoryError::InvalidProgressCount)?;
+
+            user_room_best_records.insert(
+                row.room_id,
+                RoomBestRecordRecord {
+                    elapsed_ms,
+                    rank,
+                    query_count,
+                },
+            );
+        }
+
+        room_rows
+            .into_iter()
+            .map(|row| {
+                let problem_count = u32::try_from(row.problem_count)
+                    .map_err(|_| RepositoryError::InvalidProgressCount)?;
+                let required_count = u32::try_from(row.required_count)
+                    .map_err(|_| RepositoryError::InvalidProgressCount)?;
+
+                let (progress_status, cleared_count, best_record) =
+                    if user_cleared_rooms.contains(&row.room_id) {
+                        let best = user_room_best_records.get(&row.room_id).cloned();
+                        ("cleared".to_owned(), required_count, best)
+                    } else if user_active_rooms.contains_key(&row.room_id) {
+                        let cleared = active_cleared_counts
+                            .get(&row.room_id)
+                            .copied()
+                            .unwrap_or(0);
+                        ("active".to_owned(), cleared, None)
+                    } else {
+                        ("not_started".to_owned(), 0, None)
+                    };
+
+                Ok(RoomSummaryRecord {
+                    room_id: row.room_id,
+                    number: row.number,
+                    name: row.name,
+                    genre: row.genre,
+                    description: row.description,
+                    problem_count,
+                    progress_status,
+                    cleared_count,
+                    required_count,
+                    best_record,
+                })
+            })
+            .collect()
+    }
+
     async fn find_room_by_id(&self, room_id: Uuid) -> Result<Option<RoomRecord>, RepositoryError> {
         sqlx::query_as::<_, RoomRecord>(
             r#"
@@ -641,6 +1172,302 @@ impl AuthRepository for SqlxUserRepository {
         .fetch_optional(&self.pool)
         .await
         .map_err(RepositoryError::Database)
+    }
+
+    async fn find_asset_upload_target(
+        &self,
+        room_id: Uuid,
+        problem_id: Uuid,
+    ) -> Result<Option<AssetUploadTargetRecord>, RepositoryError> {
+        sqlx::query_as::<_, AssetUploadTargetRecord>(
+            r#"
+            SELECT rooms.is_published
+            FROM rooms
+            INNER JOIN problems
+                ON problems.room_id = rooms.room_id
+            WHERE rooms.room_id = ?
+              AND problems.problem_id = ?
+            "#,
+        )
+        .bind(room_id)
+        .bind(problem_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)
+    }
+
+    async fn claim_asset_upload(
+        &self,
+        request: &AssetUploadClaimRequest,
+    ) -> Result<AssetUploadClaimOutcome, RepositoryError> {
+        let claim_token = Uuid::new_v4();
+        let mut transaction = self.pool.begin().await.map_err(RepositoryError::Database)?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO asset_upload_idempotency (
+                request_method,
+                request_path,
+                idempotency_key,
+                claim_token,
+                file_sha256,
+                alt,
+                status,
+                expires_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, 'processing', ?)
+            ON DUPLICATE KEY UPDATE
+                claim_token = IF(
+                    expires_at <= CURRENT_TIMESTAMP(3),
+                    VALUES(claim_token),
+                    claim_token
+                ),
+                file_sha256 = IF(
+                    expires_at <= CURRENT_TIMESTAMP(3),
+                    VALUES(file_sha256),
+                    file_sha256
+                ),
+                alt = IF(
+                    expires_at <= CURRENT_TIMESTAMP(3),
+                    VALUES(alt),
+                    alt
+                ),
+                status = IF(
+                    expires_at <= CURRENT_TIMESTAMP(3),
+                    VALUES(status),
+                    status
+                ),
+                object_key = IF(
+                    expires_at <= CURRENT_TIMESTAMP(3),
+                    NULL,
+                    object_key
+                ),
+                created_at = IF(
+                    expires_at <= CURRENT_TIMESTAMP(3),
+                    CURRENT_TIMESTAMP(3),
+                    created_at
+                ),
+                completed_at = IF(
+                    expires_at <= CURRENT_TIMESTAMP(3),
+                    NULL,
+                    completed_at
+                ),
+                expires_at = IF(
+                    expires_at <= CURRENT_TIMESTAMP(3),
+                    VALUES(expires_at),
+                    expires_at
+                )
+            "#,
+        )
+        .bind(&request.request_method)
+        .bind(&request.request_path)
+        .bind(request.idempotency_key)
+        .bind(claim_token)
+        .bind(request.file_sha256.as_slice())
+        .bind(&request.alt)
+        .bind(request.expires_at.to_owned())
+        .execute(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        let row = sqlx::query_as::<_, AssetUploadIdempotencyRow>(
+            r#"
+            SELECT
+                claim_token,
+                file_sha256,
+                alt,
+                status,
+                CAST(
+                    object_key AS CHAR CHARACTER SET utf8mb4
+                ) AS object_key
+            FROM asset_upload_idempotency
+            WHERE request_method = ?
+              AND request_path = ?
+              AND idempotency_key = ?
+            FOR UPDATE
+            "#,
+        )
+        .bind(&request.request_method)
+        .bind(&request.request_path)
+        .bind(request.idempotency_key)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?
+        .ok_or(RepositoryError::InvalidAssetUploadIdempotencyRecord)?;
+
+        let same_payload = row.file_sha256.as_slice() == request.file_sha256.as_slice()
+            && row.alt.as_str() == request.alt.as_str();
+
+        let outcome = if row.claim_token == claim_token {
+            AssetUploadClaimOutcome::Acquired { claim_token }
+        } else if !same_payload {
+            AssetUploadClaimOutcome::Reused
+        } else {
+            match row.status.as_str() {
+                "processing" => AssetUploadClaimOutcome::InProgress,
+                "completed" => {
+                    let object_key = row
+                        .object_key
+                        .ok_or(RepositoryError::InvalidAssetUploadIdempotencyRecord)?;
+
+                    AssetUploadClaimOutcome::Completed {
+                        asset: Asset {
+                            asset_type: "image".to_owned(),
+                            object_key,
+                            alt: row.alt,
+                        },
+                    }
+                }
+                _ => return Err(RepositoryError::InvalidAssetUploadIdempotencyRecord),
+            }
+        };
+
+        transaction
+            .commit()
+            .await
+            .map_err(RepositoryError::Database)?;
+
+        Ok(outcome)
+    }
+
+    async fn complete_asset_upload(
+        &self,
+        request: &CompleteAssetUploadRequest,
+    ) -> Result<(), RepositoryError> {
+        let mut transaction = self.pool.begin().await.map_err(RepositoryError::Database)?;
+
+        let target = sqlx::query_as::<_, AssetUploadCompletionTargetRow>(
+            r#"
+            SELECT
+                rooms.is_published,
+                problems.assets
+            FROM rooms
+            INNER JOIN problems
+                ON problems.room_id = rooms.room_id
+            WHERE rooms.room_id = ?
+              AND problems.problem_id = ?
+            FOR UPDATE
+            "#,
+        )
+        .bind(request.room_id)
+        .bind(request.problem_id)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?
+        .ok_or(RepositoryError::AssetUploadTargetChanged)?;
+
+        if target.is_published {
+            return Err(RepositoryError::PublishedRoomImmutable);
+        }
+
+        let claim = sqlx::query_as::<_, AssetUploadCompletionRow>(
+            r#"
+            SELECT claim_token, alt, status
+            FROM asset_upload_idempotency
+            WHERE request_method = ?
+              AND request_path = ?
+              AND idempotency_key = ?
+            FOR UPDATE
+            "#,
+        )
+        .bind(&request.request_method)
+        .bind(&request.request_path)
+        .bind(request.idempotency_key)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?
+        .ok_or(RepositoryError::InvalidAssetUploadIdempotencyRecord)?;
+
+        if claim.claim_token != request.claim_token
+            || claim.status != "processing"
+            || claim.alt != request.asset.alt
+        {
+            return Err(RepositoryError::InvalidAssetUploadIdempotencyRecord);
+        }
+
+        let mut assets = target.assets.0;
+        assets.push(request.asset.clone());
+
+        let problem_update = sqlx::query(
+            r#"
+            UPDATE problems
+            SET assets = ?
+            WHERE room_id = ?
+              AND problem_id = ?
+            "#,
+        )
+        .bind(sqlx::types::Json(assets))
+        .bind(request.room_id)
+        .bind(request.problem_id)
+        .execute(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        if problem_update.rows_affected() != 1 {
+            return Err(RepositoryError::ProblemAssetsUpdateConflict);
+        }
+
+        let idempotency_update = sqlx::query(
+            r#"
+            UPDATE asset_upload_idempotency
+            SET status = 'completed',
+                object_key = ?,
+                completed_at = ?
+            WHERE request_method = ?
+              AND request_path = ?
+              AND idempotency_key = ?
+              AND claim_token = ?
+              AND status = 'processing'
+            "#,
+        )
+        .bind(&request.asset.object_key)
+        .bind(request.completed_at.to_owned())
+        .bind(&request.request_method)
+        .bind(&request.request_path)
+        .bind(request.idempotency_key)
+        .bind(request.claim_token)
+        .execute(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        if idempotency_update.rows_affected() != 1 {
+            return Err(RepositoryError::AssetUploadIdempotencyUpdateConflict);
+        }
+
+        transaction
+            .commit()
+            .await
+            .map_err(RepositoryError::Database)?;
+
+        Ok(())
+    }
+
+    async fn release_asset_upload_claim(
+        &self,
+        request_method: &str,
+        request_path: &str,
+        idempotency_key: Uuid,
+        claim_token: Uuid,
+    ) -> Result<(), RepositoryError> {
+        sqlx::query(
+            r#"
+            DELETE FROM asset_upload_idempotency
+            WHERE request_method = ?
+              AND request_path = ?
+              AND idempotency_key = ?
+              AND claim_token = ?
+              AND status = 'processing'
+            "#,
+        )
+        .bind(request_method)
+        .bind(request_path)
+        .bind(idempotency_key)
+        .bind(claim_token)
+        .execute(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        Ok(())
     }
 
     async fn find_active_run(
@@ -815,7 +1642,6 @@ impl AuthRepository for SqlxUserRepository {
         if counter_update.rows_affected() != 1 {
             return Err(RepositoryError::ProblemProgressUpdateConflict);
         }
-
         let problem_status = if submission.is_correct {
             let plan = apply_problem_clear_in_transaction(
                 &mut transaction,
@@ -922,10 +1748,10 @@ impl AuthRepository for SqlxUserRepository {
             )
             .await?;
 
-            let cleared_problem_count = i32::try_from(plan.progress.cleared_problem_count)
+            let cleared_count = u32::try_from(plan.progress.cleared_count)
                 .map_err(|_| RepositoryError::InvalidProgressCount)?;
 
-            let total_problem_count = i32::try_from(plan.progress.total_problem_count)
+            let required_count = u32::try_from(plan.progress.required_count)
                 .map_err(|_| RepositoryError::InvalidProgressCount)?;
 
             let elapsed_ms = duration_to_elapsed_ms(plan.elapsed)?;
@@ -938,8 +1764,8 @@ impl AuthRepository for SqlxUserRepository {
             AnswerSubmissionResult::Correct {
                 unlocked_problem_ids: plan.unlocked_problem_ids,
                 run_status,
-                cleared_problem_count,
-                total_problem_count,
+                cleared_count,
+                required_count,
                 elapsed_ms,
             }
         } else {
@@ -1225,6 +2051,60 @@ impl AuthRepository for SqlxUserRepository {
         .map_err(RepositoryError::Database)?;
 
         rows.into_iter().map(LeaderboardRecord::try_from).collect()
+    }
+
+    async fn find_user_progress(
+        &self,
+        user_id: Uuid,
+    ) -> Result<UserProgressRecord, RepositoryError> {
+        let rows = sqlx::query_as::<_, GenreProgressRow>(
+            r#"
+            SELECT
+                rooms.genre,
+                CAST(COUNT(cleared_rooms.room_id) AS SIGNED)
+                    AS cleared_room_count,
+                CAST(COUNT(*) AS SIGNED)
+                    AS total_room_count
+            FROM rooms
+            LEFT JOIN (
+                SELECT DISTINCT room_id
+                FROM runs
+                WHERE user_id = ?
+                  AND status = 'cleared'
+            ) AS cleared_rooms
+                ON cleared_rooms.room_id = rooms.room_id
+            WHERE rooms.is_published = 1
+            GROUP BY rooms.genre
+            ORDER BY rooms.genre ASC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        let by_genre = rows
+            .into_iter()
+            .map(GenreProgressRecord::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let cleared_room_count = by_genre.iter().try_fold(0_u32, |total, progress| {
+            total
+                .checked_add(progress.cleared_room_count)
+                .ok_or(RepositoryError::InvalidProgressCount)
+        })?;
+
+        let total_room_count = by_genre.iter().try_fold(0_u32, |total, progress| {
+            total
+                .checked_add(progress.total_room_count)
+                .ok_or(RepositoryError::InvalidProgressCount)
+        })?;
+
+        Ok(UserProgressRecord {
+            cleared_room_count,
+            total_room_count,
+            by_genre,
+        })
     }
 
     async fn find_problems_by_room_id(

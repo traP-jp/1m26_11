@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import AuthActionButton from './components/auth/AuthActionButton.vue'
 import GuestNameForm from './components/auth/GuestNameForm.vue'
@@ -19,29 +19,39 @@ const emit = defineEmits<{
   startRoom: [roomId: string]
 }>()
 
+const guestNameForm = ref<InstanceType<typeof GuestNameForm> | null>(null)
+
 const userStatus = computed<PortalUserStatusState>(() =>
   props.authenticated
     ? {
         authenticated: true,
         authMode: props.authMode,
         displayName: props.displayName ?? '',
-        logoutHref: null,
+        logoutHref: props.logoutHref,
         logoutPending: props.authBusy,
       }
     : {
         authenticated: false,
         authMode: props.authMode,
-        loginHref: null,
+        loginHref: props.loginHref,
         loginPending: props.authBusy,
       },
 )
+
+function handleLogin(): void {
+  if (!props.authenticated && props.authMode === 'demo') {
+    guestNameForm.value?.focus()
+    return
+  }
+  emit('login')
+}
 </script>
 
 <template>
   <PortalHeader
     home-href="/"
     :user-status="userStatus"
-    @login="emit('login')"
+    @login="handleLogin"
     @logout="emit('logout')"
     @show-instructions="emit('showInstructions')"
   />
@@ -50,6 +60,7 @@ const userStatus = computed<PortalUserStatusState>(() =>
       <template #action>
         <GuestNameForm
           v-if="authMode === 'demo'"
+          ref="guestNameForm"
           :submit-pending="authBusy"
           @submit="emit('guestLogin', $event)"
         />
@@ -57,6 +68,7 @@ const userStatus = computed<PortalUserStatusState>(() =>
           v-else
           action="login"
           :disabled="authBusy"
+          :href="loginHref"
           :label="authBusy ? '処理中…' : undefined"
           @activate="emit('login')"
         />

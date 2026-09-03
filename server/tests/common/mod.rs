@@ -18,7 +18,8 @@ use server::{
     repository::{
         AnswerRunStatus, AnswerSubmission, AnswerSubmissionResult, AuthProvider, AuthRepository,
         AuthUserRecord, HintRecord, LeaderboardRecord, ProblemDetailRecord, QuerySubmission,
-        QuerySubmissionResult, RepositoryError, RoomRecord, RunRecord,
+        QuerySubmissionResult, RepositoryError, RoomBestRecordRecord, RoomRecord,
+        RoomSummaryRecord, RunRecord,
     },
 };
 use sqlx::{
@@ -171,6 +172,46 @@ impl AuthRepository for StubAuthRepository {
 
     async fn delete_demo_session(&self, _session_id: Uuid) -> Result<(), RepositoryError> {
         Ok(())
+    }
+
+    async fn find_published_rooms_with_progress(
+        &self,
+        user_id: Option<Uuid>,
+    ) -> Result<Vec<RoomSummaryRecord>, RepositoryError> {
+        let room_id = Uuid::from_str(MOCK_RESUME_ROOM_ID).unwrap();
+        let (progress_status, cleared_count, best_record) = match user_id {
+            Some(uid) => {
+                let cleared_user_id =
+                    Uuid::from_str("99999999-9999-4999-8999-999999999999").unwrap();
+                if uid == cleared_user_id {
+                    (
+                        "cleared".to_owned(),
+                        4,
+                        Some(RoomBestRecordRecord {
+                            elapsed_ms: 119820,
+                            rank: 14,
+                            query_count: 37,
+                        }),
+                    )
+                } else {
+                    ("active".to_owned(), 1, None)
+                }
+            }
+            None => ("not_started".to_owned(), 0, None),
+        };
+
+        Ok(vec![RoomSummaryRecord {
+            room_id,
+            number: 12,
+            name: "general".to_owned(),
+            genre: "OSINT".to_owned(),
+            description: "人物を特定して脱出せよ".to_owned(),
+            problem_count: 5,
+            progress_status,
+            cleared_count,
+            required_count: 4,
+            best_record,
+        }])
     }
 
     async fn find_room_by_id(&self, room_id: Uuid) -> Result<Option<RoomRecord>, RepositoryError> {
@@ -411,8 +452,8 @@ impl AuthRepository for StubAuthRepository {
             Ok(AnswerSubmissionResult::Correct {
                 unlocked_problem_ids: vec![locked_problem_id],
                 run_status: AnswerRunStatus::Active,
-                cleared_problem_count: 1,
-                total_problem_count: 4,
+                cleared_count: 1,
+                required_count: 4,
                 elapsed_ms: 48_321,
             })
         } else {

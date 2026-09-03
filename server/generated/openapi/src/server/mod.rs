@@ -28,6 +28,7 @@ where
         + apis::auth::Auth<E>
         + apis::leaderboard::Leaderboard<E>
         + apis::problems::Problems<E>
+        + apis::progress::Progress<E>
         + apis::queries::Queries<E>
         + apis::rooms::Rooms<E>
         + apis::runs::Runs<E>
@@ -42,6 +43,8 @@ where
         .route("/api/auth/guest", post(login_guest::<I, A, E>))
         .route("/api/auth/logout", post(logout_demo::<I, A, E>))
         .route("/api/me", get(get_me::<I, A, E>))
+        .route("/api/me/progress", get(get_me_progress::<I, A, E>))
+        .route("/api/rooms", get(get_rooms::<I, A, E>))
         .route("/api/rooms/{room_id}", get(get_room::<I, A, E>))
         .route(
             "/api/rooms/{room_id}/leaderboard",
@@ -54,6 +57,10 @@ where
         .route(
             "/api/rooms/{room_id}/problems/{problem_id}/answers",
             post(submit_answer::<I, A, E>),
+        )
+        .route(
+            "/api/rooms/{room_id}/problems/{problem_id}/assets",
+            post(upload_problem_asset::<I, A, E>),
         )
         .route(
             "/api/rooms/{room_id}/problems/{problem_id}/hints/{level}",
@@ -1110,6 +1117,411 @@ where
     })
 }
 
+#[tracing::instrument(skip_all)]
+fn upload_problem_asset_validation(
+    header_params: models::UploadProblemAssetHeaderParams,
+    path_params: models::UploadProblemAssetPathParams,
+) -> std::result::Result<
+    (
+        models::UploadProblemAssetHeaderParams,
+        models::UploadProblemAssetPathParams,
+    ),
+    ValidationErrors,
+> {
+    header_params.validate()?;
+    path_params.validate()?;
+
+    Ok((header_params, path_params))
+}
+/// UploadProblemAsset - POST /api/rooms/{room_id}/problems/{problem_id}/assets
+#[tracing::instrument(skip_all)]
+async fn upload_problem_asset<I, A, E>(
+    method: Method,
+    TypedHeader(host): TypedHeader<Host>,
+    cookies: CookieJar,
+    headers: HeaderMap,
+    Path(path_params): Path<models::UploadProblemAssetPathParams>,
+    State(api_impl): State<I>,
+    body: Multipart,
+) -> Result<Response, StatusCode>
+where
+    I: AsRef<A> + Send + Sync,
+    A: apis::problems::Problems<E> + Send + Sync,
+    E: std::fmt::Debug + Send + Sync + 'static,
+{
+    // Header parameters
+    let header_params = {
+        let header_idempotency_key = headers.get(HeaderName::from_static("idempotency-key"));
+
+        let header_idempotency_key = match header_idempotency_key {
+            Some(v) => match header::IntoHeaderValue::<uuid::Uuid>::try_from((*v).clone()) {
+                Ok(result) => result.0,
+                Err(err) => {
+                    return Response::builder()
+                        .status(StatusCode::BAD_REQUEST)
+                        .body(Body::from(format!(
+                            "Invalid header Idempotency-Key - {err}"
+                        )))
+                        .map_err(|e| {
+                            error!(error = ?e);
+                            StatusCode::INTERNAL_SERVER_ERROR
+                        });
+                }
+            },
+            None => {
+                return Response::builder()
+                    .status(StatusCode::BAD_REQUEST)
+                    .body(Body::from("Missing required header Idempotency-Key"))
+                    .map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    });
+            }
+        };
+
+        models::UploadProblemAssetHeaderParams {
+            idempotency_key: header_idempotency_key,
+        }
+    };
+
+    #[allow(clippy::redundant_closure)]
+    let validation = tokio::task::spawn_blocking(move || {
+        upload_problem_asset_validation(header_params, path_params)
+    })
+    .await
+    .unwrap();
+
+    let Ok((header_params, path_params)) = validation else {
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Body::from(validation.unwrap_err().to_string()))
+            .map_err(|_| StatusCode::BAD_REQUEST);
+    };
+
+    let result = api_impl
+        .as_ref()
+        .upload_problem_asset(&method, &host, &cookies, &header_params, &path_params, body)
+        .await;
+
+    let resp = match result {
+        Ok(rsp) => match rsp {
+            apis::problems::UploadProblemAssetResponse::Status201(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(201);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::UploadProblemAssetResponse::Status400_UploadRequest(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(400);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::UploadProblemAssetResponse::Status404_Room(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(404);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::UploadProblemAssetResponse::Status409(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(409);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::UploadProblemAssetResponse::Status413_FileSize(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(413);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::UploadProblemAssetResponse::Status415(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(415);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::UploadProblemAssetResponse::Status422_File(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(422);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::UploadProblemAssetResponse::Status500_DB(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(500);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::UploadProblemAssetResponse::Status502_StorageProvider(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(502);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::UploadProblemAssetResponse::Status503_StorageProvider(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(503);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+        },
+        Err(why) => {
+            // Application code returned an error. This should not happen, as the implementation should
+            // return a valid response.
+            return api_impl
+                .as_ref()
+                .handle_error(&method, &host, &cookies, why)
+                .await;
+        }
+    };
+
+    resp.map_err(|e| {
+        error!(error = ?e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })
+}
+
+#[tracing::instrument(skip_all)]
+fn get_me_progress_validation() -> std::result::Result<(), ValidationErrors> {
+    Ok(())
+}
+/// GetMeProgress - GET /api/me/progress
+#[tracing::instrument(skip_all)]
+async fn get_me_progress<I, A, E>(
+    method: Method,
+    TypedHeader(host): TypedHeader<Host>,
+    cookies: CookieJar,
+    State(api_impl): State<I>,
+) -> Result<Response, StatusCode>
+where
+    I: AsRef<A> + Send + Sync,
+    A: apis::progress::Progress<E> + Send + Sync,
+    E: std::fmt::Debug + Send + Sync + 'static,
+{
+    #[allow(clippy::redundant_closure)]
+    let validation = tokio::task::spawn_blocking(move || get_me_progress_validation())
+        .await
+        .unwrap();
+
+    let Ok(()) = validation else {
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Body::from(validation.unwrap_err().to_string()))
+            .map_err(|_| StatusCode::BAD_REQUEST);
+    };
+
+    let result = api_impl
+        .as_ref()
+        .get_me_progress(&method, &host, &cookies)
+        .await;
+
+    let resp = match result {
+        Ok(rsp) => match rsp {
+            apis::progress::GetMeProgressResponse::Status200(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(200);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::progress::GetMeProgressResponse::Status401(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(401);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::progress::GetMeProgressResponse::Status500_Server(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(500);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+        },
+        Err(why) => {
+            // Application code returned an error. This should not happen, as the implementation should
+            // return a valid response.
+            return api_impl
+                .as_ref()
+                .handle_error(&method, &host, &cookies, why)
+                .await;
+        }
+    };
+
+    resp.map_err(|e| {
+        error!(error = ?e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })
+}
+
 #[derive(validator::Validate)]
 #[allow(dead_code)]
 struct SubmitQueryBodyValidator<'a> {
@@ -1412,6 +1824,94 @@ where
                 response.body(Body::from(body_content))
             }
             apis::rooms::GetRoomResponse::Status500_Server(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(500);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+        },
+        Err(why) => {
+            // Application code returned an error. This should not happen, as the implementation should
+            // return a valid response.
+            return api_impl
+                .as_ref()
+                .handle_error(&method, &host, &cookies, why)
+                .await;
+        }
+    };
+
+    resp.map_err(|e| {
+        error!(error = ?e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })
+}
+
+#[tracing::instrument(skip_all)]
+fn get_rooms_validation() -> std::result::Result<(), ValidationErrors> {
+    Ok(())
+}
+/// GetRooms - GET /api/rooms
+#[tracing::instrument(skip_all)]
+async fn get_rooms<I, A, E>(
+    method: Method,
+    TypedHeader(host): TypedHeader<Host>,
+    cookies: CookieJar,
+    State(api_impl): State<I>,
+) -> Result<Response, StatusCode>
+where
+    I: AsRef<A> + Send + Sync,
+    A: apis::rooms::Rooms<E> + Send + Sync,
+    E: std::fmt::Debug + Send + Sync + 'static,
+{
+    #[allow(clippy::redundant_closure)]
+    let validation = tokio::task::spawn_blocking(move || get_rooms_validation())
+        .await
+        .unwrap();
+
+    let Ok(()) = validation else {
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Body::from(validation.unwrap_err().to_string()))
+            .map_err(|_| StatusCode::BAD_REQUEST);
+    };
+
+    let result = api_impl.as_ref().get_rooms(&method, &host, &cookies).await;
+
+    let resp = match result {
+        Ok(rsp) => match rsp {
+            apis::rooms::GetRoomsResponse::Status200(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(200);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::rooms::GetRoomsResponse::Status500_Server(body) => {
                 let mut response = Response::builder();
                 let mut response = response.status(500);
                 {

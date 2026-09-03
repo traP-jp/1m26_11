@@ -5,6 +5,7 @@
 ## 構成
 
 - `client/`: Vue 3 + Vite + TypeScript のクライアントアプリケーション
+- `device/`: Raspberry Pi Pico H向けMicroPython firmwareと実機確認資料
 - `openapi/`: クライアントとサーバーが共有する OpenAPI 3.1 契約
 - `server/`: Rust 2024 edition のサーバーアプリケーション
 - `Dockerfile`: Rust server の production image 定義
@@ -21,7 +22,7 @@ mise trust
 mise install
 ```
 
-Rust stable、Node.js 24、pnpm 11 は `mise.toml` の定義に従ってセットアップされます。
+Rust stable、Node.js 24、pnpm 11、Python 3.12は `mise.toml` の定義に従ってセットアップされます。
 
 ## Tasks
 
@@ -41,9 +42,10 @@ Rust stable、Node.js 24、pnpm 11 は `mise.toml` の定義に従ってセッ�
 | `mise run client-lint` | client の ESLint/Oxlint | 不要 |
 | `mise run client-test` | client の Vitest | 不要 |
 | `mise run client-check` | client の全チェック | 不要 |
+| `mise run device-test` | device firmwareのhost側unit test | 不要 |
 | `mise run openapi-generate` | Rust・TypeScript の契約コードを再生成 | 不要 |
 | `mise run openapi-generate-check` | 再生成後の差分がないことを検査 | 不要 |
-| `mise run check` | server と client の全チェック | 不要 |
+| `mise run check` | server、client、deviceの全チェック | 不要 |
 | `mise run docker-build` | server のコンテナ image をビルド | 不要 |
 
 Integration test をローカルで実行する場合は、MariaDB を用意して `TEST_DATABASE_URL` を設定してください。CI と Compose では MariaDB 11.8 LTS 系を使用します。SQLx は MariaDB への接続にも MySQL protocol の `mysql://` URL を使用します。
@@ -70,6 +72,10 @@ API の共有契約は `openapi/openapi-v1.yaml` です。この1ファイルか
 `server/build.rs`はサーバービルド時にYAML、OpenAPI version、必須path/methodの`operationId`を検証して埋め込みます。`mise run check`では生成Rustクレートもbuildとformatの対象になり、Clippy時には依存としてコンパイルされます。親serverの回帰testで生成された契約型を検査します。
 
 詳細は `openapi/README.md` を参照してください。
+
+## 作問用画像アップロード
+
+開発環境で問題へ画像を追加する手順、必要なstorage設定、対応画像、再送時の扱い、troubleshootingは、[IMAGE_UPLOAD.md](IMAGE_UPLOAD.md)を参照してください。
 
 ## Members
 

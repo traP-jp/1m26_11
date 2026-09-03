@@ -22,6 +22,16 @@ pub enum GetRoomResponse {
     Status500_Server(models::ErrorResponse),
 }
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[must_use]
+#[allow(clippy::large_enum_variant)]
+pub enum GetRoomsResponse {
+    /// 公開部屋一覧の取得成功
+    Status200(models::RoomsResponse),
+    /// server内部エラー。具体的なerror.codeは未確定です。
+    Status500_Server(models::ErrorResponse),
+}
+
 /// Rooms
 #[async_trait]
 #[allow(clippy::ptr_arg)]
@@ -37,4 +47,15 @@ pub trait Rooms<E: std::fmt::Debug + Send + Sync + 'static = ()>: super::ErrorHa
         cookies: &CookieJar,
         path_params: &models::GetRoomPathParams,
     ) -> Result<GetRoomResponse, E>;
+
+    /// 公開部屋一覧を取得する.
+    ///
+    /// GetRooms - GET /api/rooms
+    async fn get_rooms(
+        &self,
+
+        method: &Method,
+        host: &Host,
+        cookies: &CookieJar,
+    ) -> Result<GetRoomsResponse, E>;
 }

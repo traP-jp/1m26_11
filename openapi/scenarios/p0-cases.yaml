@@ -328,6 +328,8 @@ cases:
         state_after:
           problem_status: cleared
           run_status: cleared
+          active_run_exists: false
+          cleared_run_exists: true
 
   - id: answer_input_too_long
     preconditions:
@@ -349,6 +351,44 @@ cases:
       - operation_id: getCurrentRun
         response:
           status: 400
+
+  - id: rooms_unauthenticated
+    preconditions:
+      authenticated: false
+    steps:
+      - operation_id: getRooms
+        response:
+          status: 200
+          example: unauthenticated
+
+  - id: rooms_authenticated_active
+    preconditions:
+      authenticated: true
+      active_run_exists: true
+    steps:
+      - operation_id: getRooms
+        response:
+          status: 200
+          example: authenticated_active
+
+  - id: rooms_authenticated_cleared
+    preconditions:
+      authenticated: true
+      cleared_run_exists: true
+    steps:
+      - operation_id: getRooms
+        response:
+          status: 200
+          example: authenticated_cleared
+
+  - id: rooms_empty
+    preconditions:
+      published_rooms_count: 0
+    steps:
+      - operation_id: getRooms
+        response:
+          status: 200
+          example: empty
 
   - id: room_detail_active
     preconditions:
@@ -378,3 +418,4 @@ cases:
         response:
           status: 200
           example: cleared
+

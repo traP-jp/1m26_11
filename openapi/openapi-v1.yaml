@@ -30,6 +30,24 @@ paths:
           $ref: "#/components/responses/MeSuccess"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /api/me/progress:
+    get:
+      summary: ログイン中のユーザーの全体進捗を取得する
+      description: |
+        公開room全体のclear数、総数、genre別内訳を返します。
+        同じroomを複数回clearしていても、clear数には1回だけ加算します。
+        非公開roomは全体とgenre別のどちらにも含めません。
+        by_genreはgenreの昇順で返します。
+      operationId: getMeProgress
+      tags:
+        - progress
+      responses:
+        "200":
+          $ref: "#/components/responses/MeProgressSuccess"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
   /api/auth/guest:
     post:
       summary: デモ環境で名前を登録する
@@ -85,6 +103,21 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /api/rooms:
+    get:
+      summary: 公開部屋一覧を取得する
+      description: |
+        公開されている部屋の一覧をnumber昇順で取得します。
+        未認証時は進捗がnot_started、best_recordがnullで返ります。
+        認証時は現在のユーザーの進捗とベストレコードを含めて返します。
+      operationId: getRooms
+      tags:
+        - rooms
+      responses:
+        "200":
+          $ref: "#/components/responses/RoomsSuccess"
         "500":
           $ref: "#/components/responses/InternalServerError"
   /api/rooms/{room_id}/runs:
@@ -184,6 +217,46 @@ paths:
           $ref: "#/components/responses/ProblemLocked"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /api/rooms/{room_id}/problems/{problem_id}/assets:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+      - $ref: "#/components/parameters/ProblemId"
+    post:
+      summary: 作問用画像をアップロードする
+      description: |
+        dev環境専用の作問支援APIです。
+        AUTH_MODE=demoかつIMAGE_UPLOAD_ENABLED=trueの場合だけrouteを登録します。
+        それ以外の環境ではroute自体を登録せず404を返します。
+        fileの実内容を検査し、storageへのuploadとproblems.assetsへの追加を行います。
+        client filename、object_key、storage credentialはresponseへ返しません。
+      operationId: uploadProblemAsset
+      tags:
+        - problems
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/UploadProblemAsset"
+      responses:
+        "201":
+          $ref: "#/components/responses/ProblemAssetUploadSuccess"
+        "400":
+          $ref: "#/components/responses/ProblemAssetUploadBadRequest"
+        "404":
+          $ref: "#/components/responses/ProblemAssetUploadNotFound"
+        "409":
+          $ref: "#/components/responses/ProblemAssetUploadConflict"
+        "413":
+          $ref: "#/components/responses/ProblemAssetUploadTooLarge"
+        "415":
+          $ref: "#/components/responses/ProblemAssetUploadUnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ProblemAssetUploadValidationError"
+        "500":
+          $ref: "#/components/responses/ProblemAssetUploadInternalServerError"
+        "502":
+          $ref: "#/components/responses/ProblemAssetUploadProviderError"
+        "503":
+          $ref: "#/components/responses/ProblemAssetUploadUnavailable"
   /api/rooms/{room_id}/problems/{problem_id}/hints/{level}:
     parameters:
       - $ref: "#/components/parameters/RoomId"
@@ -293,6 +366,17 @@ components:
         type: integer
         minimum: 1
       example: 1
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        methodとpathごとにrequestを識別するUUID v4です。
+        同じfileとtrim済みaltによる再送では、最初の201 responseを返します。
+      schema:
+        type: string
+        format: uuid
+      example: 44444444-4444-4444-8444-444444444444
   requestBodies:
     GuestLogin:
       required: true
@@ -337,6 +421,27 @@ components:
             too_long_for_example_problem:
               summary: max_lengthが50の例示問題に対する51文字の入力
               externalValue: ./examples/answers/request-too-long.json
+    UploadProblemAsset:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required:
+              - file
+              - alt
+            properties:
+              file:
+                type: string
+                format: binary
+                description: |
+                  5,242,880 bytes以下のPNG、JPEG、WebP画像です。
+                  filenameや申告Content-Typeではなく実内容を検証します。
+              alt:
+                type: string
+                description: |
+                  画像内容を説明する代替テキストです。
+                  Unicode空白を前後からtrimした後、1〜200文字である必要があります。
   responses:
     MeSuccess:
       description: 現在のログイン状態
@@ -357,6 +462,38 @@ components:
             demo_unauthenticated:
               summary: デモで未ログイン
               externalValue: ./examples/auth/me-demo-unauthenticated.json
+    RoomsSuccess:
+      description: 公開部屋一覧の取得成功
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/RoomsResponse"
+          examples:
+            authenticated_cleared:
+              summary: 認証済みユーザー・部屋クリア済み
+              externalValue: ./examples/rooms/response-authenticated-cleared.json
+            authenticated_active:
+              summary: 認証済みユーザー・挑戦中
+              externalValue: ./examples/rooms/response-authenticated-active.json
+            unauthenticated:
+              summary: 未ログイン
+              externalValue: ./examples/rooms/response-unauthenticated.json
+            empty:
+              summary: 公開部屋が0件
+              externalValue: ./examples/rooms/response-empty.json
+    MeProgressSuccess:
+      description: ログイン中のユーザーの公開room全体に対する進捗
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/MeProgressResponse"
+          examples:
+            summary:
+              summary: 複数genreのroomをclearしている場合
+              externalValue: ./examples/progress/response-summary.json
+            empty:
+              summary: 公開roomが存在しない場合
+              externalValue: ./examples/progress/response-empty.json
     GuestLoginSuccess:
       description: デモ用ユーザーを取得または作成し、session Cookieを発行した状態
       headers:
@@ -450,6 +587,91 @@ components:
             available_problem:
               summary: 挑戦可能な小なぞ
               externalValue: ./examples/problems/available-response.json
+    ProblemAssetUploadSuccess:
+      description: 画像をuploadし、対象problemへの紐付けが完了しました。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Asset"
+          examples:
+            created:
+              summary: PNG画像のupload成功
+              externalValue: ./examples/assets/response-created.json
+    ProblemAssetUploadBadRequest:
+      description: |
+        upload requestの形式が不正です。
+        error.codeはINVALID_PATH_PARAMETER、INVALID_MULTIPART、
+        IDEMPOTENCY_KEY_REQUIRED、INVALID_IDEMPOTENCY_KEYのいずれかです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetUploadNotFound:
+      description: |
+        roomまたはproblemが存在しないか、problemが指定されたroomに属していません。
+        error.codeはROOM_OR_PROBLEM_NOT_FOUNDです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetUploadConflict:
+      description: |
+        公開済みroomまたはidempotencyの状態によりuploadできません。
+        error.codeはPUBLISHED_ROOM_IMMUTABLE、IDEMPOTENCY_KEY_REUSED、
+        IDEMPOTENCY_REQUEST_IN_PROGRESSのいずれかです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetUploadTooLarge:
+      description: |
+        file sizeが5,242,880 bytesを超えています。
+        error.codeはIMAGE_TOO_LARGEです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetUploadUnsupportedMediaType:
+      description: |
+        実file内容がPNG、JPEG、WebPではありません。SVGも許可しません。
+        error.codeはUNSUPPORTED_IMAGE_TYPEです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetUploadValidationError:
+      description: |
+        file内容、画像寸法、またはtrim後のaltが不正です。
+        error.codeはEMPTY_FILE、INVALID_IMAGE、IMAGE_DIMENSIONS_EXCEEDED、
+        INVALID_ALTのいずれかです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetUploadInternalServerError:
+      description: |
+        DB更新失敗などのserver内部エラーです。
+        error.codeはINTERNAL_SERVER_ERRORです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetUploadProviderError:
+      description: |
+        storage providerが4xx responseを返しました。
+        error.codeはSTORAGE_PROVIDER_ERRORです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetUploadUnavailable:
+      description: |
+        storage providerへの接続失敗、10秒のtimeout、またはproviderの5xxです。
+        error.codeはSTORAGE_UNAVAILABLEです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     ProblemHintSuccess:
       description: ヒント本文
       content:
@@ -598,6 +820,43 @@ components:
         - $ref: "#/components/schemas/MeNeoshowcaseUnauthenticated"
         - $ref: "#/components/schemas/MeDemoAuthenticated"
         - $ref: "#/components/schemas/MeDemoUnauthenticated"
+    MeProgressResponse:
+      type: object
+      required:
+        - cleared_room_count
+        - total_room_count
+        - by_genre
+      properties:
+        cleared_room_count:
+          type: integer
+          format: int32
+          minimum: 0
+        total_room_count:
+          type: integer
+          format: int32
+          minimum: 0
+        by_genre:
+          type: array
+          items:
+            $ref: "#/components/schemas/GenreProgress"
+
+    GenreProgress:
+      type: object
+      required:
+        - genre
+        - cleared_room_count
+        - total_room_count
+      properties:
+        genre:
+          type: string
+        cleared_room_count:
+          type: integer
+          format: int32
+          minimum: 0
+        total_room_count:
+          type: integer
+          format: int32
+          minimum: 0
     MeNeoshowcaseAuthenticated:
       type: object
       required:
@@ -1104,16 +1363,87 @@ components:
           type: integer
           format: int64
           minimum: 0
+    ProgressStatus:
+      type: string
+      enum:
+        - not_started
+        - active
+        - cleared
     Progress:
       type: object
       required:
-        - cleared_problem_count
-        - total_problem_count
+        - status
+        - cleared_count
+        - required_count
       properties:
-        cleared_problem_count:
+        status:
+          $ref: "#/components/schemas/ProgressStatus"
+        cleared_count:
           type: integer
-        total_problem_count:
+          minimum: 0
+        required_count:
           type: integer
+          minimum: 0
+    BestRecord:
+      type: object
+      required:
+        - elapsed_ms
+        - rank
+        - query_count
+      properties:
+        elapsed_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        rank:
+          type: integer
+          minimum: 1
+        query_count:
+          type: integer
+          format: int64
+          minimum: 0
+    RoomItem:
+      type: object
+      required:
+        - room_id
+        - number
+        - name
+        - genre
+        - description
+        - problem_count
+        - progress
+        - best_record
+      properties:
+        room_id:
+          type: string
+          format: uuid
+        number:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+        genre:
+          type: string
+        description:
+          type: string
+        problem_count:
+          type: integer
+          minimum: 0
+        progress:
+          $ref: "#/components/schemas/Progress"
+        best_record:
+          oneOf:
+            - $ref: "#/components/schemas/BestRecord"
+            - type: "null"
+    RoomsResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RoomItem"
     ErrorResponse:
       type: object
       required:

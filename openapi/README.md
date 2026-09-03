@@ -11,13 +11,16 @@ openapi/
 ├── templates/
 │   └── rust-axum/
 ├── examples/
+│   ├── assets/
 │   ├── auth/
 │   ├── runs/
 │   ├── leaderboard/
+│   ├── progress/
 │   ├── problems/
 │   ├── queries/
 │   └── answers/
 ├── scenarios/
+│   ├── image-upload.yaml
 │   └── p0-cases.yaml
 └── README.md
 ```
@@ -56,14 +59,19 @@ Rustの`rust-axum` Generator 7.24.0はOpenAPI 3.1の`type: "null"`を標準で�
 | operationId | request example | response status / example |
 |---|---|---|
 | `getMe` | なし | `200`: `neoshowcase_authenticated`, `neoshowcase_unauthenticated`, `demo_authenticated`, `demo_unauthenticated` |
+| `getMeProgress` | なし | `200`: `summary`, `empty`; `401`: `unauthorized` |
+| `getRooms` | なし | `200`: `unauthenticated`, `authenticated_active`, `authenticated_cleared`, `empty` |
 | `loginGuest` | `guest_login`, `guest_login_empty`, `guest_login_too_long` | `200`: `guest_authenticated`; `422`: `display_name_required`, `display_name_too_long` |
 | `logoutDemo` | bodyなし | `204`: bodyなし |
 | `startOrResumeRun` | bodyなし | `200`: `new_run`, `resumed_run`; `401`: `unauthorized` |
 | `getCurrentRun` | なし | `200`: `current_run`; `401`: `unauthorized`; `404`: `run_not_found` |
 | `getRoomLeaderboard` | なし | `200`: `ranked`, `unauthenticated`, `empty` |
 | `getProblem` | なし | `200`: `available_problem`; `401`: `unauthorized`; `409`: `problem_locked` |
+| `uploadProblemAsset` | multipartの`file`／`alt`と`Idempotency-Key` | `201`: `created`; `400`／`404`／`409`／`413`／`415`／`422`／`500`／`502`／`503`: `ErrorResponse` |
 | `submitQuery` | `serial_operations`, `invalid_source` | `200`: `incorrect_query`, `correct_query`; `401`: `unauthorized`; `409`: `problem_locked`, `problem_already_cleared`; `422`: `validation_error` |
 | `submitAnswer` | `submitted_answer`, `too_long_for_example_problem` | `200`: `incorrect_answer`, `correct_answer_unlocks_problem`, `correct_answer_clears_run`; `401`: `unauthorized`; `409`: `problem_locked` |
+
+`uploadProblemAsset`はP1のdev専用作問支援APIです。routeは`AUTH_MODE=demo`かつ`IMAGE_UPLOAD_ENABLED=true`の場合だけ登録し、`p0-cases.yaml`には追加しません。localhost制限はapplication内でrequest headerから判定せず、直接起動時のlisten addressとComposeのhost側port公開によって実現します。uploadの状態遷移は`scenarios/image-upload.yaml`に記録します。Rust生成境界ではmultipart bodyを`axum::extract::Multipart`として受け取るため、画像binaryの検証はAPI実装testで行います。
 
 `400`、部屋・問題の`404`、`submitAnswer`の`422`、`500`はstatusと共通Error schemaまで定義していますが、未確定の`error.code`を発明しないためresponse exampleは置いていません。`submitQuery`の意味的な入力不備は`422 VALIDATION_ERROR`として確定しており、`invalid_source` requestと`validation_error` responseで表現しています。例示問題の`max_length: 50`に対する51文字のrequestは、transport共通schemaでは文字列として妥当ですが、問題ごとの制限によって不正となる`submitAnswer`の例です。
 

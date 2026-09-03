@@ -21,4 +21,15 @@ describe('AuthActionButton', () => {
 
     expect(wrapper.emitted('activate')).toBeUndefined()
   })
+
+  it('renders an enabled href action as a link and delegates its activation', async () => {
+    const wrapper = mount(AuthActionButton, {
+      props: { action: 'login', href: '/_oauth/login?redirect=/' },
+    })
+
+    expect(wrapper.element.tagName).toBe('A')
+    expect(wrapper.attributes('href')).toBe('/_oauth/login?redirect=/')
+    await wrapper.trigger('click')
+    expect(wrapper.emitted('activate')).toHaveLength(1)
+  })
 })

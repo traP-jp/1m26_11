@@ -1,3 +1,5 @@
+import type { InputAdapterEvent } from './input/InputAdapter.types'
+
 export type ProblemStatus = 'locked' | 'available' | 'cleared'
 export type JudgementState = 'idle' | 'pending' | 'correct' | 'incorrect' | 'error'
 
@@ -27,13 +29,11 @@ export interface RoomViewModel {
   answerInput: { value: string; maxLength: number }
   queryJudgement: { state: JudgementState }
   answerJudgement: { state: JudgementState }
-  clear: { cleared: boolean; clearedProblemCount: number; totalProblemCount: number }
+  clear: { cleared: boolean; clearedCount: number; requiredCount: number }
 }
 
 export type RoomUiEvent =
   | { type: 'problem-selected'; problemId: string }
-  | { type: 'condition-changed'; control: string; count: number }
-  | { type: 'query-submitted' }
   | { type: 'answer-changed'; value: string }
-  | { type: 'answer-submitted' }
   | { type: 'room-exited' }
+  | InputAdapterEvent

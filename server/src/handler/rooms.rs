@@ -5,8 +5,8 @@ use axum::{
 use chrono::Utc;
 use openapi_generated::{
     models::{
-        ActiveRunResponse, ProblemHintResponse, ProblemResponse, RoomRankingSummary, RoomResponse,
-        RoomRunStatus,
+        ActiveRunResponse, BestRecord, ProblemHintResponse, ProblemResponse, Progress,
+        ProgressStatus, RoomItem, RoomRankingSummary, RoomResponse, RoomRunStatus, RoomsResponse,
     },
     types::Nullable,
 };
@@ -17,7 +17,64 @@ use crate::{
     auth::current_user::{CurrentUser, OptionalCurrentUser},
     error::AppError,
     problem::build_problem_response,
+    repository::RepositoryError,
 };
+
+pub(crate) async fn get_rooms(
+    State(state): State<AppState>,
+    OptionalCurrentUser(user): OptionalCurrentUser,
+) -> Result<Json<RoomsResponse>, AppError> {
+    let user_id = user.map(|u| u.user_id);
+    let room_summaries = state
+        .auth_repository
+        .find_published_rooms_with_progress(user_id)
+        .await?;
+
+    let items = room_summaries
+        .into_iter()
+        .map(|summary| {
+            let progress_status = match summary.progress_status.as_str() {
+                "not_started" => ProgressStatus::NotStarted,
+                "active" => ProgressStatus::Active,
+                "cleared" => ProgressStatus::Cleared,
+                other => {
+                    return Err(RepositoryError::InvalidRunStatus {
+                        status: format!("unexpected progress status: {other}"),
+                    }
+                    .into());
+                }
+            };
+
+            let progress = Progress::new(
+                progress_status,
+                summary.cleared_count,
+                summary.required_count,
+            );
+
+            let best_record = match summary.best_record {
+                Some(record) => Nullable::Present(BestRecord::new(
+                    record.elapsed_ms,
+                    record.rank,
+                    record.query_count,
+                )),
+                None => Nullable::Null,
+            };
+
+            Ok(RoomItem::new(
+                summary.room_id,
+                summary.number as u32,
+                summary.name,
+                summary.genre,
+                summary.description,
+                summary.problem_count,
+                progress,
+                best_record,
+            ))
+        })
+        .collect::<Result<Vec<_>, AppError>>()?;
+
+    Ok(Json(RoomsResponse::new(items)))
+}
 
 pub(crate) async fn start_or_resume_run(
     State(state): State<AppState>,
