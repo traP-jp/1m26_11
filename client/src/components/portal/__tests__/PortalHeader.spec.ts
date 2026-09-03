@@ -25,6 +25,37 @@ describe('PortalHeader', () => {
     expect(wrapper.emitted('logout')).toBeUndefined()
   })
 
+  it('delegates the NeoShowcase login link and disables it while busy', async () => {
+    const wrapper = mount(PortalHeader, {
+      props: {
+        ...portalHeaderFixtures.unauthenticated,
+        userStatus: {
+          authenticated: false,
+          authMode: 'neoshowcase',
+          loginHref: '/_oauth/login?redirect=/',
+          loginPending: false,
+        },
+      },
+    })
+
+    const loginLink = wrapper.get('a[href="/_oauth/login?redirect=/"]')
+    await loginLink.trigger('click')
+    expect(wrapper.emitted('login')).toHaveLength(1)
+
+    await wrapper.setProps({
+      userStatus: {
+        authenticated: false,
+        authMode: 'neoshowcase',
+        loginHref: '/_oauth/login?redirect=/',
+        loginPending: true,
+      },
+    })
+
+    expect(wrapper.find('a[href="/_oauth/login?redirect=/"]').exists()).toBe(false)
+    expect(wrapper.get('button:not([aria-label="操作説明"])').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('button:not([aria-label="操作説明"])').attributes('aria-busy')).toBe('true')
+  })
+
   it('shows the Demo display name and emits logout from its menu', async () => {
     const wrapper = mount(PortalHeader, {
       props: portalHeaderFixtures.demoAuthenticated,
@@ -71,7 +102,9 @@ describe('PortalHeader', () => {
 
     expect(status.attributes('data-auth-mode')).toBe('neoshowcase')
     expect(userMenu.get('a').attributes('href')).toBe('/_oauth/logout?redirect=/')
-    expect(wrapper.emitted('logout')).toBeUndefined()
+    await userMenu.get('a').trigger('click')
+    await nextTick()
+    expect(wrapper.emitted('logout')).toHaveLength(1)
   })
 
   it('emits an instruction event when no instruction path is supplied', async () => {

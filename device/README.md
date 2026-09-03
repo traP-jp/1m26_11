@@ -14,6 +14,9 @@ Wire v1の規範はIssue #92と[`SERIAL_PROTOCOL.md`](SERIAL_PROTOCOL.md)、そ�
 firmwareはIssue #81として追跡します。`poc/button_test.py`の人向け表示は最終serial protocolではなく、
 productionのdebounce、repeat抑止、長押し判定を実装しません。
 
+本番当日の設置、接続確認、故障時の代替入力、予備機交換には、技術検証手順を抜粋した
+[`PRODUCTION_RUNBOOK.md`](PRODUCTION_RUNBOOK.md)を使用します。
+
 ## 現在の確認状況
 
 | 項目 | 状態 |
@@ -27,7 +30,8 @@ productionのdebounce、repeat抑止、長押し判定を実装しません。
 | 2 script構成の`Upload Project`転送内容 | 2026-09-02 確認済み |
 | スイッチ1～7とgame controlの対応 | 2026-08-29 確定 |
 | `button_test.py`のWeb Serial raw受信・切断・再接続 | 2026-09-01 確認済み |
-| Issue #92 Wire v1契約と専用firmware／parser PoC | 2026-09-02 実装・実機確認済み |
+| Issue #92 Wire v1契約と専用firmware | 2026-09-02 実装・実機確認済み |
+| Issue #93 Wire v1純粋parser／WebSerialInputAdapter | contract-synthetic／実機sample unit test済み |
 | Issue #81 production firmwareのhost unit test | 2026-09-02 `mise run device-test` 23 test確認済み |
 | Issue #81 production firmwareの書込み・実機操作matrix | 2026-09-02 確認済み |
 | Issue #81 production firmwareの物理電源再投入・押下中再投入 | 2026-09-02 確認済み（WSLへ再attach） |
@@ -70,6 +74,7 @@ device/
 │   └── serial_protocol_poc.py # Issue #92時点のWire v1実機確認用script
 ├── samples/                   # 過去のPoCで取得したvREPL transcript
 ├── tests/                     # hardware非依存のproduction状態機械test
+├── PRODUCTION_RUNBOOK.md      # 本番設置、接続、代替入力、予備機交換の当日手順
 ├── README.md
 └── SERIAL_PROTOCOL.md         # device／frontend間のWire v1規範
 ```
