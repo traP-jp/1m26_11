@@ -1,3 +1,4 @@
+import problemAssetsFixture from '../../../../openapi/examples/assets/response-list.json'
 import { describe, expect, it } from 'vitest'
 import problemAssetCreatedFixture from '../../../../openapi/examples/assets/response-created.json'
 import leaderboardEmptyFixture from '../../../../openapi/examples/leaderboard/response-empty.json'
@@ -18,10 +19,16 @@ type UploadProblemAssetOperation = operations['uploadProblemAsset']
 type UploadProblemAssetBody =
   UploadProblemAssetOperation['requestBody']['content']['multipart/form-data']
 type UploadProblemAssetHeaders = UploadProblemAssetOperation['parameters']['header']
+type ProblemAssetsResponse = components['schemas']['ProblemAssetsResponse']
+type GetProblemAssetsOperation = operations['getProblemAssets']
+type GetProblemAssetsResponse =
+  GetProblemAssetsOperation['responses'][200]['content']['application/json']
 
 const leaderboardMeAcceptsNull: null extends LeaderboardResponse['me'] ? true : false = true
 const summaryProgress: MeProgressResponse = meProgressSummaryFixture
 const emptyProgress: MeProgressResponse = meProgressEmptyFixture
+const problemAssets: ProblemAssetsResponse = problemAssetsFixture
+const getProblemAssetsResponse: GetProblemAssetsResponse = problemAssetsFixture
 
 type LeaderboardMeIsRequired =
   Pick<LeaderboardResponse, 'me'> extends Required<Pick<LeaderboardResponse, 'me'>> ? true : false
@@ -142,5 +149,16 @@ describe('generated API contract', () => {
     expect(uploadBody.file).toBe('binary image placeholder')
     expect(uploadBody.alt).toBe(problemAssetCreatedFixture.alt)
     expect(uploadHeaders['Idempotency-Key']).toBe('44444444-4444-4444-8444-444444444444')
+  })
+
+  it('keeps problem asset download aligned with the generated contract', () => {
+    expect(problemAssets.items).toHaveLength(2)
+    expect(getProblemAssetsResponse).toEqual(problemAssetsFixture)
+
+    for (const asset of problemAssets.items) {
+      expect(asset.type).toBe('image')
+      expect(asset.url).toContain('X-Amz-Expires=300')
+      expect('object_key' in asset).toBe(false)
+    }
   })
 })

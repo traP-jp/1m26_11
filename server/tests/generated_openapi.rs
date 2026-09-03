@@ -1,9 +1,10 @@
 use openapi_generated::{
     NullValue,
     models::{
-        ActiveRunResponse, Asset, CorrectQueryResponse, IncorrectQueryResponse,
-        LeaderboardResponse, MeDemoUnauthenticated, MeProgressResponse, Operation,
-        UploadProblemAssetHeaderParams, UploadProblemAssetPathParams,
+        ActiveRunResponse, Asset, CorrectQueryResponse, GetProblemAssetsPathParams,
+        IncorrectQueryResponse, LeaderboardResponse, MeDemoUnauthenticated, MeProgressResponse,
+        Operation, ProblemAssetsResponse, UploadProblemAssetHeaderParams,
+        UploadProblemAssetPathParams,
     },
     types::Nullable,
 };
@@ -42,6 +43,11 @@ const ME_PROGRESS_EMPTY: &str = include_str!(concat!(
 const PROBLEM_ASSET_CREATED: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../openapi/examples/assets/response-created.json"
+));
+
+const PROBLEM_ASSETS_LIST: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../openapi/examples/assets/response-list.json"
 ));
 
 #[test]
@@ -221,6 +227,50 @@ fn generated_me_progress_responses_match_fixtures() {
         serde_json::from_value::<MeProgressResponse>(negative_genre_count).is_err(),
         "negative genre count must not deserialize into the generated u32 field"
     );
+}
+
+#[test]
+fn generated_problem_assets_contract_matches_fixture() {
+    let expected: serde_json::Value =
+        serde_json::from_str(PROBLEM_ASSETS_LIST).expect("asset list fixture should be valid JSON");
+
+    let model: ProblemAssetsResponse = serde_json::from_value(expected.clone())
+        .expect("asset list fixture should match generated model");
+
+    assert_eq!(
+        serde_json::to_value(&model).expect("generated asset list should serialize"),
+        expected
+    );
+
+    assert_eq!(model.items.len(), 2);
+
+    for asset in &model.items {
+        assert_eq!(asset.r_type, "image");
+        assert!(asset.url.contains("X-Amz-Expires=300"));
+    }
+
+    let serialized =
+        serde_json::to_value(model).expect("generated asset list should serialize again");
+
+    assert!(
+        serialized["items"]
+            .as_array()
+            .expect("items should be an array")
+            .iter()
+            .all(|asset| asset.get("object_key").is_none()),
+        "public asset response must not expose object_key"
+    );
+
+    let room_id = Uuid::parse_str("11111111-1111-4111-8111-111111111111").unwrap();
+    let problem_id = Uuid::parse_str("22222222-2222-4222-8222-222222222221").unwrap();
+
+    let path = GetProblemAssetsPathParams {
+        room_id,
+        problem_id,
+    };
+
+    assert_eq!(path.room_id, room_id);
+    assert_eq!(path.problem_id, problem_id);
 }
 
 #[test]
