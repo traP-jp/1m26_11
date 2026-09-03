@@ -105,9 +105,28 @@ parserです。`WebSerialInputAdapter`はparserへchunkを渡し、valid frame�
 1 gestureとして`count: 1`にし、`gesture`は共通入力eventへ追加しません。frontendではdebounce、長押しの
 再判定、重複除去を行わず、現在の問題で許可されていない`control`だけを除外します。
 
-Adapterはserial port、reader、接続状態を所有しません。接続側が受信chunkを`pushChunk()`へ渡し、切断時に
-`resetSession()`を呼びます。製品画面への接続、port選択／再接続UI、共通eventからOpenAPI operationへの
-変換とAPI送信は別の責任です。
+Adapterはserial port、reader、接続状態を所有しません。`useWebSerialConnection`が利用者の操作からPicoを
+選択・openし、受信chunkを`pushChunk()`へ渡します。正常終了、切断、読取り失敗、Room画面の破棄時には
+readerとportを解放して`resetSession()`を呼びます。自動再接続は行わず、Room画面の独立した
+`SerialStatusNotice`から再接続、keyboard、画面ボタンのいずれかを選択します。keyboardを選ぶとlistenerを
+開始し、画面入力を選ぶとcontrol、操作列送信、文字列回答のbuttonを表示します。いずれの代替入力もSerialを
+解放し、再接続を選ぶと停止してSerial入力へ戻ります。3入力元は同じguardを通して共通入力eventをRoomへ
+渡します。
+
+製品接続は自動起動済みfirmwareをreadするだけで、開発用PoCのraw REPL操作、script起動、captureは行いません。
+画面入力の操作列送信と文字列回答は共通の`query-submitted`／`answer-submitted` eventまで接続します。
+`OperationBuffer`からOpenAPI requestを組み立てる処理とAPI送信は別の責任です。
+
+### 製品Room接続UIの実機確認（2026-09-03）
+
+Windows側の対応Chromium browserから`localhost`のRoom画面を開き、Raspberry Pi Pico Hで次を確認しました。
+
+- port選択のキャンセルを接続エラーとして表示し、利用者操作による再接続へ戻れる
+- 再接続でPicoを選択すると接続済みとなり、読取り開始状態を表示する
+- 利用者操作でSerialを切断した後、同じ画面から再度接続できる
+- 読取り中にUSBを抜くと`The device has been lost.`を含む読取りエラーを表示し、再接続と代替入力の導線を残す
+
+この確認ではcaptureやlogを保存していません。
 
 2026-09-03にproduction Picoから直接readした`up`／`short_press`のcanonical frame 1件は、raw captureや
 host固有情報を含めず、LF終端へ正規化した最小fixtureとして
