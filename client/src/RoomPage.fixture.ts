@@ -36,6 +36,7 @@ export function roomViewModelFromFixtures(
       id: problem.id,
       number: problem.number,
       type: problem.type,
+      submissionType: problem.submission_type,
       title: problem.title,
       bodyMarkdown: problem.body_markdown,
       assets: problem.assets,

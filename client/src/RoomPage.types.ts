@@ -1,4 +1,5 @@
 import type { Control, InputAdapterEvent, Operation } from './input/InputAdapter.types'
+import type { components } from './generated/api'
 
 export type ProblemStatus = 'locked' | 'available' | 'cleared'
 export type ProblemType = 'small' | 'final'
@@ -17,6 +18,7 @@ export interface RoomViewModel {
     id: string
     number: number
     type: ProblemType
+    submissionType: components['schemas']['SubmissionType']
     title: string
     bodyMarkdown: string
     assets: Array<{ type: string; url: string; alt: string }>
@@ -36,6 +38,8 @@ export interface RoomViewModel {
 
 export type RoomUiEvent =
   | { type: 'problem-selected'; problemId: string }
+  | { type: 'query-operation-removed'; index: number }
+  | { type: 'query-operations-cleared' }
   | { type: 'answer-changed'; value: string }
   | { type: 'portal-returned' }
   | { type: 'room-exited' }

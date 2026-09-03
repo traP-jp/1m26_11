@@ -32,6 +32,13 @@ const controlLabels: Readonly<Record<Control, string>> = {
 const selectedProblemIndex = computed(() =>
   props.viewModel.problems.findIndex((problem) => problem.selected),
 )
+const selectedProblemStatus = computed(
+  () => props.viewModel.problems[selectedProblemIndex.value]?.status,
+)
+const isOperationProblem = computed(
+  () => props.viewModel.selectedProblem?.submissionType === 'operation_sequence',
+)
+const isStringProblem = computed(() => props.viewModel.selectedProblem?.submissionType === 'string')
 const previousProblem = computed(() =>
   selectedProblemIndex.value > 0
     ? props.viewModel.problems[selectedProblemIndex.value - 1]
@@ -49,9 +56,22 @@ const conditionItems = computed<ConditionBoxItem[]>(() =>
   })),
 )
 const selectedControl = ref<Control | undefined>(props.viewModel.queryInput.allowedControls[0])
+const operationCount = computed(() =>
+  props.viewModel.queryInput.operations.reduce((total, operation) => total + operation.count, 0),
+)
+const submissionPending = computed(
+  () =>
+    props.viewModel.queryJudgement.state === 'pending' ||
+    props.viewModel.answerJudgement.state === 'pending',
+)
 const queryDisabled = computed(
   () =>
-    props.viewModel.selectedProblem === null || props.viewModel.queryJudgement.state === 'pending',
+    props.viewModel.selectedProblem === null ||
+    selectedProblemStatus.value !== 'available' ||
+    submissionPending.value,
+)
+const operationLimitReached = computed(
+  () => operationCount.value >= props.viewModel.queryInput.maxOperations,
 )
 
 watch(
@@ -70,8 +90,9 @@ function selectProblem(problemId: string): void {
 function addCondition(): void {
   if (
     queryDisabled.value ||
+    operationLimitReached.value ||
     selectedControl.value === undefined ||
-    props.viewModel.queryInput.operations.length >= props.viewModel.queryInput.maxOperations
+    !isOperationProblem.value
   ) {
     return
   }
@@ -90,24 +111,12 @@ function removeCondition(itemId: string): void {
   const operation = props.viewModel.queryInput.operations[index]
   if (operation === undefined || itemId !== `operation-${index}`) return
 
-  emit('uiEvent', {
-    type: 'condition-changed',
-    source: screenButtonInputSource,
-    control: operation.control,
-    count: -operation.count,
-  })
+  emit('uiEvent', { type: 'query-operation-removed', index })
 }
 
 function clearConditions(): void {
-  if (queryDisabled.value) return
-  for (const operation of props.viewModel.queryInput.operations) {
-    emit('uiEvent', {
-      type: 'condition-changed',
-      source: screenButtonInputSource,
-      control: operation.control,
-      count: -operation.count,
-    })
-  }
+  if (queryDisabled.value || props.viewModel.queryInput.operations.length === 0) return
+  emit('uiEvent', { type: 'query-operations-cleared' })
 }
 
 function submitAnswer(answer: string, source: AlternativeInputSource): void {
@@ -153,18 +162,27 @@ function submitAnswer(answer: string, source: AlternativeInputSource): void {
         <QuestionNavigationButton
           direction="previous"
           :problem-id="previousProblem?.id ?? ''"
-          :disabled="previousProblem === undefined || previousProblem.status === 'locked'"
+          :disabled="
+            submissionPending ||
+            previousProblem === undefined ||
+            previousProblem.status === 'locked'
+          "
           @select="selectProblem"
         />
         <QuestionNavigationButton
           direction="next"
           :problem-id="nextProblem?.id ?? ''"
-          :disabled="nextProblem === undefined || nextProblem.status === 'locked'"
+          :disabled="
+            submissionPending || nextProblem === undefined || nextProblem.status === 'locked'
+          "
           @select="selectProblem"
         />
       </nav>
 
-      <div class="grid gap-3 sm:grid-cols-[minmax(10rem,14rem)_minmax(0,1fr)] sm:items-start">
+      <div
+        v-if="isOperationProblem"
+        class="grid gap-3 sm:grid-cols-[minmax(10rem,14rem)_minmax(0,1fr)] sm:items-start"
+      >
         <label class="text-sm font-bold text-[#36465f]">
           追加する操作
           <select
@@ -192,11 +210,10 @@ function submitAnswer(answer: string, source: AlternativeInputSource): void {
 
       <div class="grid shrink-0 gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(18rem,3fr)]">
         <AnswerPanel
+          v-if="isStringProblem"
           :max-length="viewModel.answerInput.maxLength"
           :pending="viewModel.answerJudgement.state === 'pending'"
-          :disabled="
-            viewModel.selectedProblem === null || viewModel.queryJudgement.state === 'pending'
-          "
+          :disabled="queryDisabled"
           @submit="submitAnswer"
         />
         <AnswerJudgeResult :state="viewModel.answerJudgement.state" />
