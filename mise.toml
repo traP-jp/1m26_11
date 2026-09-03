@@ -1,6 +1,7 @@
 [tools]
 node = "24"
 pnpm = "11.5.0"
+python = "3.12"
 rust = "stable"
 
 [tasks.build]
@@ -111,9 +112,14 @@ description = "Run all client checks"
 depends = ["client-format-check", "client-build", "client-histoire-build", "client-lint", "client-test"]
 run = "echo Client checks passed"
 
+[tasks.device-test]
+description = "Run host-side tests for the MicroPython device firmware"
+dir = "device"
+run = "python3 -m unittest discover -s tests -p 'test_*.py' -v"
+
 [tasks.check]
-description = "Run all server and client checks"
-depends = ["server-check", "client-check"]
+description = "Run all server, client, and device checks"
+depends = ["server-check", "client-check", "device-test"]
 run = "echo All checks passed"
 
 [tasks.openapi-generate-server]

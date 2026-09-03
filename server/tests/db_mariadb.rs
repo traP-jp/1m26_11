@@ -1,11 +1,15 @@
 mod common;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use common::{connect_test_database, foreign_key_delete_rule, index_columns, primary_key_columns};
 use serde_json::json;
 use server::{
     migrate,
-    repository::{AuthProvider, AuthRepository, RepositoryError, SqlxUserRepository},
+    problem::Asset,
+    repository::{
+        AssetUploadClaimOutcome, AssetUploadClaimRequest, AuthProvider, AuthRepository,
+        CompleteAssetUploadRequest, RepositoryError, SqlxUserRepository,
+    },
 };
 use sqlx::types::Json;
 use uuid::Uuid;
@@ -193,6 +197,7 @@ async fn mariadb_game_schema_matches_contract() {
     assert_eq!(
         tables,
         vec![
+            "asset_upload_idempotency".to_owned(),
             "demo_sessions".to_owned(),
             "problem_progress".to_owned(),
             "problems".to_owned(),
@@ -204,6 +209,10 @@ async fn mariadb_game_schema_matches_contract() {
     );
 
     let primary_keys: &[(&str, &[&str])] = &[
+        (
+            "asset_upload_idempotency",
+            &["request_method", "request_path", "idempotency_key"],
+        ),
         ("users", &["user_id"]),
         ("demo_sessions", &["session_id"]),
         ("rooms", &["room_id"]),
@@ -227,6 +236,11 @@ async fn mariadb_game_schema_matches_contract() {
     }
 
     let indexes: &[(&str, &str, &[&str])] = &[
+        (
+            "asset_upload_idempotency",
+            "idx_asset_upload_idempotency_expires_at",
+            &["expires_at"],
+        ),
         ("demo_sessions", "idx_demo_sessions_user_id", &["user_id"]),
         ("rooms", "uq_rooms_number", &["number"]),
         (
@@ -305,6 +319,609 @@ async fn mariadb_game_schema_matches_contract() {
         query_count_column_count, 0,
         "query_count must be derived from query history, not stored in a dedicated column",
     );
+
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_asset_upload_idempotency_schema_enforces_constraints() {
+    let pool = connect_test_database().await;
+
+    migrate(&pool).await.expect("migration should succeed");
+
+    let idempotency_key = Uuid::new_v4();
+    let claim_token = Uuid::new_v4();
+    let competing_claim_token = Uuid::new_v4();
+    let invalid_claim_token = Uuid::new_v4();
+    let request_path = format!(
+        "/api/rooms/{}/problems/{}/assets",
+        Uuid::new_v4(),
+        Uuid::new_v4()
+    );
+    let file_sha256 = vec![0xabu8; 32];
+
+    sqlx::query(
+        r#"
+        INSERT INTO asset_upload_idempotency (
+            request_method,
+            request_path,
+            idempotency_key,
+            claim_token,
+            file_sha256,
+            alt,
+            status,
+            expires_at
+        )
+        VALUES (
+            'POST',
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            'processing',
+            DATE_ADD(CURRENT_TIMESTAMP(3), INTERVAL 24 HOUR)
+        )
+        "#,
+    )
+    .bind(&request_path)
+    .bind(idempotency_key)
+    .bind(claim_token.as_bytes().as_slice())
+    .bind(&file_sha256)
+    .bind("テスト画像")
+    .execute(&pool)
+    .await
+    .expect("valid processing idempotency record should be inserted");
+
+    let duplicate_result = sqlx::query(
+        r#"
+        INSERT INTO asset_upload_idempotency (
+            request_method,
+            request_path,
+            idempotency_key,
+            claim_token,
+            file_sha256,
+            alt,
+            status,
+            expires_at
+        )
+        VALUES (
+            'POST',
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            'processing',
+            DATE_ADD(CURRENT_TIMESTAMP(3), INTERVAL 24 HOUR)
+        )
+        "#,
+    )
+    .bind(&request_path)
+    .bind(idempotency_key)
+    .bind(competing_claim_token.as_bytes().as_slice())
+    .bind(&file_sha256)
+    .bind("テスト画像")
+    .execute(&pool)
+    .await;
+
+    assert!(
+        duplicate_result.is_err(),
+        "method, path, and idempotency key must be unique"
+    );
+
+    let invalid_completed_result = sqlx::query(
+        r#"
+        INSERT INTO asset_upload_idempotency (
+            request_method,
+            request_path,
+            idempotency_key,
+            claim_token,
+            file_sha256,
+            alt,
+            status,
+            expires_at
+        )
+        VALUES (
+            'POST',
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            'completed',
+            DATE_ADD(CURRENT_TIMESTAMP(3), INTERVAL 24 HOUR)
+        )
+        "#,
+    )
+    .bind(format!("{request_path}/invalid"))
+    .bind(Uuid::new_v4())
+    .bind(invalid_claim_token.as_bytes().as_slice())
+    .bind(&file_sha256)
+    .bind("不正な完了record")
+    .execute(&pool)
+    .await;
+
+    assert!(
+        invalid_completed_result.is_err(),
+        "completed record must contain object_key and completed_at"
+    );
+
+    sqlx::query(
+        r#"
+        DELETE FROM asset_upload_idempotency
+        WHERE request_method = 'POST'
+          AND request_path = ?
+          AND idempotency_key = ?
+        "#,
+    )
+    .bind(&request_path)
+    .bind(idempotency_key)
+    .execute(&pool)
+    .await
+    .expect("idempotency test record cleanup should succeed");
+
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_asset_upload_repository_handles_claim_replay_and_completion() {
+    let pool = connect_test_database().await;
+
+    migrate(&pool).await.expect("migration should succeed");
+
+    let repository = SqlxUserRepository::new(pool.clone());
+
+    let room_id = Uuid::new_v4();
+    let problem_id = Uuid::new_v4();
+    let room_number = (room_id.as_u128() % 2_000_000_000) as i32 + 1;
+    let request_path = format!("/api/rooms/{room_id}/problems/{problem_id}/assets");
+
+    sqlx::query(
+        r#"
+        INSERT INTO rooms (
+            room_id,
+            number,
+            name,
+            genre,
+            description,
+            is_published
+        )
+        VALUES (
+            ?,
+            ?,
+            'asset-upload-repository-test-room',
+            'test',
+            'asset upload repository integration test',
+            0
+        )
+        "#,
+    )
+    .bind(room_id)
+    .bind(room_number)
+    .execute(&pool)
+    .await
+    .expect("unpublished test room should be inserted");
+
+    sqlx::query(
+        r#"
+        INSERT INTO problems (
+            problem_id,
+            room_id,
+            number,
+            problem_type,
+            title,
+            body_markdown,
+            submission_type,
+            assets,
+            input_schema,
+            hints,
+            judge_config,
+            depends_on_problem_id,
+            is_required
+        )
+        VALUES (
+            ?,
+            ?,
+            1,
+            'small',
+            'asset upload repository test problem',
+            'asset upload repository test body',
+            'string',
+            JSON_ARRAY(),
+            JSON_OBJECT(),
+            JSON_ARRAY(),
+            JSON_OBJECT(),
+            NULL,
+            1
+        )
+        "#,
+    )
+    .bind(problem_id)
+    .bind(room_id)
+    .execute(&pool)
+    .await
+    .expect("test problem should be inserted");
+
+    let target = repository
+        .find_asset_upload_target(room_id, problem_id)
+        .await
+        .expect("asset upload target lookup should succeed")
+        .expect("room and problem combination should exist");
+
+    assert!(
+        !target.is_published,
+        "new asset upload target should be unpublished"
+    );
+
+    let wrong_problem = repository
+        .find_asset_upload_target(room_id, Uuid::new_v4())
+        .await
+        .expect("unknown problem lookup should succeed");
+
+    assert!(
+        wrong_problem.is_none(),
+        "unknown problem must not be accepted as an upload target"
+    );
+
+    let wrong_room = repository
+        .find_asset_upload_target(Uuid::new_v4(), problem_id)
+        .await
+        .expect("wrong room lookup should succeed");
+
+    assert!(
+        wrong_room.is_none(),
+        "problem must not be accepted for another room"
+    );
+
+    let claim_request = AssetUploadClaimRequest {
+        request_method: "POST".to_owned(),
+        request_path: request_path.clone(),
+        idempotency_key: Uuid::new_v4(),
+        file_sha256: [0xabu8; 32],
+        alt: "テスト画像".to_owned(),
+        expires_at: Utc::now() + Duration::hours(24),
+    };
+
+    let (first_claim, second_claim) = tokio::join!(
+        repository.claim_asset_upload(&claim_request),
+        repository.claim_asset_upload(&claim_request),
+    );
+
+    let first_claim = first_claim.expect("first concurrent claim should succeed");
+    let second_claim = second_claim.expect("second concurrent claim should succeed");
+
+    let claim_token = match (first_claim, second_claim) {
+        (
+            AssetUploadClaimOutcome::Acquired { claim_token },
+            AssetUploadClaimOutcome::InProgress,
+        )
+        | (
+            AssetUploadClaimOutcome::InProgress,
+            AssetUploadClaimOutcome::Acquired { claim_token },
+        ) => claim_token,
+        outcomes => panic!("unexpected concurrent claim outcomes: {outcomes:?}"),
+    };
+
+    let different_alt_request = AssetUploadClaimRequest {
+        alt: "異なる説明".to_owned(),
+        ..claim_request.clone()
+    };
+
+    let different_alt_outcome = repository
+        .claim_asset_upload(&different_alt_request)
+        .await
+        .expect("different alt claim should be checked");
+
+    assert_eq!(
+        different_alt_outcome,
+        AssetUploadClaimOutcome::Reused,
+        "same key with a different alt must be rejected as reused"
+    );
+
+    let different_file_request = AssetUploadClaimRequest {
+        file_sha256: [0xcdu8; 32],
+        ..claim_request.clone()
+    };
+
+    let different_file_outcome = repository
+        .claim_asset_upload(&different_file_request)
+        .await
+        .expect("different file claim should be checked");
+
+    assert_eq!(
+        different_file_outcome,
+        AssetUploadClaimOutcome::Reused,
+        "same key with a different file must be rejected as reused"
+    );
+
+    let asset = Asset {
+        asset_type: "image".to_owned(),
+        object_key: format!("v1/problems/{room_id}/{problem_id}/{}.png", Uuid::new_v4()),
+        alt: claim_request.alt.clone(),
+    };
+
+    let completed_at = Utc::now();
+
+    repository
+        .complete_asset_upload(&CompleteAssetUploadRequest {
+            request_method: claim_request.request_method.clone(),
+            request_path: claim_request.request_path.clone(),
+            idempotency_key: claim_request.idempotency_key,
+            claim_token,
+            room_id,
+            problem_id,
+            asset: asset.clone(),
+            completed_at,
+        })
+        .await
+        .expect("asset upload completion should succeed");
+
+    let stored_assets = sqlx::query_scalar::<_, Json<Vec<Asset>>>(
+        r#"
+        SELECT assets
+        FROM problems
+        WHERE problem_id = ?
+        "#,
+    )
+    .bind(problem_id)
+    .fetch_one(&pool)
+    .await
+    .expect("stored problem assets should be readable");
+
+    assert_eq!(
+        stored_assets.0,
+        vec![asset.clone()],
+        "completed asset must be appended to problems.assets"
+    );
+
+    let (stored_status, stored_object_key, stored_completed_at) =
+        sqlx::query_as::<_, (String, Option<String>, Option<DateTime<Utc>>)>(
+            r#"
+            SELECT
+                status,
+                CAST(
+                    object_key AS CHAR CHARACTER SET utf8mb4
+                ) AS object_key,
+                completed_at
+            FROM asset_upload_idempotency
+            WHERE request_method = ?
+              AND request_path = ?
+              AND idempotency_key = ?
+            "#,
+        )
+        .bind(&claim_request.request_method)
+        .bind(&claim_request.request_path)
+        .bind(claim_request.idempotency_key)
+        .fetch_one(&pool)
+        .await
+        .expect("completed idempotency record should be readable");
+
+    assert_eq!(stored_status, "completed");
+    assert_eq!(
+        stored_object_key.as_deref(),
+        Some(asset.object_key.as_str())
+    );
+    assert_eq!(
+        stored_completed_at.map(|value| value.timestamp_millis()),
+        Some(completed_at.timestamp_millis()),
+        "completed_at must be stored with MariaDB TIMESTAMP(3) precision"
+    );
+
+    let replay_outcome = repository
+        .claim_asset_upload(&claim_request)
+        .await
+        .expect("completed request replay should succeed");
+
+    assert_eq!(
+        replay_outcome,
+        AssetUploadClaimOutcome::Completed {
+            asset: asset.clone(),
+        },
+        "same key, file, and alt must return the first completed asset"
+    );
+
+    let release_request = AssetUploadClaimRequest {
+        idempotency_key: Uuid::new_v4(),
+        file_sha256: [0xdeu8; 32],
+        alt: "解放確認画像".to_owned(),
+        ..claim_request.clone()
+    };
+
+    let first_release_claim = repository
+        .claim_asset_upload(&release_request)
+        .await
+        .expect("release test claim should succeed");
+
+    let first_release_token = match first_release_claim {
+        AssetUploadClaimOutcome::Acquired { claim_token } => claim_token,
+        outcome => panic!("release test should acquire a claim, got {outcome:?}"),
+    };
+
+    repository
+        .release_asset_upload_claim(
+            &release_request.request_method,
+            &release_request.request_path,
+            release_request.idempotency_key,
+            first_release_token,
+        )
+        .await
+        .expect("owned processing claim should be released");
+
+    let second_release_claim = repository
+        .claim_asset_upload(&release_request)
+        .await
+        .expect("released request should be claimable again");
+
+    let second_release_token = match second_release_claim {
+        AssetUploadClaimOutcome::Acquired { claim_token } => claim_token,
+        outcome => panic!("released request should acquire a new claim, got {outcome:?}"),
+    };
+
+    assert_ne!(
+        first_release_token, second_release_token,
+        "reacquired request must receive a new claim token"
+    );
+
+    let expired_request = AssetUploadClaimRequest {
+        idempotency_key: Uuid::new_v4(),
+        file_sha256: [0xe1u8; 32],
+        alt: "期限切れ確認画像".to_owned(),
+        ..claim_request.clone()
+    };
+
+    let initial_expired_claim = repository
+        .claim_asset_upload(&expired_request)
+        .await
+        .expect("expiration test claim should succeed");
+
+    let initial_expired_token = match initial_expired_claim {
+        AssetUploadClaimOutcome::Acquired { claim_token } => claim_token,
+        outcome => panic!("expiration test should acquire a claim, got {outcome:?}"),
+    };
+
+    sqlx::query(
+        r#"
+        UPDATE asset_upload_idempotency
+        SET created_at = DATE_SUB(CURRENT_TIMESTAMP(3), INTERVAL 25 HOUR),
+            expires_at = DATE_SUB(CURRENT_TIMESTAMP(3), INTERVAL 1 HOUR)
+        WHERE request_method = ?
+          AND request_path = ?
+          AND idempotency_key = ?
+        "#,
+    )
+    .bind(&expired_request.request_method)
+    .bind(&expired_request.request_path)
+    .bind(expired_request.idempotency_key)
+    .execute(&pool)
+    .await
+    .expect("expiration test record should be moved into the past");
+
+    let renewed_expired_claim = repository
+        .claim_asset_upload(&expired_request)
+        .await
+        .expect("expired request should be claimable again");
+
+    let renewed_expired_token = match renewed_expired_claim {
+        AssetUploadClaimOutcome::Acquired { claim_token } => claim_token,
+        outcome => panic!("expired request should acquire a new claim, got {outcome:?}"),
+    };
+
+    assert_ne!(
+        initial_expired_token, renewed_expired_token,
+        "expired request must receive a new claim token"
+    );
+
+    let publish_race_request = AssetUploadClaimRequest {
+        idempotency_key: Uuid::new_v4(),
+        file_sha256: [0xefu8; 32],
+        alt: "公開競合確認画像".to_owned(),
+        ..claim_request.clone()
+    };
+
+    let publish_race_claim = repository
+        .claim_asset_upload(&publish_race_request)
+        .await
+        .expect("publish race claim should succeed");
+
+    let publish_race_token = match publish_race_claim {
+        AssetUploadClaimOutcome::Acquired { claim_token } => claim_token,
+        outcome => panic!("publish race request should acquire a claim, got {outcome:?}"),
+    };
+
+    sqlx::query(
+        r#"
+        UPDATE rooms
+        SET is_published = 1
+        WHERE room_id = ?
+        "#,
+    )
+    .bind(room_id)
+    .execute(&pool)
+    .await
+    .expect("test room should be published");
+
+    let published_target = repository
+        .find_asset_upload_target(room_id, problem_id)
+        .await
+        .expect("published target lookup should succeed")
+        .expect("published room and problem should still exist");
+
+    assert!(
+        published_target.is_published,
+        "repository must expose that the target room is published"
+    );
+
+    let publish_race_asset = Asset {
+        asset_type: "image".to_owned(),
+        object_key: format!("v1/problems/{room_id}/{problem_id}/{}.webp", Uuid::new_v4()),
+        alt: publish_race_request.alt.clone(),
+    };
+
+    let publish_race_result = repository
+        .complete_asset_upload(&CompleteAssetUploadRequest {
+            request_method: publish_race_request.request_method.clone(),
+            request_path: publish_race_request.request_path.clone(),
+            idempotency_key: publish_race_request.idempotency_key,
+            claim_token: publish_race_token,
+            room_id,
+            problem_id,
+            asset: publish_race_asset,
+            completed_at: Utc::now(),
+        })
+        .await;
+
+    assert!(
+        matches!(
+            publish_race_result,
+            Err(RepositoryError::PublishedRoomImmutable)
+        ),
+        "room published during upload must reject the database completion"
+    );
+
+    let assets_after_publish_conflict = sqlx::query_scalar::<_, Json<Vec<Asset>>>(
+        r#"
+        SELECT assets
+        FROM problems
+        WHERE problem_id = ?
+        "#,
+    )
+    .bind(problem_id)
+    .fetch_one(&pool)
+    .await
+    .expect("assets after publish conflict should be readable");
+
+    assert_eq!(
+        assets_after_publish_conflict.0,
+        vec![asset],
+        "published room conflict must not append another asset"
+    );
+
+    sqlx::query(
+        r#"
+        DELETE FROM asset_upload_idempotency
+        WHERE request_method = 'POST'
+          AND request_path = ?
+        "#,
+    )
+    .bind(&request_path)
+    .execute(&pool)
+    .await
+    .expect("asset upload idempotency records should be removed");
+
+    sqlx::query("DELETE FROM problems WHERE problem_id = ?")
+        .bind(problem_id)
+        .execute(&pool)
+        .await
+        .expect("asset upload test problem should be removed");
+
+    sqlx::query("DELETE FROM rooms WHERE room_id = ?")
+        .bind(room_id)
+        .execute(&pool)
+        .await
+        .expect("asset upload test room should be removed");
 
     pool.close().await;
 }
