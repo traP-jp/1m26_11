@@ -28,6 +28,7 @@ function activate(): void {
     :href="href"
     :data-action="action"
     class="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#121a2a] px-5 py-3 font-bold text-white no-underline transition-colors hover:bg-[#27354d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3997ea]"
+    @click.prevent="activate"
   >
     {{ label ?? (action === 'login' ? 'ログイン' : 'ログアウト') }}
   </a>
