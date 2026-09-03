@@ -248,10 +248,11 @@ synthetic入力であり、production実機sampleではありません。
 ## 対象外
 
 - 製品版の画面や操作UI
-- 製品版parser／Adapterの実装
+- WebSerialInputAdapter／共通操作eventへの変換
 - Issue #27のport管理、切断復帰、代替入力UI
 - custom UF2やfirmware updaterとしての配布
 - backend処理、HTTP API、query送信処理
 
-この文書はIssue #92のWire v1規範とIssue #81実装の責任境界を定義します。対象外の製品frontendやbackendの
-実装完了、および未実施の別担当再現を主張しません。
+frontendの純粋parserはこの契約に従って実装します。この文書は上記のAdapterや製品統合の完了を主張せず、
+それらが従うdevice／frontend間のWire v1契約とIssue #81実装の責任境界を定義します。また、未実施の
+別担当再現の完了を主張しません。
