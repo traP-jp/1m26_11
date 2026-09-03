@@ -3,6 +3,11 @@ import { mount } from '@vue/test-utils'
 
 import type { SubmitQueryRequest } from '@/api/client'
 
+import AnswerPanel from '../components/room/AnswerPanel.vue'
+import ClearScreen from '../components/room/ClearScreen.vue'
+import QuestionArea from '../components/room/QuestionArea.vue'
+import RoomPageShell from '../components/room/RoomPageShell.vue'
+import RoomTopBar from '../components/room/RoomTopBar.vue'
 import RoomPage from '../RoomPage.vue'
 import { roomPageFixture } from '../RoomPage.fixture'
 import type { RoomUiEvent } from '../RoomPage.types'
@@ -78,15 +83,41 @@ function installBrowserSerial(serial: WebSerialLike): () => void {
 }
 
 describe('RoomPage', () => {
-  it('passes the ViewModel to its child and forwards semantic UI events', async () => {
+  it('renders the normal shell and forwards child events', async () => {
     const wrapper = mount(RoomPage, { props: { viewModel: roomPageFixture } })
 
-    expect(wrapper.get('h1').text()).toBe(roomPageFixture.room.name)
-    const exitButton = wrapper.findAll('button').find((button) => button.text() === '退出する')
-    if (!exitButton) throw new Error('expected the room exit button')
-    await exitButton.trigger('click')
+    expect(wrapper.findComponent(RoomPageShell).exists()).toBe(true)
+    expect(wrapper.text()).toContain(roomPageFixture.selectedProblem?.title)
+    expect(wrapper.getComponent(QuestionArea).props('problemType')).toBe(
+      roomPageFixture.selectedProblem?.type,
+    )
 
-    expect(wrapper.emitted('uiEvent')).toEqual([[{ type: 'room-exited' }]])
+    wrapper.getComponent(RoomTopBar).vm.$emit('exit')
+    wrapper.getComponent(AnswerPanel).vm.$emit('submit', 'fixture answer', 'mouse')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('uiEvent')).toEqual([
+      [{ type: 'room-exited' }],
+      [{ type: 'answer-submitted', source: 'mouse', answer: 'fixture answer' }],
+    ])
+  })
+
+  it('switches to ClearScreen with the server elapsed time and forwards Portal navigation', async () => {
+    const clearedViewModel = {
+      ...roomPageFixture,
+      serverElapsedMs: 75_432,
+      clear: { ...roomPageFixture.clear, cleared: true },
+    }
+    const wrapper = mount(RoomPage, { props: { viewModel: clearedViewModel } })
+
+    expect(wrapper.findComponent(RoomPageShell).exists()).toBe(false)
+    expect(wrapper.find('[data-testid="serial-status-notice"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="final-elapsed-time"]').text()).toBe('1:15')
+
+    wrapper.getComponent(ClearScreen).vm.$emit('backToPortal')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('uiEvent')).toEqual([[{ type: 'portal-returned' }]])
   })
 
   it('keeps one room operation buffer across Serial, keyboard, and screen input', async () => {

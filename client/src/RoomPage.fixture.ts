@@ -9,6 +9,7 @@ type QueryRequest = components['schemas']['QueryRequest']
 
 interface RoomFixture {
   room_id: string
+  number: number
   name: string
   problem_count: number
   required_count: number
@@ -21,7 +22,7 @@ export function roomViewModelFromFixtures(
   query: QueryRequest,
 ): RoomViewModel {
   return {
-    room: { id: room.room_id, name: room.name },
+    room: { id: room.room_id, number: room.number, name: room.name },
     problems: [
       {
         id: problem.id,
@@ -34,6 +35,7 @@ export function roomViewModelFromFixtures(
     selectedProblem: {
       id: problem.id,
       number: problem.number,
+      type: problem.type,
       title: problem.title,
       bodyMarkdown: problem.body_markdown,
       assets: problem.assets,
@@ -58,6 +60,7 @@ export function roomViewModelFromFixtures(
 
 const room = {
   room_id: '1411824c-d357-4941-af76-c76cb827dda6',
+  number: 1,
   name: '最初の部屋',
   problem_count: 4,
   required_count: 4,
