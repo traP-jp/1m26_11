@@ -187,7 +187,7 @@ upload成功時には、対象problemの内部`assets`へ次の情報が自動�
 }
 ```
 
-内部`object_key`は`AssetUrlResolver`によってAssetの`url`へ変換されます。この`url`から画像を取得する方法と、取得時に必要な認証は別途定めます。
+内部の`object_key`はupload responseでは`AssetUrlResolver`によって`Asset.url`へ変換されます。認証必須のstorageからゲームclientが画像を取得する場合は、`GET /api/rooms/{room_id}/problems/{problem_id}/assets`で有効期限300秒のpresigned GET URLを発行します。
 
 ## アップロード結果の確認
 
@@ -197,7 +197,7 @@ upload APIが`201 Created`を返し、responseに`type`、`url`、`alt`が含ま
 
 storageへのuploadにはserver-side credentialを使用します。credentialをHTTP requestやfrontendへ含めないでください。
 
-生成された`url`から画像を取得する方法は本機能の対象外です。storageが認証を要求する場合、未認証のGET requestが`403`になることがありますが、これはuploadの失敗を意味しません。確認のためにbucketを匿名公開しないでください。
+upload responseの`url`へ未認証で直接GETすると、storageの設定によって`403`になることがあります。ゲームclientは画像取得APIが返すpresigned URLを使用してください。確認のためにbucketを匿名公開しないでください。
 
 ## Idempotency-Keyと再送
 

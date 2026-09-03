@@ -4,18 +4,20 @@ use axum::{
         Multipart, Path, State,
         multipart::{MultipartError, MultipartRejection},
     },
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode, header},
+    response::{IntoResponse, Response},
 };
 use chrono::{Duration, Utc};
-use openapi_generated::models::Asset as PublicAsset;
+use openapi_generated::models::{Asset as PublicAsset, ProblemAssetsResponse};
 use uuid::{Uuid, Version};
 
 use crate::{
     AppState,
+    auth::current_user::CurrentUser,
     error::AppError,
     image_upload::{
-        ImageStorageError, ImageStorageUpload, ImageValidationError, MAX_IMAGE_FILE_BYTES,
-        build_image_object_key, validate_image,
+        IMAGE_PRESIGNED_URL_TTL, ImageStorageError, ImageStorageUpload, ImageValidationError,
+        MAX_IMAGE_FILE_BYTES, build_image_object_key, validate_image,
     },
     problem::Asset,
     repository::{
@@ -26,6 +28,73 @@ use crate::{
 
 const REQUEST_METHOD: &str = "POST";
 const IDEMPOTENCY_TTL_HOURS: i64 = 24;
+
+pub(crate) async fn get_problem_assets(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path((room_id, problem_id)): Path<(String, String)>,
+) -> Result<Response, AppError> {
+    let room_id = Uuid::parse_str(&room_id).map_err(|_| {
+        AppError::api(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PATH_PARAMETER",
+            "room_id is invalid",
+        )
+    })?;
+
+    let problem_id = Uuid::parse_str(&problem_id).map_err(|_| {
+        AppError::api(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PATH_PARAMETER",
+            "problem_id is invalid",
+        )
+    })?;
+
+    let run = state
+        .auth_repository
+        .find_active_run(user.user_id, room_id)
+        .await?
+        .ok_or(AppError::RunNotFound)?;
+
+    let problem = state
+        .auth_repository
+        .find_problem_for_run(run.id, room_id, problem_id)
+        .await?
+        .ok_or_else(image_not_found_error)?;
+
+    if problem.status == "locked" {
+        return Err(AppError::ProblemLocked);
+    }
+
+    if problem.assets.0.is_empty() {
+        return Err(image_not_found_error());
+    }
+
+    let signer = state.image_url_signer.as_ref().ok_or_else(|| {
+        AppError::internal(std::io::Error::other("image URL signer is not configured"))
+    })?;
+
+    let mut items = Vec::with_capacity(problem.assets.0.len());
+
+    for asset in problem.assets.0 {
+        let url = signer
+            .presign_get(&asset.object_key, IMAGE_PRESIGNED_URL_TTL)
+            .await
+            .map_err(AppError::internal)?;
+
+        items.push(PublicAsset::new(asset.asset_type, url, asset.alt));
+    }
+
+    Ok((
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(ProblemAssetsResponse::new(items)),
+    )
+        .into_response())
+}
+
+fn image_not_found_error() -> AppError {
+    AppError::api(StatusCode::NOT_FOUND, "IMAGE_NOT_FOUND", "image not found")
+}
 
 pub(crate) async fn upload_problem_asset(
     State(state): State<AppState>,
