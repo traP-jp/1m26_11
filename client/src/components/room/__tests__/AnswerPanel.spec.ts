@@ -28,7 +28,7 @@ describe('AnswerPanel', () => {
     await wrapper.get('textarea').setValue(answerPanelFixture.submittedAnswer)
     await wrapper.get('form').trigger('submit')
 
-    expect(wrapper.emitted('submit')).toEqual([[answerPanelFixture.submittedAnswer]])
+    expect(wrapper.emitted('submit')).toEqual([[answerPanelFixture.submittedAnswer, 'mouse']])
   })
 
   it('emits the answer exactly once when the submit button is clicked', async () => {
@@ -39,7 +39,7 @@ describe('AnswerPanel', () => {
     submitButton.element.click()
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.emitted('submit')).toEqual([[answerPanelFixture.submittedAnswer]])
+    expect(wrapper.emitted('submit')).toEqual([[answerPanelFixture.submittedAnswer, 'mouse']])
 
     wrapper.unmount()
   })
@@ -53,7 +53,10 @@ describe('AnswerPanel', () => {
     await textarea.setValue('')
     await wrapper.get('form').trigger('submit')
 
-    expect(wrapper.emitted('submit')).toEqual([['  answer\n'], ['']])
+    expect(wrapper.emitted('submit')).toEqual([
+      ['  answer\n', 'mouse'],
+      ['', 'mouse'],
+    ])
   })
 
   it('submits once on Enter and ignores repeated Enter presses', async () => {
@@ -75,33 +78,41 @@ describe('AnswerPanel', () => {
     textarea.element.dispatchEvent(enter)
     textarea.element.dispatchEvent(repeatedEnter)
 
-    expect(wrapper.emitted('submit')).toEqual([[answerPanelFixture.submittedAnswer]])
+    expect(wrapper.emitted('submit')).toEqual([[answerPanelFixture.submittedAnswer, 'keyboard']])
     expect(enter.defaultPrevented).toBe(true)
     expect(repeatedEnter.defaultPrevented).toBe(true)
   })
 
-  it('does not submit on Shift+Enter or while an IME composition is active', async () => {
+  it('does not submit with modifiers or while an IME composition is active', async () => {
     const wrapper = mount(AnswerPanel, { props: defaultProps })
     const textarea = wrapper.get('textarea')
 
     await textarea.setValue(answerPanelFixture.submittedAnswer)
-    const shiftedEnter = new KeyboardEvent('keydown', {
-      key: 'Enter',
-      shiftKey: true,
-      bubbles: true,
-      cancelable: true,
-    })
+    const modifiedEnters = [
+      { altKey: true },
+      { ctrlKey: true },
+      { metaKey: true },
+      { shiftKey: true },
+    ].map(
+      (modifier) =>
+        new KeyboardEvent('keydown', {
+          key: 'Enter',
+          ...modifier,
+          bubbles: true,
+          cancelable: true,
+        }),
+    )
     const composingEnter = new KeyboardEvent('keydown', {
       key: 'Enter',
       isComposing: true,
       bubbles: true,
       cancelable: true,
     })
-    textarea.element.dispatchEvent(shiftedEnter)
+    for (const event of modifiedEnters) textarea.element.dispatchEvent(event)
     textarea.element.dispatchEvent(composingEnter)
 
     expect(wrapper.emitted('submit')).toBeUndefined()
-    expect(shiftedEnter.defaultPrevented).toBe(false)
+    expect(modifiedEnters.every((event) => !event.defaultPrevented)).toBe(true)
     expect(composingEnter.defaultPrevented).toBe(false)
   })
 
@@ -143,12 +154,12 @@ describe('AnswerPanel', () => {
     await textarea.setValue(maximumAnswer)
     await wrapper.get('form').trigger('submit')
 
-    expect(wrapper.emitted('submit')).toEqual([[maximumAnswer]])
+    expect(wrapper.emitted('submit')).toEqual([[maximumAnswer, 'mouse']])
 
     await textarea.setValue('x'.repeat(answerPanelFixture.maxLength + 1))
     await wrapper.get('form').trigger('submit')
 
-    expect(wrapper.emitted('submit')).toEqual([[maximumAnswer]])
+    expect(wrapper.emitted('submit')).toEqual([[maximumAnswer, 'mouse']])
     expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
   })
 })

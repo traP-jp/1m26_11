@@ -3,7 +3,16 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 import type { SubmitQueryRequest } from '@/api/client'
 import type { RoomUiEvent } from '@/RoomPage.types'
 import { createOperationBuffer } from '../operationBuffer'
-import type { Control, InputAdapterEvent, InputSource, Operation } from '../InputAdapter.types'
+import {
+  keyboardInputSource,
+  screenButtonInputSource,
+  type AlternativeInputSource,
+  type Control,
+  type InputAdapterEvent,
+  type InputAdapterEventHandler,
+  type InputSource,
+  type Operation,
+} from '../InputAdapter.types'
 
 type ConditionChangedEvent = Extract<InputAdapterEvent, { type: 'condition-changed' }>
 type QuerySubmittedEvent = Extract<InputAdapterEvent, { type: 'query-submitted' }>
@@ -14,6 +23,10 @@ describe('InputAdapterEvent', () => {
     expectTypeOf<InputSource>().toEqualTypeOf<SubmitQueryRequest['source']>()
     expectTypeOf<Control>().toEqualTypeOf<SubmitQueryRequest['operations'][number]['control']>()
     expectTypeOf<Operation>().toEqualTypeOf<SubmitQueryRequest['operations'][number]>()
+    expectTypeOf<AlternativeInputSource>().toEqualTypeOf<'keyboard' | 'mouse'>()
+    expectTypeOf<ReturnType<InputAdapterEventHandler>>().toEqualTypeOf<Promise<void>>()
+    expect(keyboardInputSource).toBe('keyboard')
+    expect(screenButtonInputSource).toBe('mouse')
   })
 
   it('uses only the semantic Room UI event fields and input source', () => {
@@ -31,16 +44,17 @@ describe('InputAdapterEvent', () => {
     expectTypeOf<AnswerSubmittedEvent>().toEqualTypeOf<{
       type: 'answer-submitted'
       source: InputSource
+      answer: string
     }>()
 
     const events = [
       { type: 'query-submitted', source: 'serial' },
-      { type: 'answer-submitted', source: 'keyboard' },
+      { type: 'answer-submitted', source: 'keyboard', answer: 'answer' },
     ] satisfies InputAdapterEvent[]
 
     expect(events).toEqual([
       { type: 'query-submitted', source: 'serial' },
-      { type: 'answer-submitted', source: 'keyboard' },
+      { type: 'answer-submitted', source: 'keyboard', answer: 'answer' },
     ])
   })
 

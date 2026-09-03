@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, useId } from 'vue'
 
+import {
+  keyboardInputSource,
+  screenButtonInputSource,
+  type AlternativeInputSource,
+} from '@/input/InputAdapter.types'
+
 const props = defineProps<{
   maxLength: number
   pending: boolean
@@ -8,7 +14,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  submit: [answer: string]
+  submit: [answer: string, source: AlternativeInputSource]
 }>()
 
 const answer = ref('')
@@ -20,18 +26,27 @@ const interactionDisabled = computed(() => props.pending || props.disabled)
 const answerTooLong = computed(() => answer.value.length > props.maxLength)
 const submitDisabled = computed(() => interactionDisabled.value || answerTooLong.value)
 
-function submitAnswer() {
+function submitAnswer(source: AlternativeInputSource) {
   if (submitDisabled.value) return
-  emit('submit', answer.value)
+  emit('submit', answer.value, source)
 }
 
 function handleAnswerKeydown(event: KeyboardEvent) {
-  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return
+  if (
+    event.key !== 'Enter' ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    event.isComposing
+  ) {
+    return
+  }
 
   event.preventDefault()
   if (event.repeat) return
 
-  submitAnswer()
+  submitAnswer(keyboardInputSource)
 }
 </script>
 
@@ -48,7 +63,7 @@ function handleAnswerKeydown(event: KeyboardEvent) {
 
     <form
       class="rounded-xl border border-[#c8d5e8] bg-white p-4 sm:p-5"
-      @submit.prevent="submitAnswer"
+      @submit.prevent="submitAnswer(screenButtonInputSource)"
     >
       <label :for="answerInputId" class="mb-3 block text-sm font-bold">回答</label>
       <textarea
