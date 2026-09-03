@@ -1,6 +1,9 @@
 use std::{error::Error, sync::Arc};
 
-use server::{AppState, app, config::Config, migrate, repository::SqlxUserRepository};
+use server::{
+    AppState, S3ImageStorage, app, config::Config, migrate, problem::PublicBaseAssetUrlResolver,
+    repository::SqlxUserRepository,
+};
 use sqlx::mysql::MySqlPoolOptions;
 use tokio::{net::TcpListener, signal};
 use tracing::{error, info};
@@ -24,8 +27,16 @@ async fn run() -> Result<(), Box<dyn Error>> {
     migrate(&pool).await?;
 
     let repository = Arc::new(SqlxUserRepository::new(pool.clone()));
-    let state = AppState::new(config.auth_mode, repository)
+    let mut state = AppState::new(config.auth_mode, repository)
         .with_demo_cookie_secure(config.demo_cookie_secure);
+
+    if let Some(storage_config) = config.storage.as_ref() {
+        state = state
+            .with_image_storage(Arc::new(S3ImageStorage::new(storage_config)))
+            .with_asset_url_resolver(Arc::new(PublicBaseAssetUrlResolver::new(
+                &storage_config.public_base_url,
+            )));
+    }
     let listener = TcpListener::bind(config.app_addr).await?;
     info!(address = %config.app_addr, "listening");
     axum::serve(listener, app(state))
