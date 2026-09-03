@@ -10,6 +10,16 @@ import ClearPage from './ClearPage.vue'
 import PortalPage from './PortalPage.vue'
 import RoomPage from './RoomPage.vue'
 
+const developmentRoutes: RouteRecordRaw[] = import.meta.env.DEV
+  ? [
+      {
+        path: '/device-poc',
+        name: 'device-poc',
+        component: () => import('./DevicePocPage.vue'),
+      },
+    ]
+  : []
+
 export const routes: RouteRecordRaw[] = [
   {
     path: '/',
@@ -26,6 +36,7 @@ export const routes: RouteRecordRaw[] = [
     name: 'clear',
     component: ClearPage,
   },
+  ...developmentRoutes,
   {
     path: '/:pathMatch(.*)*',
     redirect: { name: 'portal' },

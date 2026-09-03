@@ -33,22 +33,91 @@ export type AuthState =
     }
   | { status: 'error'; error: unknown }
 
+export interface AuthNavigationRequest {
+  type: 'navigate'
+  url: string
+}
+
+export type AuthNavigationHandler = (request: AuthNavigationRequest) => void
+
+function invalidAuthNavigationUrl(): Error {
+  return new Error('認証用の遷移URLが不正です')
+}
+
+export function createAuthNavigationRequest(
+  value: unknown,
+  currentUrl = globalThis.location?.href ?? 'https://localhost/',
+): AuthNavigationRequest {
+  if (typeof value !== 'string' || value.length === 0 || value.trim() !== value) {
+    throw invalidAuthNavigationUrl()
+  }
+
+  let current: URL
+  let destination: URL
+  try {
+    current = new URL(currentUrl)
+    destination = new URL(value, current)
+  } catch {
+    throw invalidAuthNavigationUrl()
+  }
+
+  const isHttps = destination.protocol === 'https:'
+  const isCurrentHttpOrigin =
+    destination.protocol === 'http:' && destination.origin === current.origin
+  if (
+    (!isHttps && !isCurrentHttpOrigin) ||
+    destination.username !== '' ||
+    destination.password !== ''
+  ) {
+    throw invalidAuthNavigationUrl()
+  }
+
+  return { type: 'navigate', url: value }
+}
+
 export function authStateFromMe(me: GetMeResponse): AuthState {
-  if (!me.authenticated) {
+  if (me.authenticated !== true && me.authenticated !== false) {
+    throw new Error('認証状態が不正です')
+  }
+  if (me.auth_mode !== 'demo' && me.auth_mode !== 'neoshowcase') {
+    throw new Error('未対応の認証modeです')
+  }
+
+  if (me.authenticated === false) {
+    if (me.user !== null) throw new Error('未認証userが不正です')
+    if (me.auth_mode === 'demo' && (me.login_url !== null || me.logout_url !== null)) {
+      throw new Error('Demo認証の遷移URLが不正です')
+    }
+    if (me.auth_mode === 'neoshowcase' && me.logout_url !== null) {
+      throw new Error('NeoShowcase認証の遷移URLが不正です')
+    }
+
     return {
       status: 'unauthenticated',
       authMode: me.auth_mode,
-      loginUrl: me.login_url,
+      loginUrl:
+        me.auth_mode === 'neoshowcase' ? createAuthNavigationRequest(me.login_url).url : null,
       busy: false,
       error: null,
     }
+  }
+
+  if (me.user === null || typeof me.user.display_name !== 'string') {
+    throw new Error('認証済みuserが不正です')
+  }
+  if (me.auth_mode === 'demo' && (me.login_url !== null || me.logout_url !== null)) {
+    throw new Error('Demo認証の遷移URLが不正です')
+  }
+  if (me.auth_mode === 'neoshowcase' && me.login_url !== null) {
+    throw new Error('NeoShowcase認証の遷移URLが不正です')
   }
 
   return {
     status: 'authenticated',
     authMode: me.auth_mode,
     displayName: me.user.display_name,
-    logoutUrl: me.logout_url,
+    logoutUrl:
+      me.auth_mode === 'neoshowcase' ? createAuthNavigationRequest(me.logout_url).url : null,
     busy: false,
     error: null,
   }
@@ -97,17 +166,23 @@ export function portalUserStatusFromAuthState(state: AuthState): PortalUserStatu
   return null
 }
 
-export interface AuthFlow {
+export interface AuthController {
   state: DeepReadonly<Ref<AuthState>>
   portalUserStatus: ComputedRef<PortalUserStatusState | null>
   refresh(): Promise<void>
+  login(): Promise<void>
   loginGuest(displayName: LoginGuestRequest['display_name']): Promise<void>
   logout(): Promise<void>
 }
 
 export const authApiClientKey: InjectionKey<ApiClient> = Symbol('authApiClient')
+export const authNavigationHandlerKey: InjectionKey<AuthNavigationHandler> =
+  Symbol('authNavigationHandler')
 
-export function createAuthFlow(client: ApiClient = apiClient): AuthFlow {
+export function createAuthController(
+  client: ApiClient = apiClient,
+  navigate: AuthNavigationHandler = ({ url }) => globalThis.location.assign(url),
+): AuthController {
   const state = ref<AuthState>({ status: 'loading' })
   let operationPending = false
 
@@ -154,8 +229,32 @@ export function createAuthFlow(client: ApiClient = apiClient): AuthFlow {
     await runOperation(() => client.loginGuest({ display_name: displayName }))
   }
 
+  function runNavigation(url: string | null): void {
+    if (operationPending) return
+    const current = state.value
+    if (current.status !== 'authenticated' && current.status !== 'unauthenticated') return
+
+    operationPending = true
+    state.value = { ...current, busy: true, error: null }
+    try {
+      navigate(createAuthNavigationRequest(url))
+    } catch (error) {
+      state.value = { ...current, busy: false, error }
+      operationPending = false
+    }
+  }
+
+  async function login(): Promise<void> {
+    if (state.value.status !== 'unauthenticated' || state.value.authMode !== 'neoshowcase') return
+    runNavigation(state.value.loginUrl)
+  }
+
   async function logout(): Promise<void> {
-    if (state.value.status !== 'authenticated' || state.value.authMode !== 'demo') return
+    if (state.value.status !== 'authenticated') return
+    if (state.value.authMode === 'neoshowcase') {
+      runNavigation(state.value.logoutUrl)
+      return
+    }
     await runOperation(() => client.logoutDemo())
   }
 
@@ -163,6 +262,7 @@ export function createAuthFlow(client: ApiClient = apiClient): AuthFlow {
     state: readonly(state),
     portalUserStatus: computed(() => portalUserStatusFromAuthState(state.value)),
     refresh,
+    login,
     loginGuest,
     logout,
   }

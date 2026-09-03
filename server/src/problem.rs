@@ -13,7 +13,7 @@ use thiserror::Error;
 
 pub(crate) use answer::{AnswerJudgeError, judge_answer};
 pub(crate) use asset_url::UnconfiguredAssetUrlResolver;
-pub use asset_url::{AssetUrlResolveError, AssetUrlResolver};
+pub use asset_url::{AssetUrlResolveError, AssetUrlResolver, PublicBaseAssetUrlResolver};
 pub use loader::load_problem_data;
 pub use model::{
     Asset, Hint, InputSchema, JudgeConfig, Operation, Problem, ProblemCatalog, ProblemType, Room,

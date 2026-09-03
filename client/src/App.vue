@@ -6,10 +6,10 @@ import { portalPageFixtures } from './PortalPage.fixture'
 import type { PortalPageProps } from './PortalPage.types'
 import { roomPageFixture } from './RoomPage.fixture'
 import type { RoomUiEvent } from './RoomPage.types'
-import { authApiClientKey, createAuthFlow } from './utils/auth'
+import { authApiClientKey, authNavigationHandlerKey, createAuthController } from './utils/auth'
 
 const router = useRouter()
-const auth = createAuthFlow(inject(authApiClientKey))
+const auth = createAuthController(inject(authApiClientKey), inject(authNavigationHandlerKey))
 
 const portalPageProps = computed<PortalPageProps | null>(() => {
   const state = auth.state.value
@@ -48,10 +48,7 @@ const hasAuthOperationError = computed(() => {
 onMounted(() => void auth.refresh())
 
 function handleLogin(): void {
-  const state = auth.state.value
-  if (state.status === 'unauthenticated' && state.loginUrl) {
-    globalThis.location.assign(state.loginUrl)
-  }
+  void auth.login()
 }
 
 function handleRoomSelected(roomId: string): void {

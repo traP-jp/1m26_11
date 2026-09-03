@@ -44,6 +44,32 @@ pub enum GetProblemHintResponse {
     Status500_Server(models::ErrorResponse),
 }
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[must_use]
+#[allow(clippy::large_enum_variant)]
+pub enum UploadProblemAssetResponse {
+    /// 画像をuploadし、対象problemへの紐付けが完了しました。
+    Status201(models::Asset),
+    /// upload requestの形式が不正です。 error.codeはINVALID_PATH_PARAMETER、INVALID_MULTIPART、 IDEMPOTENCY_KEY_REQUIRED、INVALID_IDEMPOTENCY_KEYのいずれかです。
+    Status400_UploadRequest(models::ErrorResponse),
+    /// roomまたはproblemが存在しないか、problemが指定されたroomに属していません。 error.codeはROOM_OR_PROBLEM_NOT_FOUNDです。
+    Status404_Room(models::ErrorResponse),
+    /// 公開済みroomまたはidempotencyの状態によりuploadできません。 error.codeはPUBLISHED_ROOM_IMMUTABLE、IDEMPOTENCY_KEY_REUSED、 IDEMPOTENCY_REQUEST_IN_PROGRESSのいずれかです。
+    Status409(models::ErrorResponse),
+    /// file sizeが5,242,880 bytesを超えています。 error.codeはIMAGE_TOO_LARGEです。
+    Status413_FileSize(models::ErrorResponse),
+    /// 実file内容がPNG、JPEG、WebPではありません。SVGも許可しません。 error.codeはUNSUPPORTED_IMAGE_TYPEです。
+    Status415(models::ErrorResponse),
+    /// file内容、画像寸法、またはtrim後のaltが不正です。 error.codeはEMPTY_FILE、INVALID_IMAGE、IMAGE_DIMENSIONS_EXCEEDED、 INVALID_ALTのいずれかです。
+    Status422_File(models::ErrorResponse),
+    /// DB更新失敗などのserver内部エラーです。 error.codeはINTERNAL_SERVER_ERRORです。
+    Status500_DB(models::ErrorResponse),
+    /// storage providerが4xx responseを返しました。 error.codeはSTORAGE_PROVIDER_ERRORです。
+    Status502_StorageProvider(models::ErrorResponse),
+    /// storage providerへの接続失敗、10秒のtimeout、またはproviderの5xxです。 error.codeはSTORAGE_UNAVAILABLEです。
+    Status503_StorageProvider(models::ErrorResponse),
+}
+
 /// Problems
 #[async_trait]
 #[allow(clippy::ptr_arg)]
@@ -73,4 +99,18 @@ pub trait Problems<E: std::fmt::Debug + Send + Sync + 'static = ()>:
         cookies: &CookieJar,
         path_params: &models::GetProblemHintPathParams,
     ) -> Result<GetProblemHintResponse, E>;
+
+    /// 作問用画像をアップロードする.
+    ///
+    /// UploadProblemAsset - POST /api/rooms/{room_id}/problems/{problem_id}/assets
+    async fn upload_problem_asset(
+        &self,
+
+        method: &Method,
+        host: &Host,
+        cookies: &CookieJar,
+        header_params: &models::UploadProblemAssetHeaderParams,
+        path_params: &models::UploadProblemAssetPathParams,
+        body: Multipart,
+    ) -> Result<UploadProblemAssetResponse, E>;
 }
