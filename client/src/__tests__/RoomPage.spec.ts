@@ -3,6 +3,13 @@ import { mount } from '@vue/test-utils'
 
 import type { SubmitQueryRequest } from '@/api/client'
 
+import AnswerPanel from '../components/room/AnswerPanel.vue'
+import ClearScreen from '../components/room/ClearScreen.vue'
+import ConditionBoxList from '../components/room/ConditionBoxList.vue'
+import QuestionArea from '../components/room/QuestionArea.vue'
+import QuestionNavigationButton from '../components/room/QuestionNavigationButton.vue'
+import RoomPageShell from '../components/room/RoomPageShell.vue'
+import RoomTopBar from '../components/room/RoomTopBar.vue'
 import RoomPage from '../RoomPage.vue'
 import { roomPageFixture } from '../RoomPage.fixture'
 import type { RoomUiEvent } from '../RoomPage.types'
@@ -78,15 +85,111 @@ function installBrowserSerial(serial: WebSerialLike): () => void {
 }
 
 describe('RoomPage', () => {
-  it('passes the ViewModel to its child and forwards semantic UI events', async () => {
+  it('renders the normal shell and forwards child events', async () => {
     const wrapper = mount(RoomPage, { props: { viewModel: roomPageFixture } })
+    const shell = wrapper.getComponent(RoomPageShell)
 
-    expect(wrapper.get('h1').text()).toBe(roomPageFixture.room.name)
-    const exitButton = wrapper.findAll('button').find((button) => button.text() === '退出する')
-    if (!exitButton) throw new Error('expected the room exit button')
-    await exitButton.trigger('click')
+    expect(shell.get('nav[aria-label="問題の移動"]').element).toBeInstanceOf(HTMLElement)
+    expect(shell.findAllComponents(QuestionNavigationButton)).toHaveLength(2)
+    expect(
+      shell
+        .findAllComponents(QuestionNavigationButton)
+        .every((button) => button.props('disabled') === true),
+    ).toBe(true)
+    expect(shell.findComponent(ConditionBoxList).exists()).toBe(true)
+    expect(wrapper.text()).toContain(roomPageFixture.selectedProblem?.title)
+    expect(wrapper.getComponent(QuestionArea).props('problemType')).toBe(
+      roomPageFixture.selectedProblem?.type,
+    )
+    expect(wrapper.getComponent(QuestionArea).props('smallTotal')).toBe(3)
 
-    expect(wrapper.emitted('uiEvent')).toEqual([[{ type: 'room-exited' }]])
+    wrapper.getComponent(RoomTopBar).vm.$emit('exit')
+    wrapper.getComponent(AnswerPanel).vm.$emit('submit', 'fixture answer', 'mouse')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('uiEvent')).toEqual([
+      [{ type: 'room-exited' }],
+      [{ type: 'answer-submitted', source: 'mouse', answer: 'fixture answer' }],
+    ])
+  })
+
+  it('forwards problem navigation and condition editing from the shell', async () => {
+    const viewModel = {
+      ...roomPageFixture,
+      problems: [
+        {
+          id: 'previous-problem',
+          number: 1,
+          title: '前の問題',
+          status: 'available' as const,
+          selected: false,
+        },
+        { ...roomPageFixture.problems[0]!, selected: true },
+        {
+          id: 'next-problem',
+          number: 3,
+          title: '次の問題',
+          status: 'available' as const,
+          selected: false,
+        },
+      ],
+      queryInput: {
+        ...roomPageFixture.queryInput,
+        allowedControls: ['up', 'right'] as Array<'up' | 'right'>,
+        operations: [
+          { control: 'up' as const, count: 2 },
+          { control: 'right' as const, count: 1 },
+        ],
+      },
+    }
+    const wrapper = mount(RoomPage, { props: { viewModel } })
+    const shell = wrapper.getComponent(RoomPageShell)
+    const navigationButtons = shell.findAllComponents(QuestionNavigationButton)
+
+    navigationButtons[0]?.vm.$emit('select', 'previous-problem')
+    navigationButtons[1]?.vm.$emit('select', 'next-problem')
+    const conditions = shell.getComponent(ConditionBoxList)
+    conditions.vm.$emit('add')
+    conditions.vm.$emit('remove', 'operation-1')
+    conditions.vm.$emit('clear')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('uiEvent')).toEqual([
+      [{ type: 'problem-selected', problemId: 'previous-problem' }],
+      [{ type: 'problem-selected', problemId: 'next-problem' }],
+      [{ type: 'condition-changed', source: 'mouse', control: 'up', count: 1 }],
+      [{ type: 'condition-changed', source: 'mouse', control: 'right', count: -1 }],
+      [{ type: 'condition-changed', source: 'mouse', control: 'up', count: -2 }],
+      [{ type: 'condition-changed', source: 'mouse', control: 'right', count: -1 }],
+    ])
+  })
+
+  it('disables answer submission while a query is pending', () => {
+    const viewModel = {
+      ...roomPageFixture,
+      queryJudgement: { state: 'pending' as const },
+    }
+    const wrapper = mount(RoomPage, { props: { viewModel } })
+
+    expect(wrapper.getComponent(AnswerPanel).props('disabled')).toBe(true)
+  })
+
+  it('switches to ClearScreen with the server elapsed time and forwards Portal navigation', async () => {
+    const clearedViewModel = {
+      ...roomPageFixture,
+      serverElapsedMs: 75_432,
+      clear: { ...roomPageFixture.clear, cleared: true },
+    }
+    const wrapper = mount(RoomPage, { props: { viewModel: clearedViewModel } })
+
+    expect(wrapper.findComponent(RoomPageShell).exists()).toBe(false)
+    expect(wrapper.find('[data-testid="serial-status-notice"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="final-elapsed-time"]').text()).toBe('1:15')
+
+    wrapper.getComponent(ClearScreen).vm.$emit('backToPortal')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('uiEvent')).toEqual([[{ type: 'portal-returned' }]])
   })
 
   it('keeps one room operation buffer across Serial, keyboard, and screen input', async () => {
@@ -291,6 +394,41 @@ describe('RoomPage', () => {
       })
       expect(browserSerial.cancel).toHaveBeenCalledTimes(1)
       expect(browserSerial.close).toHaveBeenCalledTimes(1)
+    } finally {
+      wrapper.unmount()
+      restoreBrowserSerial()
+    }
+  })
+
+  it('stops keyboard and Serial input when the run becomes cleared', async () => {
+    const browserSerial = createBrowserSerialFixture()
+    const restoreBrowserSerial = installBrowserSerial(browserSerial.serial)
+    const wrapper = mount(RoomPage, {
+      props: { viewModel: roomPageFixture },
+      attachTo: document.body,
+    })
+
+    try {
+      await wrapper.get('[data-testid="serial-retry"]').trigger('click')
+      await vi.waitFor(() => {
+        expect(wrapper.get('[data-testid="serial-status-notice"]').attributes('data-status')).toBe(
+          'connected',
+        )
+      })
+
+      await wrapper.setProps({
+        viewModel: {
+          ...roomPageFixture,
+          clear: { ...roomPageFixture.clear, cleared: true },
+        },
+      })
+      await vi.waitFor(() => expect(browserSerial.close).toHaveBeenCalledTimes(1))
+
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }),
+      )
+      expect(wrapper.emitted('uiEvent')).toBeUndefined()
+      expect(wrapper.find('[data-testid="serial-status-notice"]').exists()).toBe(false)
     } finally {
       wrapper.unmount()
       restoreBrowserSerial()
