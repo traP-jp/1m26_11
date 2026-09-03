@@ -6,6 +6,7 @@ import { createOperationBuffer } from '../operationBuffer'
 import {
   keyboardInputSource,
   screenButtonInputSource,
+  serialInputSource,
   type AlternativeInputSource,
   type Control,
   type InputAdapterEvent,
@@ -25,11 +26,12 @@ describe('InputAdapterEvent', () => {
     expectTypeOf<Operation>().toEqualTypeOf<SubmitQueryRequest['operations'][number]>()
     expectTypeOf<AlternativeInputSource>().toEqualTypeOf<'keyboard' | 'mouse'>()
     expectTypeOf<ReturnType<InputAdapterEventHandler>>().toEqualTypeOf<Promise<void>>()
+    expect(serialInputSource).toBe('serial')
     expect(keyboardInputSource).toBe('keyboard')
     expect(screenButtonInputSource).toBe('mouse')
   })
 
-  it('uses only the semantic Room UI event fields and input source', () => {
+  it('extends the semantic Room UI event fields with source', () => {
     expectTypeOf<InputAdapterEvent>().toMatchTypeOf<RoomUiEvent>()
     expectTypeOf<ConditionChangedEvent>().toEqualTypeOf<{
       type: 'condition-changed'

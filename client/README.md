@@ -100,7 +100,20 @@ SHA-256は、保存した環境に応じて`sha256sum <capture.bin>`またはPow
 1行を複数chunkへ分ける場合、複数行を1 chunkへまとめる場合、invalid UTF-8／JSON／schema、overlong
 frameは実機が送ったdataと偽らず、`src/input/__tests__/serialFrameParser.spec.ts`の
 contract-synthetic testとして区別します。`SerialFrameParser`はWire v1 frameを復元・検証する純粋な
-parserです。`source`と`count`を持つ共通操作eventへの変換や製品画面への接続はまだ行いません。
+parserです。`WebSerialInputAdapter`はparserへchunkを渡し、valid frameを`source: "serial"`、
+`count: 1`の共通入力eventへstream順に変換します。`short_press`と`long_press`はいずれも確定済みの
+1 gestureとして`count: 1`にし、`gesture`は共通入力eventへ追加しません。frontendではdebounce、長押しの
+再判定、重複除去を行わず、現在の問題で許可されていない`control`だけを除外します。
+
+Adapterはserial port、reader、接続状態を所有しません。接続側が受信chunkを`pushChunk()`へ渡し、切断時に
+`resetSession()`を呼びます。製品画面への接続、port選択／再接続UI、共通eventからOpenAPI operationへの
+変換とAPI送信は別の責任です。
+
+2026-09-03にproduction Picoから直接readした`up`／`short_press`のcanonical frame 1件は、raw captureや
+host固有情報を含めず、LF終端へ正規化した最小fixtureとして
+`src/input/__fixtures__/serial-protocol-v1-hardware-sample.jsonl`へ保存しています。このfixtureは
+parserからAdapterまでの主要経路だけに使用し、分割受信、複数frame、invalid frameはcontract-synthetic
+testで検証します。
 
 ## Keyboard input
 
