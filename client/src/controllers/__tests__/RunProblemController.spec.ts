@@ -15,6 +15,8 @@ import { RunProblemController } from '../RunProblemController'
 
 const ROOM_ID = '11111111-1111-4111-8111-111111111111'
 const PROBLEM_ID = '22222222-2222-4222-8222-222222222221'
+const NEXT_ROOM_ID = '11111111-1111-4111-8111-111111111112'
+const NEXT_PROBLEM_ID = '22222222-2222-4222-8222-222222222222'
 
 function createClient(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
@@ -30,12 +32,19 @@ function createClient(overrides: Partial<ApiClient> = {}): ApiClient {
   }
 }
 
+function createProblemSelectionHandler() {
+  return { selectProblem: vi.fn<(problemId: string) => void>() }
+}
+
 describe('RunProblemController', () => {
   it('starts a run and exposes the active run state', async () => {
     const startOrResumeRun = vi
       .fn<ApiClient['startOrResumeRun']>()
       .mockResolvedValue(newRun as StartOrResumeRunResponse)
-    const controller = new RunProblemController(createClient({ startOrResumeRun }))
+    const controller = new RunProblemController(
+      createClient({ startOrResumeRun }),
+      createProblemSelectionHandler(),
+    )
 
     const result = await controller.startOrResume(ROOM_ID)
 
@@ -54,7 +63,10 @@ describe('RunProblemController', () => {
     const getCurrentRun = vi
       .fn<ApiClient['getCurrentRun']>()
       .mockResolvedValue(currentRun as GetCurrentRunResponse)
-    const controller = new RunProblemController(createClient({ getCurrentRun }))
+    const controller = new RunProblemController(
+      createClient({ getCurrentRun }),
+      createProblemSelectionHandler(),
+    )
 
     await controller.restoreCurrentRun(ROOM_ID)
 
@@ -74,7 +86,10 @@ describe('RunProblemController', () => {
     const getProblem = vi
       .fn<ApiClient['getProblem']>()
       .mockResolvedValue(problemResponse as GetProblemResponse)
-    const controller = new RunProblemController(createClient({ startOrResumeRun, getProblem }))
+    const controller = new RunProblemController(
+      createClient({ startOrResumeRun, getProblem }),
+      createProblemSelectionHandler(),
+    )
 
     await controller.startOrResume(ROOM_ID)
     const result = await controller.loadProblem(ROOM_ID, PROBLEM_ID)
@@ -98,7 +113,10 @@ describe('RunProblemController', () => {
       details: {},
     })
     const getProblem = vi.fn<ApiClient['getProblem']>().mockRejectedValue(apiError)
-    const controller = new RunProblemController(createClient({ getProblem }))
+    const controller = new RunProblemController(
+      createClient({ getProblem }),
+      createProblemSelectionHandler(),
+    )
 
     await expect(controller.loadProblem(ROOM_ID, PROBLEM_ID)).rejects.toBe(apiError)
 
@@ -118,7 +136,10 @@ describe('RunProblemController', () => {
       details: {},
     })
     const getProblem = vi.fn<ApiClient['getProblem']>().mockRejectedValue(apiError)
-    const controller = new RunProblemController(createClient({ getProblem }))
+    const controller = new RunProblemController(
+      createClient({ getProblem }),
+      createProblemSelectionHandler(),
+    )
 
     await expect(controller.loadProblem(ROOM_ID, PROBLEM_ID)).rejects.toBe(apiError)
 
@@ -133,7 +154,10 @@ describe('RunProblemController', () => {
       details: {},
     })
     const getProblem = vi.fn<ApiClient['getProblem']>().mockRejectedValue(apiError)
-    const controller = new RunProblemController(createClient({ getProblem }))
+    const controller = new RunProblemController(
+      createClient({ getProblem }),
+      createProblemSelectionHandler(),
+    )
 
     await expect(controller.loadProblem(ROOM_ID, PROBLEM_ID)).rejects.toBe(apiError)
 
@@ -144,11 +168,246 @@ describe('RunProblemController', () => {
     const getProblem = vi
       .fn<ApiClient['getProblem']>()
       .mockResolvedValue(problemResponse as GetProblemResponse)
-    const controller = new RunProblemController(createClient({ getProblem }))
+    const problemSelection = createProblemSelectionHandler()
+    const controller = new RunProblemController(createClient({ getProblem }), problemSelection)
 
     await controller.loadSelectedProblem(ROOM_ID, PROBLEM_ID)
 
     expect(getProblem).toHaveBeenCalledWith({ room_id: ROOM_ID, problem_id: PROBLEM_ID })
+    expect(problemSelection.selectProblem).toHaveBeenCalledExactlyOnceWith(PROBLEM_ID)
     expect(controller.state.problem?.id).toBe(problemResponse.id)
+  })
+
+  it('keeps the latest problem when an earlier request finishes last', async () => {
+    let resolveFirstProblem!: (response: GetProblemResponse) => void
+    const firstProblem = new Promise<GetProblemResponse>((resolve) => {
+      resolveFirstProblem = resolve
+    })
+    const nextProblem = { ...problemResponse, id: NEXT_PROBLEM_ID } as GetProblemResponse
+    const getProblem = vi
+      .fn<ApiClient['getProblem']>()
+      .mockReturnValueOnce(firstProblem)
+      .mockResolvedValueOnce(nextProblem)
+    const controller = new RunProblemController(
+      createClient({ getProblem }),
+      createProblemSelectionHandler(),
+    )
+
+    const firstRequest = controller.loadProblem(ROOM_ID, PROBLEM_ID)
+    await controller.loadProblem(ROOM_ID, NEXT_PROBLEM_ID)
+    resolveFirstProblem(problemResponse as GetProblemResponse)
+    await firstRequest
+
+    expect(controller.state).toMatchObject({
+      phase: 'ready',
+      problemStatus: nextProblem.status,
+      roomId: ROOM_ID,
+      problem: nextProblem,
+      error: null,
+    })
+  })
+
+  it('keeps the latest run when an earlier run request finishes last', async () => {
+    let resolveStart!: (response: StartOrResumeRunResponse) => void
+    const pendingStart = new Promise<StartOrResumeRunResponse>((resolve) => {
+      resolveStart = resolve
+    })
+    const startOrResumeRun = vi.fn<ApiClient['startOrResumeRun']>().mockReturnValue(pendingStart)
+    const getCurrentRun = vi
+      .fn<ApiClient['getCurrentRun']>()
+      .mockResolvedValue(currentRun as GetCurrentRunResponse)
+    const controller = new RunProblemController(
+      createClient({ startOrResumeRun, getCurrentRun }),
+      createProblemSelectionHandler(),
+    )
+
+    const firstRequest = controller.startOrResume(ROOM_ID)
+    await controller.restoreCurrentRun(NEXT_ROOM_ID)
+    resolveStart(newRun as StartOrResumeRunResponse)
+    await firstRequest
+
+    expect(controller.state).toMatchObject({
+      phase: 'ready',
+      roomId: NEXT_ROOM_ID,
+      run: currentRun,
+      elapsedMs: currentRun.elapsed_ms,
+      error: null,
+    })
+  })
+
+  it('keeps a pending run request active when a problem request starts', async () => {
+    let resolveStart!: (response: StartOrResumeRunResponse) => void
+    const pendingStart = new Promise<StartOrResumeRunResponse>((resolve) => {
+      resolveStart = resolve
+    })
+    const startOrResumeRun = vi.fn<ApiClient['startOrResumeRun']>().mockReturnValue(pendingStart)
+    const getProblem = vi
+      .fn<ApiClient['getProblem']>()
+      .mockResolvedValue(problemResponse as GetProblemResponse)
+    const controller = new RunProblemController(
+      createClient({ startOrResumeRun, getProblem }),
+      createProblemSelectionHandler(),
+    )
+
+    const runRequest = controller.startOrResume(ROOM_ID)
+    await controller.loadProblem(ROOM_ID, PROBLEM_ID)
+    resolveStart(newRun as StartOrResumeRunResponse)
+    await runRequest
+
+    expect(controller.state).toMatchObject({
+      phase: 'ready',
+      roomId: ROOM_ID,
+      run: newRun,
+      problem: problemResponse,
+      error: null,
+    })
+  })
+
+  it('does not restore a stale problem after starting another run', async () => {
+    let resolveProblem!: (response: GetProblemResponse) => void
+    const pendingProblem = new Promise<GetProblemResponse>((resolve) => {
+      resolveProblem = resolve
+    })
+    const getProblem = vi.fn<ApiClient['getProblem']>().mockReturnValue(pendingProblem)
+    const startOrResumeRun = vi
+      .fn<ApiClient['startOrResumeRun']>()
+      .mockResolvedValue(newRun as StartOrResumeRunResponse)
+    const controller = new RunProblemController(
+      createClient({ getProblem, startOrResumeRun }),
+      createProblemSelectionHandler(),
+    )
+
+    const problemRequest = controller.loadProblem(ROOM_ID, PROBLEM_ID)
+    await controller.startOrResume(NEXT_ROOM_ID)
+    resolveProblem(problemResponse as GetProblemResponse)
+    await problemRequest
+
+    expect(controller.state).toMatchObject({
+      phase: 'ready',
+      problemStatus: 'idle',
+      roomId: NEXT_ROOM_ID,
+      run: newRun,
+      problem: null,
+      error: null,
+    })
+  })
+
+  it('stays loading until the latest problem request finishes', async () => {
+    let resolveStart!: (response: StartOrResumeRunResponse) => void
+    let resolveProblem!: (response: GetProblemResponse) => void
+    const pendingStart = new Promise<StartOrResumeRunResponse>((resolve) => {
+      resolveStart = resolve
+    })
+    const pendingProblem = new Promise<GetProblemResponse>((resolve) => {
+      resolveProblem = resolve
+    })
+    const startOrResumeRun = vi.fn<ApiClient['startOrResumeRun']>().mockReturnValue(pendingStart)
+    const getProblem = vi.fn<ApiClient['getProblem']>().mockReturnValue(pendingProblem)
+    const controller = new RunProblemController(
+      createClient({ startOrResumeRun, getProblem }),
+      createProblemSelectionHandler(),
+    )
+
+    const runRequest = controller.startOrResume(ROOM_ID)
+    const problemRequest = controller.loadProblem(ROOM_ID, PROBLEM_ID)
+    resolveStart(newRun as StartOrResumeRunResponse)
+    await runRequest
+
+    expect(controller.state).toMatchObject({
+      phase: 'loading',
+      problemStatus: 'loading',
+      run: newRun,
+      problem: null,
+      error: null,
+    })
+
+    resolveProblem(problemResponse as GetProblemResponse)
+    await problemRequest
+    expect(controller.state.phase).toBe('ready')
+  })
+
+  it('keeps the latest problem error when an earlier run succeeds later', async () => {
+    let resolveStart!: (response: StartOrResumeRunResponse) => void
+    const pendingStart = new Promise<StartOrResumeRunResponse>((resolve) => {
+      resolveStart = resolve
+    })
+    const apiError = new ApiClientError('問題が見つかりません', {
+      kind: 'http',
+      status: 404,
+      code: 'PROBLEM_NOT_FOUND',
+      details: {},
+    })
+    const startOrResumeRun = vi.fn<ApiClient['startOrResumeRun']>().mockReturnValue(pendingStart)
+    const getProblem = vi.fn<ApiClient['getProblem']>().mockRejectedValue(apiError)
+    const controller = new RunProblemController(
+      createClient({ startOrResumeRun, getProblem }),
+      createProblemSelectionHandler(),
+    )
+
+    const runRequest = controller.startOrResume(ROOM_ID)
+    await expect(controller.loadProblem(ROOM_ID, PROBLEM_ID)).rejects.toBe(apiError)
+    resolveStart(newRun as StartOrResumeRunResponse)
+    await runRequest
+
+    expect(controller.state).toMatchObject({
+      phase: 'error',
+      problemStatus: 'not-found',
+      run: newRun,
+      problem: null,
+      error: apiError,
+    })
+  })
+
+  it('does not attach a pending run to a problem loaded from another room', async () => {
+    let resolveStart!: (response: StartOrResumeRunResponse) => void
+    const pendingStart = new Promise<StartOrResumeRunResponse>((resolve) => {
+      resolveStart = resolve
+    })
+    const startOrResumeRun = vi.fn<ApiClient['startOrResumeRun']>().mockReturnValue(pendingStart)
+    const getProblem = vi
+      .fn<ApiClient['getProblem']>()
+      .mockResolvedValue(problemResponse as GetProblemResponse)
+    const controller = new RunProblemController(
+      createClient({ startOrResumeRun, getProblem }),
+      createProblemSelectionHandler(),
+    )
+
+    const runRequest = controller.startOrResume(ROOM_ID)
+    await controller.loadProblem(NEXT_ROOM_ID, PROBLEM_ID)
+    resolveStart(newRun as StartOrResumeRunResponse)
+    await runRequest
+
+    expect(controller.state).toMatchObject({
+      phase: 'ready',
+      roomId: NEXT_ROOM_ID,
+      run: null,
+      problem: problemResponse,
+      error: null,
+    })
+  })
+
+  it('clears the current run when loading a problem from another room', async () => {
+    const startOrResumeRun = vi
+      .fn<ApiClient['startOrResumeRun']>()
+      .mockResolvedValue(newRun as StartOrResumeRunResponse)
+    const getProblem = vi
+      .fn<ApiClient['getProblem']>()
+      .mockResolvedValue(problemResponse as GetProblemResponse)
+    const controller = new RunProblemController(
+      createClient({ startOrResumeRun, getProblem }),
+      createProblemSelectionHandler(),
+    )
+
+    await controller.startOrResume(ROOM_ID)
+    await controller.loadProblem(NEXT_ROOM_ID, PROBLEM_ID)
+
+    expect(controller.state).toMatchObject({
+      phase: 'ready',
+      roomId: NEXT_ROOM_ID,
+      run: null,
+      elapsedMs: null,
+      problem: problemResponse,
+      error: null,
+    })
   })
 })

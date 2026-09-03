@@ -2,6 +2,7 @@ import { reactive } from 'vue'
 
 import type { JudgementState } from '@/RoomPage.types'
 import type { components } from '@/generated/api'
+import type { OperationBuffer } from '@/input/operationBuffer'
 import {
   ApiClientError,
   type ApiClient,
@@ -75,7 +76,10 @@ export class QueryAnswerController {
   private queryGeneration = 0
   private answerGeneration = 0
 
-  constructor(private readonly client: ApiClient) {}
+  constructor(
+    private readonly client: ApiClient,
+    private readonly operationBuffer: OperationBuffer,
+  ) {}
 
   selectProblem(problemId: string): void {
     if (this.state.problemId === problemId) return
@@ -100,6 +104,8 @@ export class QueryAnswerController {
   }
 
   reset(): void {
+    const bufferedOperations = this.operationBuffer.snapshot()
+    this.operationBuffer.clear(bufferedOperations)
     this.queryGeneration += 1
     this.answerGeneration += 1
     this.state.queryInput = null
@@ -115,25 +121,20 @@ export class QueryAnswerController {
 
   async submitQuery(
     path: SubmitQueryPath,
-    body: SubmitQueryRequest,
+    source: SubmitQueryRequest['source'],
   ): Promise<SubmitQueryResponse | null> {
     this.selectProblem(path.problem_id)
     if (this.state.query.state === 'pending') return null
 
+    const submittedOperations = this.operationBuffer.snapshot()
+    const body: SubmitQueryRequest = { source, operations: submittedOperations }
     this.setQueryInput(body)
     this.state.query = { state: 'pending', response: null, error: null }
     const generation = ++this.queryGeneration
 
+    let response: SubmitQueryResponse
     try {
-      const response = await this.client.submitQuery(path, body)
-      if (generation !== this.queryGeneration) return response
-
-      this.state.query = {
-        state: response.correct ? 'correct' : 'incorrect',
-        response,
-        error: null,
-      }
-      return response
+      response = await this.client.submitQuery(path, body)
     } catch (error) {
       const normalized = normalizeError(error)
       if (generation === this.queryGeneration) {
@@ -141,6 +142,16 @@ export class QueryAnswerController {
       }
       throw normalized
     }
+
+    if (generation !== this.queryGeneration) return response
+
+    this.operationBuffer.clear(submittedOperations)
+    this.state.query = {
+      state: response.correct ? 'correct' : 'incorrect',
+      response,
+      error: null,
+    }
+    return response
   }
 
   async submitAnswer(

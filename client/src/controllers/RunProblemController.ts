@@ -22,6 +22,15 @@ export interface RunProblemControllerState {
   error: ApiClientError | null
 }
 
+export interface ProblemSelectionHandler {
+  selectProblem(problemId: string): void
+}
+
+interface RequestGeneration {
+  payload: number
+  state: number
+}
+
 function normalizeError(error: unknown): ApiClientError {
   if (error instanceof ApiClientError) return error
 
@@ -42,10 +51,17 @@ export class RunProblemController {
     error: null,
   })
 
-  constructor(private readonly client: ApiClient) {}
+  private runRequestGeneration = 0
+  private problemRequestGeneration = 0
+  private stateRequestGeneration = 0
+
+  constructor(
+    private readonly client: ApiClient,
+    private readonly problemSelection: ProblemSelectionHandler,
+  ) {}
 
   async startOrResume(roomId: string): Promise<StartOrResumeRunResponse> {
-    this.beginLoading(roomId)
+    const generation = this.beginRunLoading(roomId)
     this.state.run = null
     this.state.problem = null
     this.state.problemStatus = 'idle'
@@ -53,17 +69,22 @@ export class RunProblemController {
 
     try {
       const run = await this.client.startOrResumeRun({ room_id: roomId })
-      this.state.run = run
-      this.state.elapsedMs = run.elapsed_ms
-      this.state.phase = 'ready'
+      if (generation.payload === this.runRequestGeneration) {
+        this.state.run = run
+        this.state.elapsedMs = run.elapsed_ms
+        if (generation.state === this.stateRequestGeneration) {
+          this.state.phase = 'ready'
+          this.state.error = null
+        }
+      }
       return run
     } catch (error) {
-      throw this.fail(error)
+      throw this.failRun(error, generation)
     }
   }
 
   async restoreCurrentRun(roomId: string): Promise<GetCurrentRunResponse> {
-    this.beginLoading(roomId)
+    const generation = this.beginRunLoading(roomId)
     this.state.run = null
     this.state.problem = null
     this.state.problemStatus = 'idle'
@@ -71,58 +92,101 @@ export class RunProblemController {
 
     try {
       const run = await this.client.getCurrentRun({ room_id: roomId })
-      this.state.run = run
-      this.state.elapsedMs = run.elapsed_ms
-      this.state.phase = 'ready'
+      if (generation.payload === this.runRequestGeneration) {
+        this.state.run = run
+        this.state.elapsedMs = run.elapsed_ms
+        if (generation.state === this.stateRequestGeneration) {
+          this.state.phase = 'ready'
+          this.state.error = null
+        }
+      }
       return run
     } catch (error) {
-      throw this.fail(error)
+      throw this.failRun(error, generation)
     }
   }
 
   async loadProblem(roomId: string, problemId: string): Promise<GetProblemResponse> {
-    this.beginLoading(roomId)
+    const generation = this.beginProblemLoading(roomId)
     this.state.problem = null
     this.state.problemStatus = 'loading'
 
     try {
       const problem = await this.client.getProblem({ room_id: roomId, problem_id: problemId })
-      this.state.problem = problem
-      this.state.problemStatus = problem.status
-      this.state.phase = 'ready'
+      if (generation.payload === this.problemRequestGeneration) {
+        this.state.problem = problem
+        this.state.problemStatus = problem.status
+        if (generation.state === this.stateRequestGeneration) {
+          this.state.phase = 'ready'
+          this.state.error = null
+        }
+      }
       return problem
     } catch (error) {
-      throw this.failProblem(error)
+      throw this.failProblem(error, generation)
     }
   }
 
   async loadSelectedProblem(roomId: string, problemId: string): Promise<GetProblemResponse> {
+    this.problemSelection.selectProblem(problemId)
     this.resetProblem()
     return this.loadProblem(roomId, problemId)
   }
 
   resetProblem(): void {
+    this.problemRequestGeneration += 1
     this.state.problem = null
     this.state.problemStatus = 'idle'
     this.state.error = null
     this.state.phase = this.state.run ? 'ready' : 'idle'
   }
 
-  private beginLoading(roomId: string): void {
+  private beginRunLoading(roomId: string): RequestGeneration {
+    const payload = ++this.runRequestGeneration
+    this.problemRequestGeneration += 1
+    const state = this.beginLoading(roomId)
+    return { payload, state }
+  }
+
+  private beginProblemLoading(roomId: string): RequestGeneration {
+    if (this.state.roomId !== null && this.state.roomId !== roomId) {
+      this.runRequestGeneration += 1
+      this.state.run = null
+      this.state.elapsedMs = null
+    }
+    const payload = ++this.problemRequestGeneration
+    const state = this.beginLoading(roomId)
+    return { payload, state }
+  }
+
+  private beginLoading(roomId: string): number {
+    const generation = ++this.stateRequestGeneration
     this.state.phase = 'loading'
     this.state.roomId = roomId
     this.state.error = null
+    return generation
   }
 
-  private fail(error: unknown): ApiClientError {
+  private failRun(error: unknown, generation: RequestGeneration): ApiClientError {
     const normalized = normalizeError(error)
-    this.state.phase = 'error'
-    this.state.error = normalized
+    if (generation.payload !== this.runRequestGeneration) return normalized
+
+    if (generation.state === this.stateRequestGeneration) {
+      this.state.phase = 'error'
+      this.state.error = normalized
+    }
     return normalized
   }
 
-  private failProblem(error: unknown): ApiClientError {
-    const normalized = this.fail(error)
+  private failProblem(error: unknown, generation: RequestGeneration): ApiClientError {
+    const normalized = normalizeError(error)
+    if (generation.payload !== this.problemRequestGeneration) return normalized
+
+    if (generation.state === this.stateRequestGeneration) {
+      this.state.phase = 'error'
+      this.state.error = normalized
+    }
+
     if (normalized.code === 'PROBLEM_LOCKED' || normalized.status === 409) {
       this.state.problemStatus = 'locked'
     } else if (normalized.status === 404) {

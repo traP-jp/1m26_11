@@ -13,6 +13,7 @@ import {
   type SubmitAnswerResponse,
   type SubmitQueryResponse,
 } from '@/api/client'
+import { createOperationBuffer, type OperationBuffer } from '@/input/operationBuffer'
 
 import { QueryAnswerController } from '../QueryAnswerController'
 
@@ -20,6 +21,10 @@ const ROOM_ID = '11111111-1111-4111-8111-111111111111'
 const PROBLEM_ID = '22222222-2222-4222-8222-222222222221'
 const NEXT_PROBLEM_ID = '22222222-2222-4222-8222-222222222222'
 const PROBLEM_PATH = { room_id: ROOM_ID, problem_id: PROBLEM_ID }
+
+function appendQueryOperations(buffer: OperationBuffer): void {
+  for (const operation of queryRequest.operations) buffer.append(operation)
+}
 
 function createClient(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
@@ -40,9 +45,12 @@ describe('QueryAnswerController', () => {
     const submitQuery = vi
       .fn<ApiClient['submitQuery']>()
       .mockResolvedValue(queryCorrect as SubmitQueryResponse)
-    const controller = new QueryAnswerController(createClient({ submitQuery }))
+    const buffer = createOperationBuffer()
+    const controller = new QueryAnswerController(createClient({ submitQuery }), buffer)
+    controller.selectProblem(PROBLEM_ID)
+    appendQueryOperations(buffer)
 
-    const result = await controller.submitQuery(PROBLEM_PATH, queryRequest)
+    const result = await controller.submitQuery(PROBLEM_PATH, queryRequest.source)
 
     expect(submitQuery).toHaveBeenCalledExactlyOnceWith(PROBLEM_PATH, queryRequest)
     expect(result).toEqual(queryCorrect)
@@ -52,13 +60,17 @@ describe('QueryAnswerController', () => {
       error: null,
     })
     expect(controller.state.queryInput).toEqual(queryRequest)
+    expect(buffer.snapshot()).toEqual([])
   })
 
   it('maps an incorrect answer response to incorrect judgement', async () => {
     const submitAnswer = vi
       .fn<ApiClient['submitAnswer']>()
       .mockResolvedValue(answerIncorrect as SubmitAnswerResponse)
-    const controller = new QueryAnswerController(createClient({ submitAnswer }))
+    const controller = new QueryAnswerController(
+      createClient({ submitAnswer }),
+      createOperationBuffer(),
+    )
 
     const result = await controller.submitAnswer(PROBLEM_PATH, answerRequest)
 
@@ -76,7 +88,10 @@ describe('QueryAnswerController', () => {
     const submitAnswer = vi
       .fn<ApiClient['submitAnswer']>()
       .mockResolvedValue(answerCorrect as SubmitAnswerResponse)
-    const controller = new QueryAnswerController(createClient({ submitAnswer }))
+    const controller = new QueryAnswerController(
+      createClient({ submitAnswer }),
+      createOperationBuffer(),
+    )
 
     await controller.submitAnswer(PROBLEM_PATH, answerRequest)
 
@@ -93,7 +108,10 @@ describe('QueryAnswerController', () => {
     const submitAnswer = vi
       .fn<ApiClient['submitAnswer']>()
       .mockResolvedValue(answerCorrectAndClearsRun as SubmitAnswerResponse)
-    const controller = new QueryAnswerController(createClient({ submitAnswer }))
+    const controller = new QueryAnswerController(
+      createClient({ submitAnswer }),
+      createOperationBuffer(),
+    )
 
     await controller.submitAnswer(PROBLEM_PATH, answerRequest)
 
@@ -110,7 +128,10 @@ describe('QueryAnswerController', () => {
       resolveAnswer = resolve
     })
     const submitAnswer = vi.fn<ApiClient['submitAnswer']>().mockReturnValue(pendingAnswer)
-    const controller = new QueryAnswerController(createClient({ submitAnswer }))
+    const controller = new QueryAnswerController(
+      createClient({ submitAnswer }),
+      createOperationBuffer(),
+    )
 
     const firstRequest = controller.submitAnswer(PROBLEM_PATH, answerRequest)
     const duplicateResult = await controller.submitAnswer(PROBLEM_PATH, answerRequest)
@@ -129,10 +150,13 @@ describe('QueryAnswerController', () => {
       resolveQuery = resolve
     })
     const submitQuery = vi.fn<ApiClient['submitQuery']>().mockReturnValue(pendingQuery)
-    const controller = new QueryAnswerController(createClient({ submitQuery }))
+    const buffer = createOperationBuffer()
+    const controller = new QueryAnswerController(createClient({ submitQuery }), buffer)
+    controller.selectProblem(PROBLEM_ID)
+    appendQueryOperations(buffer)
 
-    const firstRequest = controller.submitQuery(PROBLEM_PATH, queryRequest)
-    const duplicateResult = await controller.submitQuery(PROBLEM_PATH, queryRequest)
+    const firstRequest = controller.submitQuery(PROBLEM_PATH, queryRequest.source)
+    const duplicateResult = await controller.submitQuery(PROBLEM_PATH, queryRequest.source)
 
     expect(duplicateResult).toBeNull()
     expect(submitQuery).toHaveBeenCalledOnce()
@@ -140,6 +164,25 @@ describe('QueryAnswerController', () => {
 
     resolveQuery(queryCorrect as SubmitQueryResponse)
     await firstRequest
+  })
+
+  it('keeps operations appended while a query request is pending', async () => {
+    let resolveQuery!: (response: SubmitQueryResponse) => void
+    const pendingQuery = new Promise<SubmitQueryResponse>((resolve) => {
+      resolveQuery = resolve
+    })
+    const submitQuery = vi.fn<ApiClient['submitQuery']>().mockReturnValue(pendingQuery)
+    const buffer = createOperationBuffer()
+    const controller = new QueryAnswerController(createClient({ submitQuery }), buffer)
+    controller.selectProblem(PROBLEM_ID)
+    appendQueryOperations(buffer)
+
+    const request = controller.submitQuery(PROBLEM_PATH, queryRequest.source)
+    buffer.append({ control: 'left', count: 1 })
+    resolveQuery(queryCorrect as SubmitQueryResponse)
+    await request
+
+    expect(buffer.snapshot()).toEqual([{ control: 'left', count: 1 }])
   })
 
   it('does not let a previous problem response overwrite the newly selected problem', async () => {
@@ -151,11 +194,16 @@ describe('QueryAnswerController', () => {
       .fn<ApiClient['submitQuery']>()
       .mockReturnValueOnce(firstQuery)
       .mockResolvedValueOnce(queryCorrect as SubmitQueryResponse)
-    const controller = new QueryAnswerController(createClient({ submitQuery }))
+    const buffer = createOperationBuffer()
+    const controller = new QueryAnswerController(createClient({ submitQuery }), buffer)
     const nextProblemPath = { room_id: ROOM_ID, problem_id: NEXT_PROBLEM_ID }
+    controller.selectProblem(PROBLEM_ID)
+    appendQueryOperations(buffer)
 
-    const firstRequest = controller.submitQuery(PROBLEM_PATH, queryRequest)
-    await controller.submitQuery(nextProblemPath, queryRequest)
+    const firstRequest = controller.submitQuery(PROBLEM_PATH, queryRequest.source)
+    controller.selectProblem(NEXT_PROBLEM_ID)
+    appendQueryOperations(buffer)
+    await controller.submitQuery(nextProblemPath, queryRequest.source)
     resolveFirstQuery(queryIncorrect as SubmitQueryResponse)
     await firstRequest
 
@@ -173,15 +221,19 @@ describe('QueryAnswerController', () => {
       details: {},
     })
     const submitQuery = vi.fn<ApiClient['submitQuery']>().mockRejectedValue(apiError)
-    const controller = new QueryAnswerController(createClient({ submitQuery }))
+    const buffer = createOperationBuffer()
+    const controller = new QueryAnswerController(createClient({ submitQuery }), buffer)
+    controller.selectProblem(PROBLEM_ID)
+    appendQueryOperations(buffer)
 
-    await expect(controller.submitQuery(PROBLEM_PATH, queryRequest)).rejects.toBe(apiError)
+    await expect(controller.submitQuery(PROBLEM_PATH, queryRequest.source)).rejects.toBe(apiError)
 
     expect(controller.state.query).toMatchObject({
       state: 'error',
       response: null,
       error: apiError,
     })
+    expect(buffer.snapshot()).toEqual(queryRequest.operations)
   })
 
   it('distinguishes a network error from an incorrect response', async () => {
@@ -190,7 +242,10 @@ describe('QueryAnswerController', () => {
       cause: new Error('connection lost'),
     })
     const submitAnswer = vi.fn<ApiClient['submitAnswer']>().mockRejectedValue(apiError)
-    const controller = new QueryAnswerController(createClient({ submitAnswer }))
+    const controller = new QueryAnswerController(
+      createClient({ submitAnswer }),
+      createOperationBuffer(),
+    )
 
     await expect(controller.submitAnswer(PROBLEM_PATH, answerRequest)).rejects.toBe(apiError)
 
@@ -202,9 +257,11 @@ describe('QueryAnswerController', () => {
   })
 
   it('resets unsent query operations and answer input when selecting another problem', () => {
-    const controller = new QueryAnswerController(createClient())
+    const buffer = createOperationBuffer()
+    const controller = new QueryAnswerController(createClient(), buffer)
 
     controller.selectProblem(PROBLEM_ID)
+    appendQueryOperations(buffer)
     controller.setQueryInput(queryRequest)
     controller.setAnswerInput(answerRequest.answer)
     controller.setAnswerMaxLength(50)
@@ -215,6 +272,7 @@ describe('QueryAnswerController', () => {
       queryInput: null,
       answerInput: { value: '', maxLength: null },
     })
+    expect(buffer.snapshot()).toEqual([])
   })
 
   it('resets both judgements when a different problem is selected', async () => {
@@ -224,9 +282,15 @@ describe('QueryAnswerController', () => {
     const submitAnswer = vi
       .fn<ApiClient['submitAnswer']>()
       .mockResolvedValue(answerIncorrect as SubmitAnswerResponse)
-    const controller = new QueryAnswerController(createClient({ submitQuery, submitAnswer }))
+    const buffer = createOperationBuffer()
+    const controller = new QueryAnswerController(
+      createClient({ submitQuery, submitAnswer }),
+      buffer,
+    )
+    controller.selectProblem(PROBLEM_ID)
+    appendQueryOperations(buffer)
 
-    await controller.submitQuery(PROBLEM_PATH, queryRequest)
+    await controller.submitQuery(PROBLEM_PATH, queryRequest.source)
     await controller.submitAnswer(PROBLEM_PATH, answerRequest)
     controller.selectProblem(NEXT_PROBLEM_ID)
 
