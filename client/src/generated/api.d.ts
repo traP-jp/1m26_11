@@ -234,6 +234,36 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/rooms/{room_id}/problems': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * 作問用の問題を新規作成する
+     * @description dev環境専用の作問支援APIです。
+     *     AUTH_MODE=demoかつPROBLEM_AUTHORING_ENABLED=trueの場合だけrouteを登録します。
+     *     それ以外の環境ではroute自体を登録せず404を返します。
+     *     serverがproblem_idを生成し、指定された未公開roomへ問題を追加します。
+     *     画像はこのrequestへ含めず、作成後にuploadProblemAssetを使用します。
+     */
+    post: operations['createProblem']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/rooms/{room_id}/problems/{problem_id}': {
     parameters: {
       query?: never
@@ -532,6 +562,52 @@ export interface components {
       /** Format: int64 */
       query_count: number
     }
+    CreateProblemRequest: {
+      /** Format: int32 */
+      number: number
+      problem_type: components['schemas']['ProblemType']
+      title: string
+      body_markdown: string
+      submission_type: components['schemas']['SubmissionType']
+      input_schema: components['schemas']['ProblemInputSchema']
+      hints: components['schemas']['CreateProblemHint'][]
+      judge_config: components['schemas']['CreateProblemJudgeConfig']
+      depends_on_problem_id: string | null
+      is_required: boolean
+    }
+    CreateProblemResponse: {
+      /** Format: uuid */
+      problem_id: string
+    }
+    CreateProblemHint: {
+      body_markdown: string
+    }
+    CreateProblemJudgeConfig:
+      | components['schemas']['CreateOperationSequenceJudgeConfig']
+      | components['schemas']['CreateStringJudgeConfig']
+    CreateOperationSequenceJudgeConfig: {
+      /** @constant */
+      type: 'operation_sequence'
+      correct_operations: components['schemas']['Operation'][]
+      candidates: components['schemas']['CreateProblemCandidate'][]
+    }
+    CreateProblemCandidate: {
+      candidate_id: string
+      operations: components['schemas']['Operation'][]
+    }
+    CreateStringJudgeConfig: {
+      /** @constant */
+      type: 'string'
+      accepted_answer: string
+      normalization: components['schemas']['CreateStringNormalization']
+    }
+    CreateStringNormalization: {
+      /** @constant */
+      unicode: 'nfkc'
+      trim_outer_whitespace: boolean
+      collapse_internal_whitespace: boolean
+      case_sensitive: boolean
+    }
     ProblemResponse: {
       /** Format: uuid */
       id: string
@@ -759,6 +835,77 @@ export interface components {
       }
       content: {
         'application/json': components['schemas']['LeaderboardResponse']
+      }
+    }
+    /** @description 問題の作成に成功しました。 */
+    ProblemCreateSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['CreateProblemResponse']
+      }
+    }
+    /**
+     * @description room_id、JSON、またはIdempotency-Keyの形式が不正です。
+     *     error.codeはINVALID_PATH_PARAMETER、INVALID_JSON、
+     *     IDEMPOTENCY_KEY_REQUIRED、INVALID_IDEMPOTENCY_KEYのいずれかです。
+     */
+    ProblemCreateBadRequest: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description 指定されたroomが存在しません。
+     *     error.codeはROOM_NOT_FOUNDです。
+     */
+    ProblemCreateNotFound: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description 公開済みroom、問題番号の重複、またはidempotencyの状態により作成できません。
+     *     error.codeはPUBLISHED_ROOM_IMMUTABLE、PROBLEM_NUMBER_CONFLICT、
+     *     IDEMPOTENCY_KEY_REUSEDのいずれかです。
+     */
+    ProblemCreateConflict: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description 問題内容、回答設定、依存関係、操作列、またはヒントが不正です。
+     *     error.codeはINVALID_PROBLEMです。
+     */
+    ProblemCreateValidationError: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description DB更新失敗などのserver内部エラーです。
+     *     error.codeはINTERNAL_SERVER_ERRORです。
+     */
+    ProblemCreateInternalServerError: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
       }
     }
     /** @description 公開可能な問題データ */
@@ -1073,7 +1220,8 @@ export interface components {
     HintLevel: number
     /**
      * @description methodとpathごとにrequestを識別するUUID v4です。
-     *     同じfileとtrim済みaltによる再送では、最初の201 responseを返します。
+     *     同じrequest内容による再送では、最初の成功responseを返します。
+     *     同じkeyを異なるrequest内容へ再利用した場合は409を返します。
      * @example 44444444-4444-4444-8444-444444444444
      */
     IdempotencyKey: string
@@ -1092,6 +1240,11 @@ export interface components {
     SubmitAnswer: {
       content: {
         'application/json': components['schemas']['AnswerRequest']
+      }
+    }
+    CreateProblem: {
+      content: {
+        'application/json': components['schemas']['CreateProblemRequest']
       }
     }
     UploadProblemAsset: {
@@ -1310,6 +1463,37 @@ export interface operations {
       500: components['responses']['InternalServerError']
     }
   }
+  createProblem: {
+    parameters: {
+      query?: never
+      header: {
+        /**
+         * @description methodとpathごとにrequestを識別するUUID v4です。
+         *     同じrequest内容による再送では、最初の成功responseを返します。
+         *     同じkeyを異なるrequest内容へ再利用した場合は409を返します。
+         * @example 44444444-4444-4444-8444-444444444444
+         */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+      }
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    requestBody: components['requestBodies']['CreateProblem']
+    responses: {
+      201: components['responses']['ProblemCreateSuccess']
+      400: components['responses']['ProblemCreateBadRequest']
+      404: components['responses']['ProblemCreateNotFound']
+      409: components['responses']['ProblemCreateConflict']
+      422: components['responses']['ProblemCreateValidationError']
+      500: components['responses']['ProblemCreateInternalServerError']
+    }
+  }
   getProblem: {
     parameters: {
       query?: never
@@ -1372,7 +1556,8 @@ export interface operations {
       header: {
         /**
          * @description methodとpathごとにrequestを識別するUUID v4です。
-         *     同じfileとtrim済みaltによる再送では、最初の201 responseを返します。
+         *     同じrequest内容による再送では、最初の成功responseを返します。
+         *     同じkeyを異なるrequest内容へ再利用した場合は409を返します。
          * @example 44444444-4444-4444-8444-444444444444
          */
         'Idempotency-Key': components['parameters']['IdempotencyKey']

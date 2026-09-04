@@ -11,6 +11,7 @@ const DEFAULT_DB_HOST: &str = "localhost";
 const DEFAULT_DB_PORT: u16 = 3306;
 const DEFAULT_DB_NAME: &str = "app";
 const DEFAULT_IMAGE_UPLOAD_ENABLED: bool = false;
+const DEFAULT_PROBLEM_AUTHORING_ENABLED: bool = false;
 const DEFAULT_IMAGE_DOWNLOAD_ENABLED: bool = false;
 
 #[derive(Clone)]
@@ -30,6 +31,7 @@ pub struct Config {
     pub auth_mode: AuthMode,
     pub demo_cookie_secure: bool,
     pub image_upload_enabled: bool,
+    pub problem_authoring_enabled: bool,
     pub image_download_enabled: bool,
     pub storage: Option<StorageConfig>,
     database_url: Option<String>,
@@ -53,6 +55,13 @@ impl Config {
                 ));
             }
         };
+
+        let problem_authoring_enabled = env_bool(
+            "PROBLEM_AUTHORING_ENABLED",
+            DEFAULT_PROBLEM_AUTHORING_ENABLED,
+        )?;
+
+        validate_problem_authoring_config(auth_mode, problem_authoring_enabled)?;
 
         let image_upload_enabled = env_bool("IMAGE_UPLOAD_ENABLED", DEFAULT_IMAGE_UPLOAD_ENABLED)?;
         let image_download_enabled =
@@ -78,6 +87,7 @@ impl Config {
             app_addr,
             auth_mode,
             demo_cookie_secure,
+            problem_authoring_enabled,
             image_upload_enabled,
             image_download_enabled,
             storage,
@@ -122,6 +132,19 @@ pub enum ConfigError {
     InvalidBooleanEnvironmentValue { key: &'static str, value: String },
     #[error("DB_PORT is not a valid port number")]
     InvalidDbPort(#[source] ParseIntError),
+    #[error("PROBLEM_AUTHORING_ENABLED=true requires AUTH_MODE=demo")]
+    ProblemAuthoringRequiresDemoAuth,
+}
+
+fn validate_problem_authoring_config(
+    auth_mode: AuthMode,
+    enabled: bool,
+) -> Result<(), ConfigError> {
+    if enabled && auth_mode != AuthMode::Demo {
+        return Err(ConfigError::ProblemAuthoringRequiresDemoAuth);
+    }
+
+    Ok(())
 }
 
 fn load_storage_config<F>(
@@ -231,7 +254,7 @@ mod tests {
 
     use super::{
         AuthMode, ConfigError, DEFAULT_APP_ADDR, load_storage_config, normalize_app_addr,
-        parse_bool,
+        parse_bool, validate_problem_authoring_config,
     };
 
     fn storage_value(key: &'static str) -> Result<String, ConfigError> {
@@ -348,5 +371,21 @@ mod tests {
         assert_eq!(DEFAULT_APP_ADDR, "127.0.0.1:8080");
         assert_eq!(normalize_app_addr(":8080"), "127.0.0.1:8080");
         assert_eq!(normalize_app_addr("0.0.0.0:8080"), "0.0.0.0:8080");
+    }
+
+    #[test]
+    fn demo_problem_authoring_configuration_is_valid() {
+        assert!(validate_problem_authoring_config(AuthMode::Demo, true).is_ok());
+        assert!(validate_problem_authoring_config(AuthMode::Demo, false).is_ok());
+    }
+
+    #[test]
+    fn neoshowcase_problem_authoring_configuration_is_rejected() {
+        assert!(matches!(
+            validate_problem_authoring_config(AuthMode::NeoShowcase, true),
+            Err(ConfigError::ProblemAuthoringRequiresDemoAuth)
+        ));
+
+        assert!(validate_problem_authoring_config(AuthMode::NeoShowcase, false).is_ok());
     }
 }

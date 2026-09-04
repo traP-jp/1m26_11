@@ -244,12 +244,13 @@ function requireOperation(
 
 export function createMockContract(
   openApiSource: string,
-  scenarioSource: string,
+  scenarioSources: string | readonly string[],
   fixtureModules: Record<string, unknown>,
 ): MockContract {
   const openApiDocument = asRecord(parse(openApiSource), 'OpenAPI document')
   const operations = readOperations(openApiDocument, fixtureModules)
-  const scenarios = readScenarios(scenarioSource)
+  const sources = typeof scenarioSources === 'string' ? [scenarioSources] : scenarioSources
+  const scenarios = sources.flatMap(readScenarios)
 
   for (const scenario of scenarios) {
     for (const step of scenario.steps) {

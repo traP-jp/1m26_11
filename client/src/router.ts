@@ -16,6 +16,12 @@ const developmentRoutes: RouteRecordRaw[] = import.meta.env.DEV
         name: 'device-poc',
         component: () => import('./DevicePocPage.vue'),
       },
+      {
+        path: '/author/rooms/:roomId/problems/new',
+        name: 'problem-author-new',
+        component: () => import('./AuthorProblemPage.vue'),
+        props: true,
+      },
     ]
   : []
 

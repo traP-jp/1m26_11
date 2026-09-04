@@ -96,6 +96,19 @@ pub struct GetRoomLeaderboardPathParams {
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
 #[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct CreateProblemHeaderParams {
+    pub idempotency_key: uuid::Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct CreateProblemPathParams {
+    /// 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+    pub room_id: uuid::Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
 pub struct GetProblemPathParams {
     /// 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
     pub room_id: uuid::Uuid,
@@ -1435,6 +1448,1274 @@ impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<CorrectQuery
                     }
                     std::result::Result::Err(err) => std::result::Result::Err(format!(
                         r#"Unable to convert header value '{value}' into CorrectQueryResponse - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct CreateOperationSequenceJudgeConfig {
+    /// Note: inline enums are not fully supported by openapi-generator
+    #[serde(rename = "type")]
+    #[validate(custom(function = "check_xss_string"))]
+    pub r_type: String,
+
+    #[serde(rename = "correct_operations")]
+    #[validate(length(min = 1), nested)]
+    pub correct_operations: Vec<models::Operation>,
+
+    #[serde(rename = "candidates")]
+    #[validate(length(min = 1), nested)]
+    pub candidates: Vec<models::CreateProblemCandidate>,
+}
+
+impl CreateOperationSequenceJudgeConfig {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(
+        r_type: String,
+        correct_operations: Vec<models::Operation>,
+        candidates: Vec<models::CreateProblemCandidate>,
+    ) -> CreateOperationSequenceJudgeConfig {
+        CreateOperationSequenceJudgeConfig {
+            r_type,
+            correct_operations,
+            candidates,
+        }
+    }
+}
+
+/// Converts the CreateOperationSequenceJudgeConfig value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for CreateOperationSequenceJudgeConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            Some("type".to_string()),
+            Some(self.r_type.to_string()),
+            // Skipping correct_operations in query parameter serialization
+
+            // Skipping candidates in query parameter serialization
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a CreateOperationSequenceJudgeConfig value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for CreateOperationSequenceJudgeConfig {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub r_type: Vec<String>,
+            pub correct_operations: Vec<Vec<models::Operation>>,
+            pub candidates: Vec<Vec<models::CreateProblemCandidate>>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing CreateOperationSequenceJudgeConfig"
+                            .to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "type" => intermediate_rep.r_type.push(<String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    "correct_operations" => return std::result::Result::Err("Parsing a container in this style is not supported in CreateOperationSequenceJudgeConfig".to_string()),
+                    "candidates" => return std::result::Result::Err("Parsing a container in this style is not supported in CreateOperationSequenceJudgeConfig".to_string()),
+                    _ => return std::result::Result::Err("Unexpected key while parsing CreateOperationSequenceJudgeConfig".to_string())
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(CreateOperationSequenceJudgeConfig {
+            r_type: intermediate_rep
+                .r_type
+                .into_iter()
+                .next()
+                .ok_or_else(|| "type missing in CreateOperationSequenceJudgeConfig".to_string())?,
+            correct_operations: intermediate_rep
+                .correct_operations
+                .into_iter()
+                .next()
+                .ok_or_else(|| {
+                    "correct_operations missing in CreateOperationSequenceJudgeConfig".to_string()
+                })?,
+            candidates: intermediate_rep
+                .candidates
+                .into_iter()
+                .next()
+                .ok_or_else(|| {
+                    "candidates missing in CreateOperationSequenceJudgeConfig".to_string()
+                })?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<CreateOperationSequenceJudgeConfig> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<CreateOperationSequenceJudgeConfig>>
+    for HeaderValue
+{
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<CreateOperationSequenceJudgeConfig>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for CreateOperationSequenceJudgeConfig - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue>
+    for header::IntoHeaderValue<CreateOperationSequenceJudgeConfig>
+{
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <CreateOperationSequenceJudgeConfig as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into CreateOperationSequenceJudgeConfig - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct CreateProblemCandidate {
+    #[serde(rename = "candidate_id")]
+    #[validate(length(min = 1), custom(function = "check_xss_string"))]
+    pub candidate_id: String,
+
+    #[serde(rename = "operations")]
+    #[validate(length(min = 1), nested)]
+    pub operations: Vec<models::Operation>,
+}
+
+impl CreateProblemCandidate {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(candidate_id: String, operations: Vec<models::Operation>) -> CreateProblemCandidate {
+        CreateProblemCandidate {
+            candidate_id,
+            operations,
+        }
+    }
+}
+
+/// Converts the CreateProblemCandidate value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for CreateProblemCandidate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            Some("candidate_id".to_string()),
+            Some(self.candidate_id.to_string()),
+            // Skipping operations in query parameter serialization
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a CreateProblemCandidate value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for CreateProblemCandidate {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub candidate_id: Vec<String>,
+            pub operations: Vec<Vec<models::Operation>>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing CreateProblemCandidate".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "candidate_id" => intermediate_rep.candidate_id.push(<String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    "operations" => return std::result::Result::Err("Parsing a container in this style is not supported in CreateProblemCandidate".to_string()),
+                    _ => return std::result::Result::Err("Unexpected key while parsing CreateProblemCandidate".to_string())
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(CreateProblemCandidate {
+            candidate_id: intermediate_rep
+                .candidate_id
+                .into_iter()
+                .next()
+                .ok_or_else(|| "candidate_id missing in CreateProblemCandidate".to_string())?,
+            operations: intermediate_rep
+                .operations
+                .into_iter()
+                .next()
+                .ok_or_else(|| "operations missing in CreateProblemCandidate".to_string())?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<CreateProblemCandidate> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<CreateProblemCandidate>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<CreateProblemCandidate>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for CreateProblemCandidate - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<CreateProblemCandidate> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <CreateProblemCandidate as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into CreateProblemCandidate - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct CreateProblemHint {
+    #[serde(rename = "body_markdown")]
+    #[validate(length(min = 1), custom(function = "check_xss_string"))]
+    pub body_markdown: String,
+}
+
+impl CreateProblemHint {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(body_markdown: String) -> CreateProblemHint {
+        CreateProblemHint { body_markdown }
+    }
+}
+
+/// Converts the CreateProblemHint value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for CreateProblemHint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            Some("body_markdown".to_string()),
+            Some(self.body_markdown.to_string()),
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a CreateProblemHint value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for CreateProblemHint {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub body_markdown: Vec<String>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing CreateProblemHint".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "body_markdown" => intermediate_rep.body_markdown.push(
+                        <String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    _ => {
+                        return std::result::Result::Err(
+                            "Unexpected key while parsing CreateProblemHint".to_string(),
+                        );
+                    }
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(CreateProblemHint {
+            body_markdown: intermediate_rep
+                .body_markdown
+                .into_iter()
+                .next()
+                .ok_or_else(|| "body_markdown missing in CreateProblemHint".to_string())?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<CreateProblemHint> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<CreateProblemHint>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<CreateProblemHint>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for CreateProblemHint - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<CreateProblemHint> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <CreateProblemHint as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into CreateProblemHint - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+#[allow(non_camel_case_types, clippy::large_enum_variant)]
+pub enum CreateProblemJudgeConfig {
+    CreateOperationSequenceJudgeConfig(models::CreateOperationSequenceJudgeConfig),
+    CreateStringJudgeConfig(models::CreateStringJudgeConfig),
+}
+
+impl validator::Validate for CreateProblemJudgeConfig {
+    fn validate(&self) -> std::result::Result<(), validator::ValidationErrors> {
+        match self {
+            Self::CreateOperationSequenceJudgeConfig(v) => v.validate(),
+            Self::CreateStringJudgeConfig(v) => v.validate(),
+        }
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a CreateProblemJudgeConfig value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for CreateProblemJudgeConfig {
+    type Err = serde_json::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        serde_json::from_str(s)
+    }
+}
+
+impl From<models::CreateOperationSequenceJudgeConfig> for CreateProblemJudgeConfig {
+    fn from(value: models::CreateOperationSequenceJudgeConfig) -> Self {
+        Self::CreateOperationSequenceJudgeConfig(value)
+    }
+}
+impl From<models::CreateStringJudgeConfig> for CreateProblemJudgeConfig {
+    fn from(value: models::CreateStringJudgeConfig) -> Self {
+        Self::CreateStringJudgeConfig(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct CreateProblemRequest {
+    #[serde(rename = "number")]
+    #[validate(range(min = 1u32))]
+    pub number: u32,
+
+    #[serde(rename = "problem_type")]
+    #[validate(nested)]
+    pub problem_type: models::ProblemType,
+
+    #[serde(rename = "title")]
+    #[validate(length(min = 1, max = 255), custom(function = "check_xss_string"))]
+    pub title: String,
+
+    #[serde(rename = "body_markdown")]
+    #[validate(length(min = 1), custom(function = "check_xss_string"))]
+    pub body_markdown: String,
+
+    #[serde(rename = "submission_type")]
+    #[validate(nested)]
+    pub submission_type: models::SubmissionType,
+
+    #[serde(rename = "input_schema")]
+    #[validate(nested)]
+    pub input_schema: models::ProblemInputSchema,
+
+    #[serde(rename = "hints")]
+    #[validate(nested)]
+    pub hints: Vec<models::CreateProblemHint>,
+
+    #[serde(rename = "judge_config")]
+    #[validate(nested)]
+    pub judge_config: models::CreateProblemJudgeConfig,
+
+    #[serde(rename = "depends_on_problem_id")]
+    pub depends_on_problem_id: Nullable<uuid::Uuid>,
+
+    #[serde(rename = "is_required")]
+    pub is_required: bool,
+}
+
+impl CreateProblemRequest {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(
+        number: u32,
+        problem_type: models::ProblemType,
+        title: String,
+        body_markdown: String,
+        submission_type: models::SubmissionType,
+        input_schema: models::ProblemInputSchema,
+        hints: Vec<models::CreateProblemHint>,
+        judge_config: models::CreateProblemJudgeConfig,
+        depends_on_problem_id: Nullable<uuid::Uuid>,
+        is_required: bool,
+    ) -> CreateProblemRequest {
+        CreateProblemRequest {
+            number,
+            problem_type,
+            title,
+            body_markdown,
+            submission_type,
+            input_schema,
+            hints,
+            judge_config,
+            depends_on_problem_id,
+            is_required,
+        }
+    }
+}
+
+/// Converts the CreateProblemRequest value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for CreateProblemRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            Some("number".to_string()),
+            Some(self.number.to_string()),
+            // Skipping problem_type in query parameter serialization
+            Some("title".to_string()),
+            Some(self.title.to_string()),
+            Some("body_markdown".to_string()),
+            Some(self.body_markdown.to_string()),
+            // Skipping submission_type in query parameter serialization
+
+            // Skipping input_schema in query parameter serialization
+
+            // Skipping hints in query parameter serialization
+
+            // Skipping judge_config in query parameter serialization
+
+            // Skipping depends_on_problem_id in query parameter serialization
+            Some("is_required".to_string()),
+            Some(self.is_required.to_string()),
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a CreateProblemRequest value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for CreateProblemRequest {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub number: Vec<u32>,
+            pub problem_type: Vec<models::ProblemType>,
+            pub title: Vec<String>,
+            pub body_markdown: Vec<String>,
+            pub submission_type: Vec<models::SubmissionType>,
+            pub input_schema: Vec<models::ProblemInputSchema>,
+            pub hints: Vec<Vec<models::CreateProblemHint>>,
+            pub judge_config: Vec<models::CreateProblemJudgeConfig>,
+            pub depends_on_problem_id: Vec<uuid::Uuid>,
+            pub is_required: Vec<bool>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing CreateProblemRequest".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "number" => intermediate_rep.number.push(<u32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    #[allow(clippy::redundant_clone)]
+                    "problem_type" => intermediate_rep.problem_type.push(<models::ProblemType as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    #[allow(clippy::redundant_clone)]
+                    "title" => intermediate_rep.title.push(<String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    #[allow(clippy::redundant_clone)]
+                    "body_markdown" => intermediate_rep.body_markdown.push(<String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    #[allow(clippy::redundant_clone)]
+                    "submission_type" => intermediate_rep.submission_type.push(<models::SubmissionType as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    #[allow(clippy::redundant_clone)]
+                    "input_schema" => intermediate_rep.input_schema.push(<models::ProblemInputSchema as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    "hints" => return std::result::Result::Err("Parsing a container in this style is not supported in CreateProblemRequest".to_string()),
+                    #[allow(clippy::redundant_clone)]
+                    "judge_config" => intermediate_rep.judge_config.push(<models::CreateProblemJudgeConfig as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    "depends_on_problem_id" => return std::result::Result::Err("Parsing a nullable type in this style is not supported in CreateProblemRequest".to_string()),
+                    #[allow(clippy::redundant_clone)]
+                    "is_required" => intermediate_rep.is_required.push(<bool as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    _ => return std::result::Result::Err("Unexpected key while parsing CreateProblemRequest".to_string())
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(CreateProblemRequest {
+            number: intermediate_rep
+                .number
+                .into_iter()
+                .next()
+                .ok_or_else(|| "number missing in CreateProblemRequest".to_string())?,
+            problem_type: intermediate_rep
+                .problem_type
+                .into_iter()
+                .next()
+                .ok_or_else(|| "problem_type missing in CreateProblemRequest".to_string())?,
+            title: intermediate_rep
+                .title
+                .into_iter()
+                .next()
+                .ok_or_else(|| "title missing in CreateProblemRequest".to_string())?,
+            body_markdown: intermediate_rep
+                .body_markdown
+                .into_iter()
+                .next()
+                .ok_or_else(|| "body_markdown missing in CreateProblemRequest".to_string())?,
+            submission_type: intermediate_rep
+                .submission_type
+                .into_iter()
+                .next()
+                .ok_or_else(|| "submission_type missing in CreateProblemRequest".to_string())?,
+            input_schema: intermediate_rep
+                .input_schema
+                .into_iter()
+                .next()
+                .ok_or_else(|| "input_schema missing in CreateProblemRequest".to_string())?,
+            hints: intermediate_rep
+                .hints
+                .into_iter()
+                .next()
+                .ok_or_else(|| "hints missing in CreateProblemRequest".to_string())?,
+            judge_config: intermediate_rep
+                .judge_config
+                .into_iter()
+                .next()
+                .ok_or_else(|| "judge_config missing in CreateProblemRequest".to_string())?,
+            depends_on_problem_id: std::result::Result::Err(
+                "Nullable types not supported in CreateProblemRequest".to_string(),
+            )?,
+            is_required: intermediate_rep
+                .is_required
+                .into_iter()
+                .next()
+                .ok_or_else(|| "is_required missing in CreateProblemRequest".to_string())?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<CreateProblemRequest> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<CreateProblemRequest>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<CreateProblemRequest>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for CreateProblemRequest - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<CreateProblemRequest> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <CreateProblemRequest as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into CreateProblemRequest - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct CreateProblemResponse {
+    #[serde(rename = "problem_id")]
+    pub problem_id: uuid::Uuid,
+}
+
+impl CreateProblemResponse {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(problem_id: uuid::Uuid) -> CreateProblemResponse {
+        CreateProblemResponse { problem_id }
+    }
+}
+
+/// Converts the CreateProblemResponse value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for CreateProblemResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            // Skipping problem_id in query parameter serialization
+
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a CreateProblemResponse value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for CreateProblemResponse {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub problem_id: Vec<uuid::Uuid>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing CreateProblemResponse".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "problem_id" => intermediate_rep.problem_id.push(
+                        <uuid::Uuid as std::str::FromStr>::from_str(val)
+                            .map_err(|x| x.to_string())?,
+                    ),
+                    _ => {
+                        return std::result::Result::Err(
+                            "Unexpected key while parsing CreateProblemResponse".to_string(),
+                        );
+                    }
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(CreateProblemResponse {
+            problem_id: intermediate_rep
+                .problem_id
+                .into_iter()
+                .next()
+                .ok_or_else(|| "problem_id missing in CreateProblemResponse".to_string())?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<CreateProblemResponse> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<CreateProblemResponse>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<CreateProblemResponse>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for CreateProblemResponse - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<CreateProblemResponse> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <CreateProblemResponse as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into CreateProblemResponse - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct CreateStringJudgeConfig {
+    /// Note: inline enums are not fully supported by openapi-generator
+    #[serde(rename = "type")]
+    #[validate(custom(function = "check_xss_string"))]
+    pub r_type: String,
+
+    #[serde(rename = "accepted_answer")]
+    #[validate(length(min = 1), custom(function = "check_xss_string"))]
+    pub accepted_answer: String,
+
+    #[serde(rename = "normalization")]
+    #[validate(nested)]
+    pub normalization: models::CreateStringNormalization,
+}
+
+impl CreateStringJudgeConfig {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(
+        r_type: String,
+        accepted_answer: String,
+        normalization: models::CreateStringNormalization,
+    ) -> CreateStringJudgeConfig {
+        CreateStringJudgeConfig {
+            r_type,
+            accepted_answer,
+            normalization,
+        }
+    }
+}
+
+/// Converts the CreateStringJudgeConfig value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for CreateStringJudgeConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            Some("type".to_string()),
+            Some(self.r_type.to_string()),
+            Some("accepted_answer".to_string()),
+            Some(self.accepted_answer.to_string()),
+            // Skipping normalization in query parameter serialization
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a CreateStringJudgeConfig value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for CreateStringJudgeConfig {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub r_type: Vec<String>,
+            pub accepted_answer: Vec<String>,
+            pub normalization: Vec<models::CreateStringNormalization>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing CreateStringJudgeConfig".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "type" => intermediate_rep.r_type.push(
+                        <String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "accepted_answer" => intermediate_rep.accepted_answer.push(
+                        <String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "normalization" => intermediate_rep.normalization.push(
+                        <models::CreateStringNormalization as std::str::FromStr>::from_str(val)
+                            .map_err(|x| x.to_string())?,
+                    ),
+                    _ => {
+                        return std::result::Result::Err(
+                            "Unexpected key while parsing CreateStringJudgeConfig".to_string(),
+                        );
+                    }
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(CreateStringJudgeConfig {
+            r_type: intermediate_rep
+                .r_type
+                .into_iter()
+                .next()
+                .ok_or_else(|| "type missing in CreateStringJudgeConfig".to_string())?,
+            accepted_answer: intermediate_rep
+                .accepted_answer
+                .into_iter()
+                .next()
+                .ok_or_else(|| "accepted_answer missing in CreateStringJudgeConfig".to_string())?,
+            normalization: intermediate_rep
+                .normalization
+                .into_iter()
+                .next()
+                .ok_or_else(|| "normalization missing in CreateStringJudgeConfig".to_string())?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<CreateStringJudgeConfig> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<CreateStringJudgeConfig>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<CreateStringJudgeConfig>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for CreateStringJudgeConfig - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<CreateStringJudgeConfig> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <CreateStringJudgeConfig as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into CreateStringJudgeConfig - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct CreateStringNormalization {
+    /// Note: inline enums are not fully supported by openapi-generator
+    #[serde(rename = "unicode")]
+    #[validate(custom(function = "check_xss_string"))]
+    pub unicode: String,
+
+    #[serde(rename = "trim_outer_whitespace")]
+    pub trim_outer_whitespace: bool,
+
+    #[serde(rename = "collapse_internal_whitespace")]
+    pub collapse_internal_whitespace: bool,
+
+    #[serde(rename = "case_sensitive")]
+    pub case_sensitive: bool,
+}
+
+impl CreateStringNormalization {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(
+        unicode: String,
+        trim_outer_whitespace: bool,
+        collapse_internal_whitespace: bool,
+        case_sensitive: bool,
+    ) -> CreateStringNormalization {
+        CreateStringNormalization {
+            unicode,
+            trim_outer_whitespace,
+            collapse_internal_whitespace,
+            case_sensitive,
+        }
+    }
+}
+
+/// Converts the CreateStringNormalization value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for CreateStringNormalization {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            Some("unicode".to_string()),
+            Some(self.unicode.to_string()),
+            Some("trim_outer_whitespace".to_string()),
+            Some(self.trim_outer_whitespace.to_string()),
+            Some("collapse_internal_whitespace".to_string()),
+            Some(self.collapse_internal_whitespace.to_string()),
+            Some("case_sensitive".to_string()),
+            Some(self.case_sensitive.to_string()),
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a CreateStringNormalization value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for CreateStringNormalization {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub unicode: Vec<String>,
+            pub trim_outer_whitespace: Vec<bool>,
+            pub collapse_internal_whitespace: Vec<bool>,
+            pub case_sensitive: Vec<bool>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing CreateStringNormalization".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "unicode" => intermediate_rep.unicode.push(
+                        <String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "trim_outer_whitespace" => intermediate_rep.trim_outer_whitespace.push(
+                        <bool as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "collapse_internal_whitespace" => {
+                        intermediate_rep.collapse_internal_whitespace.push(
+                            <bool as std::str::FromStr>::from_str(val)
+                                .map_err(|x| x.to_string())?,
+                        )
+                    }
+                    #[allow(clippy::redundant_clone)]
+                    "case_sensitive" => intermediate_rep.case_sensitive.push(
+                        <bool as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    _ => {
+                        return std::result::Result::Err(
+                            "Unexpected key while parsing CreateStringNormalization".to_string(),
+                        );
+                    }
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(CreateStringNormalization {
+            unicode: intermediate_rep
+                .unicode
+                .into_iter()
+                .next()
+                .ok_or_else(|| "unicode missing in CreateStringNormalization".to_string())?,
+            trim_outer_whitespace: intermediate_rep
+                .trim_outer_whitespace
+                .into_iter()
+                .next()
+                .ok_or_else(|| {
+                    "trim_outer_whitespace missing in CreateStringNormalization".to_string()
+                })?,
+            collapse_internal_whitespace: intermediate_rep
+                .collapse_internal_whitespace
+                .into_iter()
+                .next()
+                .ok_or_else(|| {
+                    "collapse_internal_whitespace missing in CreateStringNormalization".to_string()
+                })?,
+            case_sensitive: intermediate_rep
+                .case_sensitive
+                .into_iter()
+                .next()
+                .ok_or_else(|| "case_sensitive missing in CreateStringNormalization".to_string())?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<CreateStringNormalization> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<CreateStringNormalization>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<CreateStringNormalization>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for CreateStringNormalization - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<CreateStringNormalization> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <CreateStringNormalization as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into CreateStringNormalization - {err}"#
                     )),
                 }
             }

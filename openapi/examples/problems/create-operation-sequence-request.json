@@ -1,0 +1,66 @@
+{
+  "number": 3,
+  "problem_type": "small",
+  "title": "操作列問題",
+  "body_markdown": "正しい順番でボタンを操作してください。",
+  "submission_type": "operation_sequence",
+  "input_schema": {
+    "query": {
+      "type": "operation_sequence",
+      "allowed_controls": ["down", "right", "up", "left"],
+      "max_operations": 100
+    },
+    "answer": {
+      "type": "string",
+      "max_length": 50
+    }
+  },
+  "hints": [
+    {
+      "body_markdown": "最初の操作に注目してください。"
+    }
+  ],
+  "judge_config": {
+    "type": "operation_sequence",
+    "correct_operations": [
+      {
+        "control": "down",
+        "count": 1
+      },
+      {
+        "control": "right",
+        "count": 2
+      }
+    ],
+    "candidates": [
+      {
+        "candidate_id": "pattern-a",
+        "operations": [
+          {
+            "control": "down",
+            "count": 1
+          },
+          {
+            "control": "right",
+            "count": 2
+          }
+        ]
+      },
+      {
+        "candidate_id": "pattern-b",
+        "operations": [
+          {
+            "control": "down",
+            "count": 1
+          },
+          {
+            "control": "up",
+            "count": 1
+          }
+        ]
+      }
+    ]
+  },
+  "depends_on_problem_id": "22222222-2222-4222-8222-222222222221",
+  "is_required": true
+}

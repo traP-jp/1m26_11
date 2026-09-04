@@ -7,6 +7,7 @@ import PortalPage from '../PortalPage.vue'
 import RoomPage from '../RoomPage.vue'
 import AuthActionButton from '../components/auth/AuthActionButton.vue'
 import UserMenu from '../components/auth/UserMenu.vue'
+import AuthorProblemPage from '../AuthorProblemPage.vue'
 import { createAppRouter } from '../router'
 import guestResponse from '../../../openapi/examples/auth/guest-response.json'
 import meAuthenticated from '../../../openapi/examples/auth/me-demo-authenticated.json'
@@ -146,6 +147,7 @@ describe('App', () => {
     expect(wrapper.findComponent(PortalPage).exists()).toBe(true)
   })
 
+<<<<<<< HEAD
   it('restores the current run without starting another one on a direct Room visit', async () => {
     const getCurrentRun = vi
       .fn<ApiClient['getCurrentRun']>()
@@ -321,6 +323,14 @@ describe('App', () => {
         requiredCount: answerCleared.progress.required_count,
       },
     })
+=======
+  it('renders the development problem authoring page without changing App composition', async () => {
+    const roomId = '1411824c-d357-4941-af76-c76cb827dda6'
+    const { router, wrapper } = await mountAt(`/author/rooms/${roomId}/problems/new`)
+
+    expect(router.currentRoute.value.name).toBe('problem-author-new')
+    expect(wrapper.getComponent(AuthorProblemPage).props('roomId')).toBe(roomId)
+>>>>>>> main
   })
 
   it('connects Demo guest login to the auth flow', async () => {

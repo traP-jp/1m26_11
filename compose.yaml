@@ -8,6 +8,7 @@ services:
     environment:
       APP_ADDR: 0.0.0.0:8080
       AUTH_MODE: demo
+      PROBLEM_AUTHORING_ENABLED: "${PROBLEM_AUTHORING_ENABLED:-false}"
       IMAGE_UPLOAD_ENABLED: "false"
       IMAGE_DOWNLOAD_ENABLED: "false"
       DEMO_COOKIE_SECURE: "false"

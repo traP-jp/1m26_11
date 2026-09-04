@@ -2,13 +2,15 @@ mod common;
 
 use chrono::{DateTime, Duration, Utc};
 use common::{connect_test_database, foreign_key_delete_rule, index_columns, primary_key_columns};
-use serde_json::json;
+use openapi_generated::models::CreateProblemRequest;
+use serde_json::{Value, json};
 use server::{
     migrate,
-    problem::Asset,
+    problem::{Asset, validate_problem_draft},
     repository::{
         AssetUploadClaimOutcome, AssetUploadClaimRequest, AuthProvider, AuthRepository,
-        CompleteAssetUploadRequest, RepositoryError, SqlxUserRepository,
+        CompleteAssetUploadRequest, CreateProblemRecordOutcome, CreateProblemRecordRequest,
+        RepositoryError, SqlxUserRepository,
     },
 };
 use sqlx::types::Json;
@@ -199,6 +201,7 @@ async fn mariadb_game_schema_matches_contract() {
         vec![
             "asset_upload_idempotency".to_owned(),
             "demo_sessions".to_owned(),
+            "problem_create_idempotency".to_owned(),
             "problem_progress".to_owned(),
             "problems".to_owned(),
             "queries".to_owned(),
@@ -211,6 +214,10 @@ async fn mariadb_game_schema_matches_contract() {
     let primary_keys: &[(&str, &[&str])] = &[
         (
             "asset_upload_idempotency",
+            &["request_method", "request_path", "idempotency_key"],
+        ),
+        (
+            "problem_create_idempotency",
             &["request_method", "request_path", "idempotency_key"],
         ),
         ("users", &["user_id"]),
@@ -240,6 +247,11 @@ async fn mariadb_game_schema_matches_contract() {
             "asset_upload_idempotency",
             "idx_asset_upload_idempotency_expires_at",
             &["expires_at"],
+        ),
+        (
+            "problem_create_idempotency",
+            "idx_problem_create_idempotency_problem_id",
+            &["problem_id"],
         ),
         ("demo_sessions", "idx_demo_sessions_user_id", &["user_id"]),
         ("rooms", "uq_rooms_number", &["number"]),
@@ -285,6 +297,7 @@ async fn mariadb_game_schema_matches_contract() {
 
     let foreign_keys = [
         ("fk_demo_sessions_user_id", "CASCADE"),
+        ("fk_problem_create_idempotency_problem_id", "CASCADE"),
         ("fk_problems_room_id", "RESTRICT"),
         ("fk_problems_depends_on", "RESTRICT"),
         ("fk_runs_user_id", "RESTRICT"),
@@ -922,6 +935,459 @@ async fn mariadb_asset_upload_repository_handles_claim_replay_and_completion() {
         .execute(&pool)
         .await
         .expect("asset upload test room should be removed");
+
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a disposable MariaDB database"]
+async fn mariadb_problem_creation_is_transactional_and_idempotent() {
+    const OPERATION_REQUEST: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../openapi/examples/problems/create-operation-sequence-request.json"
+    ));
+
+    let pool = connect_test_database().await;
+    migrate(&pool).await.expect("migration should succeed");
+
+    let repository = SqlxUserRepository::new(pool.clone());
+
+    let room_id = Uuid::new_v4();
+    let other_room_id = Uuid::new_v4();
+    let dependency_id = Uuid::new_v4();
+    let other_room_problem_id = Uuid::new_v4();
+
+    let room_number = (room_id.as_u128() % 1_000_000_000) as i32 + 1;
+    let other_room_number = room_number + 1;
+
+    sqlx::query(
+        r#"
+        INSERT INTO rooms (
+            room_id,
+            number,
+            name,
+            genre,
+            description,
+            is_published
+        )
+        VALUES (?, ?, 'problem-create-test-room', 'test', 'problem creation test', 0)
+        "#,
+    )
+    .bind(room_id)
+    .bind(room_number)
+    .execute(&pool)
+    .await
+    .expect("unpublished authoring room should be inserted");
+
+    sqlx::query(
+        r#"
+        INSERT INTO rooms (
+            room_id,
+            number,
+            name,
+            genre,
+            description,
+            is_published
+        )
+        VALUES (?, ?, 'other-problem-create-test-room', 'test', 'other test room', 0)
+        "#,
+    )
+    .bind(other_room_id)
+    .bind(other_room_number)
+    .execute(&pool)
+    .await
+    .expect("other authoring room should be inserted");
+
+    sqlx::query(
+        r#"
+        INSERT INTO problems (
+            problem_id,
+            room_id,
+            number,
+            problem_type,
+            title,
+            body_markdown,
+            submission_type,
+            assets,
+            input_schema,
+            hints,
+            judge_config,
+            depends_on_problem_id,
+            is_required
+        )
+        VALUES (
+            ?, ?, 1, 'small', 'dependency problem', 'dependency body', 'string',
+            JSON_ARRAY(),
+            JSON_OBJECT(
+                'query',
+                JSON_OBJECT(
+                    'type', 'operation_sequence',
+                    'allowed_controls', JSON_ARRAY('down'),
+                    'max_operations', 100
+                ),
+                'answer',
+                JSON_OBJECT('type', 'string', 'max_length', 50)
+            ),
+            JSON_ARRAY(),
+            JSON_OBJECT(
+                'type', 'string',
+                'accepted_answers', JSON_ARRAY('answer'),
+                'normalization',
+                JSON_OBJECT(
+                    'unicode', 'nfkc',
+                    'trim_outer_whitespace', TRUE,
+                    'collapse_internal_whitespace', FALSE,
+                    'case_sensitive', FALSE
+                )
+            ),
+            NULL,
+            1
+        )
+        "#,
+    )
+    .bind(dependency_id)
+    .bind(room_id)
+    .execute(&pool)
+    .await
+    .expect("same-room dependency problem should be inserted");
+
+    sqlx::query(
+        r#"
+        INSERT INTO problems (
+            problem_id,
+            room_id,
+            number,
+            problem_type,
+            title,
+            body_markdown,
+            submission_type,
+            assets,
+            input_schema,
+            hints,
+            judge_config,
+            depends_on_problem_id,
+            is_required
+        )
+        VALUES (
+            ?, ?, 1, 'small', 'other room problem', 'other room body', 'string',
+            JSON_ARRAY(),
+            JSON_OBJECT(),
+            JSON_ARRAY(),
+            JSON_OBJECT(),
+            NULL,
+            1
+        )
+        "#,
+    )
+    .bind(other_room_problem_id)
+    .bind(other_room_id)
+    .execute(&pool)
+    .await
+    .expect("other-room dependency problem should be inserted");
+
+    let payload: CreateProblemRequest = serde_json::from_str(OPERATION_REQUEST)
+        .expect("operation request fixture should match generated model");
+
+    let mut draft =
+        validate_problem_draft(room_id, payload).expect("fixture should produce a valid draft");
+
+    draft.number = 2;
+    draft.depends_on_problem_id = Some(dependency_id);
+
+    let request_path = format!("/api/rooms/{room_id}/problems");
+    let idempotency_key = Uuid::new_v4();
+
+    let create_request = CreateProblemRecordRequest {
+        request_method: "POST".to_owned(),
+        request_path: request_path.clone(),
+        idempotency_key,
+        payload_sha256: [0x11; 32],
+        draft: draft.clone(),
+    };
+
+    let first_outcome = repository
+        .create_problem(&create_request)
+        .await
+        .expect("first problem creation should succeed");
+
+    let created_problem_id = match first_outcome {
+        CreateProblemRecordOutcome::Created { problem_id } => problem_id,
+        outcome => panic!("first request should create a problem, got {outcome:?}"),
+    };
+
+    let stored = sqlx::query_as::<
+        _,
+        (
+            i32,
+            String,
+            String,
+            String,
+            String,
+            Json<Vec<Asset>>,
+            Json<Value>,
+            Json<Value>,
+            Json<Value>,
+            Option<Uuid>,
+            bool,
+        ),
+    >(
+        r#"
+        SELECT
+            number,
+            problem_type,
+            title,
+            body_markdown,
+            submission_type,
+            assets,
+            input_schema,
+            hints,
+            judge_config,
+            depends_on_problem_id,
+            is_required
+        FROM problems
+        WHERE problem_id = ?
+        "#,
+    )
+    .bind(created_problem_id)
+    .fetch_one(&pool)
+    .await
+    .expect("created problem should be readable");
+
+    assert_eq!(stored.0, draft.number);
+    assert_eq!(stored.1, "small");
+    assert_eq!(stored.2, draft.title);
+    assert_eq!(stored.3, draft.body_markdown);
+    assert_eq!(stored.4, "operation_sequence");
+    assert!(stored.5.0.is_empty());
+    assert_eq!(
+        stored.6.0,
+        serde_json::to_value(&draft.input_schema).expect("input schema should serialize")
+    );
+    assert_eq!(
+        stored.7.0,
+        serde_json::to_value(&draft.hints).expect("hints should serialize")
+    );
+    assert_eq!(
+        stored.8.0,
+        serde_json::to_value(&draft.judge_config).expect("judge config should serialize")
+    );
+    assert_eq!(stored.9, Some(dependency_id));
+    assert!(stored.10);
+
+    let replay_outcome = repository
+        .create_problem(&create_request)
+        .await
+        .expect("same request replay should succeed");
+
+    assert_eq!(
+        replay_outcome,
+        CreateProblemRecordOutcome::Replayed {
+            problem_id: created_problem_id,
+        }
+    );
+
+    let reused_outcome = repository
+        .create_problem(&CreateProblemRecordRequest {
+            payload_sha256: [0x22; 32],
+            ..create_request.clone()
+        })
+        .await
+        .expect("different payload should be classified");
+
+    assert_eq!(reused_outcome, CreateProblemRecordOutcome::Reused);
+
+    let number_conflict_result = repository
+        .create_problem(&CreateProblemRecordRequest {
+            idempotency_key: Uuid::new_v4(),
+            payload_sha256: [0x33; 32],
+            ..create_request.clone()
+        })
+        .await;
+
+    assert!(matches!(
+        number_conflict_result,
+        Err(RepositoryError::ProblemNumberConflict)
+    ));
+
+    let mut invalid_dependency_draft = draft.clone();
+    invalid_dependency_draft.number = 3;
+    invalid_dependency_draft.depends_on_problem_id = Some(other_room_problem_id);
+
+    let invalid_dependency_result = repository
+        .create_problem(&CreateProblemRecordRequest {
+            request_method: "POST".to_owned(),
+            request_path: request_path.clone(),
+            idempotency_key: Uuid::new_v4(),
+            payload_sha256: [0x44; 32],
+            draft: invalid_dependency_draft,
+        })
+        .await;
+
+    assert!(matches!(
+        invalid_dependency_result,
+        Err(RepositoryError::InvalidProblemDependency)
+    ));
+
+    let invalid_method_result = sqlx::query(
+        r#"
+        INSERT INTO problem_create_idempotency (
+            request_method,
+            request_path,
+            idempotency_key,
+            payload_sha256,
+            problem_id
+        )
+        VALUES ('GET', ?, ?, ?, ?)
+        "#,
+    )
+    .bind(&request_path)
+    .bind(Uuid::new_v4())
+    .bind(vec![0x55_u8; 32])
+    .bind(created_problem_id)
+    .execute(&pool)
+    .await;
+
+    assert!(
+        invalid_method_result.is_err(),
+        "migration must reject methods other than POST"
+    );
+
+    sqlx::query(
+        r#"
+        UPDATE rooms
+        SET is_published = 1
+        WHERE room_id = ?
+        "#,
+    )
+    .bind(room_id)
+    .execute(&pool)
+    .await
+    .expect("test room should be published");
+
+    let replay_after_publish = repository
+        .create_problem(&create_request)
+        .await
+        .expect("completed request should still replay after publication");
+
+    assert_eq!(
+        replay_after_publish,
+        CreateProblemRecordOutcome::Replayed {
+            problem_id: created_problem_id,
+        }
+    );
+
+    let mut published_draft = draft.clone();
+    published_draft.number = 3;
+
+    let published_result = repository
+        .create_problem(&CreateProblemRecordRequest {
+            request_method: "POST".to_owned(),
+            request_path: request_path.clone(),
+            idempotency_key: Uuid::new_v4(),
+            payload_sha256: [0x66; 32],
+            draft: published_draft,
+        })
+        .await;
+
+    assert!(matches!(
+        published_result,
+        Err(RepositoryError::PublishedRoomImmutable)
+    ));
+
+    let missing_room_id = Uuid::new_v4();
+    let mut missing_room_draft = draft.clone();
+    missing_room_draft.room_id = missing_room_id;
+
+    let missing_room_result = repository
+        .create_problem(&CreateProblemRecordRequest {
+            request_method: "POST".to_owned(),
+            request_path: format!("/api/rooms/{missing_room_id}/problems"),
+            idempotency_key: Uuid::new_v4(),
+            payload_sha256: [0x77; 32],
+            draft: missing_room_draft,
+        })
+        .await;
+
+    assert!(matches!(
+        missing_room_result,
+        Err(RepositoryError::RoomNotFound)
+    ));
+
+    let created_number_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM problems
+        WHERE room_id = ?
+          AND number = 2
+        "#,
+    )
+    .bind(room_id)
+    .fetch_one(&pool)
+    .await
+    .expect("created problem count should be readable");
+
+    assert_eq!(
+        created_number_count, 1,
+        "replay and conflicts must not create duplicate problems"
+    );
+
+    let idempotency_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM problem_create_idempotency
+        WHERE request_method = 'POST'
+          AND request_path = ?
+          AND idempotency_key = ?
+        "#,
+    )
+    .bind(&request_path)
+    .bind(idempotency_key)
+    .fetch_one(&pool)
+    .await
+    .expect("problem creation idempotency record should be readable");
+
+    assert_eq!(idempotency_count, 1);
+
+    sqlx::query(
+        r#"
+        DELETE FROM problem_create_idempotency
+        WHERE request_path = ?
+        "#,
+    )
+    .bind(&request_path)
+    .execute(&pool)
+    .await
+    .expect("problem creation idempotency record should be removed");
+
+    sqlx::query("DELETE FROM problems WHERE problem_id = ?")
+        .bind(created_problem_id)
+        .execute(&pool)
+        .await
+        .expect("created problem should be removed");
+
+    sqlx::query("DELETE FROM problems WHERE problem_id = ?")
+        .bind(dependency_id)
+        .execute(&pool)
+        .await
+        .expect("dependency problem should be removed");
+
+    sqlx::query("DELETE FROM problems WHERE problem_id = ?")
+        .bind(other_room_problem_id)
+        .execute(&pool)
+        .await
+        .expect("other-room problem should be removed");
+
+    sqlx::query("DELETE FROM rooms WHERE room_id = ?")
+        .bind(room_id)
+        .execute(&pool)
+        .await
+        .expect("authoring room should be removed");
+
+    sqlx::query("DELETE FROM rooms WHERE room_id = ?")
+        .bind(other_room_id)
+        .execute(&pool)
+        .await
+        .expect("other authoring room should be removed");
 
     pool.close().await;
 }

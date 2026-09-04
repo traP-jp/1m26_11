@@ -11,6 +11,24 @@ use crate::{models, types::*};
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[must_use]
 #[allow(clippy::large_enum_variant)]
+pub enum CreateProblemResponse {
+    /// 問題の作成に成功しました。
+    Status201(models::CreateProblemResponse),
+    /// room_id、JSON、またはIdempotency-Keyの形式が不正です。 error.codeはINVALID_PATH_PARAMETER、INVALID_JSON、 IDEMPOTENCY_KEY_REQUIRED、INVALID_IDEMPOTENCY_KEYのいずれかです。
+    Status400_Room(models::ErrorResponse),
+    /// 指定されたroomが存在しません。 error.codeはROOM_NOT_FOUNDです。
+    Status404(models::ErrorResponse),
+    /// 公開済みroom、問題番号の重複、またはidempotencyの状態により作成できません。 error.codeはPUBLISHED_ROOM_IMMUTABLE、PROBLEM_NUMBER_CONFLICT、 IDEMPOTENCY_KEY_REUSEDのいずれかです。
+    Status409(models::ErrorResponse),
+    /// 問題内容、回答設定、依存関係、操作列、またはヒントが不正です。 error.codeはINVALID_PROBLEMです。
+    Status422(models::ErrorResponse),
+    /// DB更新失敗などのserver内部エラーです。 error.codeはINTERNAL_SERVER_ERRORです。
+    Status500_DB(models::ErrorResponse),
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[must_use]
+#[allow(clippy::large_enum_variant)]
 pub enum GetProblemResponse {
     /// 公開可能な問題データ
     Status200(models::ProblemResponse),
@@ -97,6 +115,20 @@ pub enum UploadProblemAssetResponse {
 pub trait Problems<E: std::fmt::Debug + Send + Sync + 'static = ()>:
     super::ErrorHandler<E>
 {
+    /// 作問用の問題を新規作成する.
+    ///
+    /// CreateProblem - POST /api/rooms/{room_id}/problems
+    async fn create_problem(
+        &self,
+
+        method: &Method,
+        host: &Host,
+        cookies: &CookieJar,
+        header_params: &models::CreateProblemHeaderParams,
+        path_params: &models::CreateProblemPathParams,
+        body: &models::CreateProblemRequest,
+    ) -> Result<CreateProblemResponse, E>;
+
     /// 問題データを取得する.
     ///
     /// GetProblem - GET /api/rooms/{room_id}/problems/{problem_id}
