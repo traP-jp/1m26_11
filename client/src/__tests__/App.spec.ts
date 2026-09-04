@@ -74,9 +74,6 @@ function createAppApiClient(overrides: Partial<ApiClient> = {}): ApiClient {
     getProblem: vi
       .fn<ApiClient['getProblem']>()
       .mockResolvedValue(problemResponse as GetProblemResponse),
-    getProblemAssets: vi
-      .fn<ApiClient['getProblemAssets']>()
-      .mockResolvedValue({ items: problemResponse.assets }),
     submitQuery: vi
       .fn<ApiClient['submitQuery']>()
       .mockResolvedValue(queryIncorrect as SubmitQueryResponse),

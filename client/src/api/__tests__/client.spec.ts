@@ -18,7 +18,6 @@ import runNotFound from '../../../../openapi/examples/runs/error-run-not-found.j
 import newRun from '../../../../openapi/examples/runs/start-new-response.json'
 import { ApiClientError, createApiClient, type CreateProblemRequest } from '@/api/client'
 import assetCreated from '../../../../openapi/examples/assets/response-created.json'
-import problemAssets from '../../../../openapi/examples/assets/response-list.json'
 import createProblemRequest from '../../../../openapi/examples/problems/create-string-request.json'
 import createProblemResponse from '../../../../openapi/examples/problems/create-response.json'
 
@@ -153,14 +152,6 @@ describe('ApiClient', () => {
       invoke: () => client.getProblem(problemPath),
       response: HttpResponse.json(problemResponse),
       expectedResult: problemResponse,
-    },
-    {
-      name: 'getProblemAssets',
-      method: 'GET',
-      path: `/api/rooms/${ROOM_ID}/problems/${PROBLEM_ID}/assets`,
-      invoke: () => client.getProblemAssets(problemPath),
-      response: HttpResponse.json(problemAssets),
-      expectedResult: problemAssets,
     },
     {
       name: 'submitQuery',

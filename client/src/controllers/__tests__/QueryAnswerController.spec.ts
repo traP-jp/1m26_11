@@ -35,7 +35,6 @@ function createClient(overrides: Partial<ApiClient> = {}): ApiClient {
     startOrResumeRun: vi.fn<ApiClient['startOrResumeRun']>(),
     getCurrentRun: vi.fn<ApiClient['getCurrentRun']>(),
     getProblem: vi.fn<ApiClient['getProblem']>(),
-    getProblemAssets: vi.fn<ApiClient['getProblemAssets']>(),
     submitQuery: vi.fn<ApiClient['submitQuery']>(),
     submitAnswer: vi.fn<ApiClient['submitAnswer']>(),
     ...overrides,
