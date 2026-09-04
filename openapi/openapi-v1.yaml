@@ -87,6 +87,26 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /api/rooms/{room_id}:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+    get:
+      summary: 部屋詳細を取得する
+      description: |
+        公開されている部屋の基本情報、問題数、現在のユーザーの挑戦状態、およびランキング概要を取得します。
+        未認証、または未挑戦の場合は run_status は not_started となり、my_rank は null になります。
+      operationId: getRoom
+      tags:
+        - rooms
+      responses:
+        "200":
+          $ref: "#/components/responses/RoomSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
   /api/rooms:
     get:
       summary: 公開部屋一覧を取得する
@@ -553,6 +573,22 @@ components:
             current_run:
               summary: 再読込後に取得したactive run
               externalValue: ./examples/runs/active-response.json
+    RoomSuccess:
+      description: 部屋詳細情報
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/RoomResponse"
+          examples:
+            active:
+              summary: active な run を持つ部屋詳細
+              externalValue: ./examples/rooms/response-active.json
+            not_started:
+              summary: 未挑戦または未認証時の部屋詳細
+              externalValue: ./examples/rooms/response-not-started.json
+            cleared:
+              summary: クリア済みの部屋詳細
+              externalValue: ./examples/rooms/response-cleared.json
     LeaderboardSuccess:
       description: 部屋別leaderboard
       content:
@@ -1022,6 +1058,60 @@ components:
           items:
             type: string
             format: uuid
+
+    RoomResponse:
+      type: object
+      required:
+        - id
+        - number
+        - name
+        - genre
+        - description
+        - problem_count
+        - run_status
+        - ranking_summary
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+        genre:
+          type: string
+        description:
+          type: string
+        problem_count:
+          type: integer
+          minimum: 0
+        run_status:
+          $ref: "#/components/schemas/RoomRunStatus"
+        ranking_summary:
+          $ref: "#/components/schemas/RoomRankingSummary"
+
+    RoomRunStatus:
+      type: string
+      enum:
+        - not_started
+        - active
+        - cleared
+
+    RoomRankingSummary:
+      type: object
+      required:
+        - player_count
+        - my_rank
+      properties:
+        player_count:
+          type: integer
+          minimum: 0
+        my_rank:
+          oneOf:
+            - type: integer
+              minimum: 1
+            - type: "null"
 
     LeaderboardResponse:
       type: object
