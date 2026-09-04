@@ -221,6 +221,32 @@ paths:
     parameters:
       - $ref: "#/components/parameters/RoomId"
       - $ref: "#/components/parameters/ProblemId"
+    get:
+      summary: 問題に登録された画像の取得URLを発行する
+      description: |
+        認証済みユーザーのcurrent runで解放済みのproblemに登録された画像を返します。
+        IMAGE_DOWNLOAD_ENABLED=trueの場合だけrouteを登録します。
+        無効な場合はroute自体を登録せず404を返します。
+        各Assetのurlは、storage objectをGETするためのpresigned URLです。
+        presigned URLの有効期限は発行から300秒です。
+        requestからobject_keyは受け取らず、problems.assetsに登録されたobject_keyだけを署名します。
+        responseへstorage credentialや内部object_keyは返しません。
+      operationId: getProblemAssets
+      tags:
+        - problems
+      responses:
+        "200":
+          $ref: "#/components/responses/ProblemAssetsSuccess"
+        "400":
+          $ref: "#/components/responses/ProblemAssetsBadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ProblemAssetsNotFound"
+        "409":
+          $ref: "#/components/responses/ProblemLocked"
+        "500":
+          $ref: "#/components/responses/ProblemAssetsInternalServerError"
     post:
       summary: 作問用画像をアップロードする
       description: |
@@ -587,6 +613,53 @@ components:
             available_problem:
               summary: 挑戦可能な小なぞ
               externalValue: ./examples/problems/available-response.json
+    ProblemAssetsSuccess:
+      description: 対象problemに登録された画像と、300秒間有効なpresigned GET URL
+      headers:
+        Cache-Control:
+          description: presigned URLを共有cacheへ保存させません。
+          schema:
+            type: string
+            example: no-store
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProblemAssetsResponse"
+          examples:
+            listed:
+              summary: 複数の画像を取得する場合
+              externalValue: ./examples/assets/response-list.json
+    ProblemAssetsBadRequest:
+      description: |
+        room_idまたはproblem_idがUUIDではありません。
+        error.codeはINVALID_PATH_PARAMETERです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemAssetsNotFound:
+      description: |
+        activeなrunがないか、指定されたproblemに取得可能な画像がありません。
+        error.codeはRUN_NOT_FOUNDまたはIMAGE_NOT_FOUNDです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            run_not_found:
+              summary: activeなrunが存在しない場合
+              externalValue: ./examples/runs/error-run-not-found.json
+            image_not_found:
+              summary: problemまたは画像が存在しない場合
+              externalValue: ./examples/assets/error-image-not-found.json
+    ProblemAssetsInternalServerError:
+      description: |
+        DBアクセスまたはpresigned URL生成に失敗しました。
+        error.codeはINTERNAL_SERVER_ERRORです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     ProblemAssetUploadSuccess:
       description: 画像をuploadし、対象problemへの紐付けが完了しました。
       content:
@@ -1170,6 +1243,16 @@ components:
       enum:
         - active
         - cleared
+    ProblemAssetsResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/Asset"
     Asset:
       type: object
       required:

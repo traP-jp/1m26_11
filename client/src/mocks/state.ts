@@ -9,6 +9,7 @@ const DEFAULT_STATE: MockState = {
   cleared_run_exists: false,
   published_rooms_count: 1,
   problem_exists: true,
+  problem_has_assets: true,
   problem_status: 'available',
   next_problem_status: 'locked',
   query_judgement: 'incorrect',

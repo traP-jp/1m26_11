@@ -22,6 +22,11 @@ const REQUIRED_OPERATIONS: [(&str, &str, &str); 10] = [
         "getProblem",
     ),
     (
+        "/api/rooms/{room_id}/problems/{problem_id}/assets",
+        "get",
+        "getProblemAssets",
+    ),
+    (
         "/api/rooms/{room_id}/problems/{problem_id}/queries",
         "post",
         "submitQuery",

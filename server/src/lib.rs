@@ -33,7 +33,10 @@ mod error;
 pub(crate) mod game_progress;
 mod handler;
 mod image_upload;
-pub use image_upload::{ImageStorage, ImageStorageError, ImageStorageUpload, S3ImageStorage};
+pub use image_upload::{
+    ImageStorage, ImageStorageError, ImageStorageUpload, ImageUrlSigner, ImageUrlSigningError,
+    S3ImageStorage,
+};
 pub mod problem;
 pub mod repository;
 
@@ -46,6 +49,7 @@ pub struct AppState {
     pub(crate) auth_repository: Arc<dyn AuthRepository>,
     pub(crate) asset_url_resolver: Arc<dyn AssetUrlResolver>,
     pub(crate) image_storage: Option<Arc<dyn ImageStorage>>,
+    pub(crate) image_url_signer: Option<Arc<dyn ImageUrlSigner>>,
 }
 
 impl AppState {
@@ -57,6 +61,7 @@ impl AppState {
             auth_repository,
             asset_url_resolver: Arc::new(UnconfiguredAssetUrlResolver),
             image_storage: None,
+            image_url_signer: None,
         }
     }
 
@@ -80,9 +85,16 @@ impl AppState {
         self.image_storage = Some(image_storage);
         self
     }
+
+    #[must_use]
+    pub fn with_image_url_signer(mut self, image_url_signer: Arc<dyn ImageUrlSigner>) -> Self {
+        self.image_url_signer = Some(image_url_signer);
+        self
+    }
 }
 
 pub fn app(state: AppState) -> Router {
+    let image_download_route_enabled = state.image_url_signer.is_some();
     let image_upload_route_enabled =
         state.auth_mode == AuthMode::Demo && state.image_storage.is_some();
 
@@ -147,7 +159,22 @@ pub fn app(state: AppState) -> Router {
             "/api/rooms/{room_id}/problems/{problem_id}/answers",
             post(handler::submit_answer).fallback(handler::method_not_allowed),
         );
-    if image_upload_route_enabled {
+    if image_download_route_enabled && image_upload_route_enabled {
+        router = router.route(
+            "/api/rooms/{room_id}/problems/{problem_id}/assets",
+            get(handler::get_problem_assets)
+                .post(handler::upload_problem_asset)
+                .fallback(handler::method_not_allowed)
+                .layer(DefaultBodyLimit::max(
+                    image_upload::MAX_IMAGE_FILE_BYTES + 64 * 1024,
+                )),
+        );
+    } else if image_download_route_enabled {
+        router = router.route(
+            "/api/rooms/{room_id}/problems/{problem_id}/assets",
+            get(handler::get_problem_assets).fallback(handler::method_not_allowed),
+        );
+    } else if image_upload_route_enabled {
         router = router.route(
             "/api/rooms/{room_id}/problems/{problem_id}/assets",
             post(handler::upload_problem_asset)
@@ -157,6 +184,7 @@ pub fn app(state: AppState) -> Router {
                 )),
         );
     }
+
     router
         .fallback(handler::not_found)
         .layer(

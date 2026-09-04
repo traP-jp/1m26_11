@@ -1,10 +1,11 @@
-import type { InputAdapterEvent } from './input/InputAdapter.types'
+import type { Control, InputAdapterEvent, Operation } from './input/InputAdapter.types'
 
 export type ProblemStatus = 'locked' | 'available' | 'cleared'
+export type ProblemType = 'small' | 'final'
 export type JudgementState = 'idle' | 'pending' | 'correct' | 'incorrect' | 'error'
 
 export interface RoomViewModel {
-  room: { id: string; name: string }
+  room: { id: string; number: number; name: string }
   problems: Array<{
     id: string
     number: number
@@ -15,6 +16,7 @@ export interface RoomViewModel {
   selectedProblem: {
     id: string
     number: number
+    type: ProblemType
     title: string
     bodyMarkdown: string
     assets: Array<{ type: string; url: string; alt: string }>
@@ -22,9 +24,9 @@ export interface RoomViewModel {
   } | null
   serverElapsedMs: number
   queryInput: {
-    allowedControls: string[]
+    allowedControls: Control[]
     maxOperations: number
-    operations: Array<{ control: string; count: number }>
+    operations: Operation[]
   }
   answerInput: { value: string; maxLength: number }
   queryJudgement: { state: JudgementState }
@@ -35,5 +37,6 @@ export interface RoomViewModel {
 export type RoomUiEvent =
   | { type: 'problem-selected'; problemId: string }
   | { type: 'answer-changed'; value: string }
+  | { type: 'portal-returned' }
   | { type: 'room-exited' }
   | InputAdapterEvent

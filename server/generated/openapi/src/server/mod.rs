@@ -60,7 +60,7 @@ where
         )
         .route(
             "/api/rooms/{room_id}/problems/{problem_id}/assets",
-            post(upload_problem_asset::<I, A, E>),
+            get(get_problem_assets::<I, A, E>).post(upload_problem_asset::<I, A, E>),
         )
         .route(
             "/api/rooms/{room_id}/problems/{problem_id}/hints/{level}",
@@ -910,6 +910,196 @@ where
                 response.body(Body::from(body_content))
             }
             apis::problems::GetProblemResponse::Status500_Server(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(500);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+        },
+        Err(why) => {
+            // Application code returned an error. This should not happen, as the implementation should
+            // return a valid response.
+            return api_impl
+                .as_ref()
+                .handle_error(&method, &host, &cookies, why)
+                .await;
+        }
+    };
+
+    resp.map_err(|e| {
+        error!(error = ?e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })
+}
+
+#[tracing::instrument(skip_all)]
+fn get_problem_assets_validation(
+    path_params: models::GetProblemAssetsPathParams,
+) -> std::result::Result<(models::GetProblemAssetsPathParams,), ValidationErrors> {
+    path_params.validate()?;
+
+    Ok((path_params,))
+}
+/// GetProblemAssets - GET /api/rooms/{room_id}/problems/{problem_id}/assets
+#[tracing::instrument(skip_all)]
+async fn get_problem_assets<I, A, E>(
+    method: Method,
+    TypedHeader(host): TypedHeader<Host>,
+    cookies: CookieJar,
+    Path(path_params): Path<models::GetProblemAssetsPathParams>,
+    State(api_impl): State<I>,
+) -> Result<Response, StatusCode>
+where
+    I: AsRef<A> + Send + Sync,
+    A: apis::problems::Problems<E> + Send + Sync,
+    E: std::fmt::Debug + Send + Sync + 'static,
+{
+    #[allow(clippy::redundant_closure)]
+    let validation =
+        tokio::task::spawn_blocking(move || get_problem_assets_validation(path_params))
+            .await
+            .unwrap();
+
+    let Ok((path_params,)) = validation else {
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Body::from(validation.unwrap_err().to_string()))
+            .map_err(|_| StatusCode::BAD_REQUEST);
+    };
+
+    let result = api_impl
+        .as_ref()
+        .get_problem_assets(&method, &host, &cookies, &path_params)
+        .await;
+
+    let resp = match result {
+        Ok(rsp) => match rsp {
+            apis::problems::GetProblemAssetsResponse::Status200 {
+                body,
+                cache_control,
+            } => {
+                let mut response = Response::builder();
+                if let Some(cache_control) = cache_control {
+                    let cache_control = match header::IntoHeaderValue(cache_control).try_into() {
+                        Ok(val) => val,
+                        Err(e) => {
+                            return Response::builder()
+                                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                        .body(Body::from(format!("An internal server error occurred handling cache_control header - {e}"))).map_err(|e| { error!(error = ?e); StatusCode::INTERNAL_SERVER_ERROR });
+                        }
+                    };
+
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(HeaderName::from_static("cache-control"), cache_control);
+                }
+                let mut response = response.status(200);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::GetProblemAssetsResponse::Status400_Room(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(400);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::GetProblemAssetsResponse::Status401(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(401);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::GetProblemAssetsResponse::Status404_Active(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(404);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::GetProblemAssetsResponse::Status409(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(409);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::GetProblemAssetsResponse::Status500_DB(body) => {
                 let mut response = Response::builder();
                 let mut response = response.status(500);
                 {

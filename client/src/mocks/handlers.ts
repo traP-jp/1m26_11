@@ -303,6 +303,70 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
       return HttpResponse.json(result.body, { status: result.status })
     }),
 
+    http.get('/api/rooms/{room_id}/problems/{problem_id}/assets', ({ params, response }) => {
+      if (!requestHasValidResourceIds(params)) return response(400).json(errorBody(400))
+
+      if (!state.get('authenticated')) {
+        return response(401).json(
+          responseExample<Schemas['ErrorResponse']>(
+            contract,
+            'getProblemAssets',
+            401,
+            'unauthorized',
+          ),
+        )
+      }
+
+      if (!state.get('active_run_exists')) {
+        return response(404).json(
+          responseExample<Schemas['ErrorResponse']>(
+            contract,
+            'getProblemAssets',
+            404,
+            'run_not_found',
+          ),
+        )
+      }
+
+      if (
+        !state.get('room_exists') ||
+        !state.get('problem_exists') ||
+        !state.get('problem_has_assets')
+      ) {
+        return response(404).json(
+          responseExample<Schemas['ErrorResponse']>(
+            contract,
+            'getProblemAssets',
+            404,
+            'image_not_found',
+          ),
+        )
+      }
+
+      if (state.get('problem_status') === 'locked') {
+        return response(409).json(
+          responseExample<Schemas['ErrorResponse']>(
+            contract,
+            'getProblemAssets',
+            409,
+            'problem_locked',
+          ),
+        )
+      }
+
+      const result = responseFromStep<Schemas['ProblemAssetsResponse']>(
+        contract,
+        state,
+        'get_problem_assets',
+        'getProblemAssets',
+      )
+
+      return HttpResponse.json(result.body, {
+        status: result.status,
+        headers: { 'cache-control': 'no-store' },
+      })
+    }),
+
     http.post(
       '/api/rooms/{room_id}/problems/{problem_id}/queries',
       async ({ params, request, response }) => {
