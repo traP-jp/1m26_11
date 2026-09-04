@@ -24,6 +24,7 @@ export function createFixtureApiClient(): ApiClient {
     startOrResumeRun: unsupported,
     getCurrentRun: unsupported,
     getProblem: unsupported,
+    getProblemAssets: unsupported,
     submitQuery: unsupported,
     submitAnswer: unsupported,
   }
