@@ -4,1488 +4,1496 @@
  */
 
 export interface paths {
-    "/openapi.yaml": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** OpenAPI文書を取得する */
-        get: operations["getOpenApi"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** ログイン状態を取得する */
-        get: operations["getMe"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/me/progress": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * ログイン中のユーザーの全体進捗を取得する
-         * @description 公開room全体のclear数、総数、genre別内訳を返します。
-         *     同じroomを複数回clearしていても、clear数には1回だけ加算します。
-         *     非公開roomは全体とgenre別のどちらにも含めません。
-         *     by_genreはgenreの昇順で返します。
-         */
-        get: operations["getMeProgress"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/guest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * デモ環境で名前を登録する
-         * @description AUTH_MODE=demoのときだけ有効です。NeoShowcase modeでは404を返します。
-         */
-        post: operations["loginGuest"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * デモ環境からログアウトする
-         * @description AUTH_MODE=demoのときだけ使用し、デモsessionとCookieを無効化します。NeoShowcase modeでは404を返します。
-         */
-        post: operations["logoutDemo"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rooms/{room_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-            };
-            cookie?: never;
-        };
-        /**
-         * 部屋詳細を取得する
-         * @description 公開されている部屋の基本情報、問題数、現在のユーザーの挑戦状態、およびランキング概要を取得します。
-         *     未認証、または未挑戦の場合は run_status は not_started となり、my_rank は null になります。
-         */
-        get: operations["getRoom"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rooms": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 公開部屋一覧を取得する
-         * @description 公開されている部屋の一覧をnumber昇順で取得します。
-         *     未認証時は進捗がnot_started、best_recordがnullで返ります。
-         *     認証時は現在のユーザーの進捗とベストレコードを含めて返します。
-         */
-        get: operations["getRooms"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rooms/{room_id}/runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 挑戦を開始または再開する
-         * @description 認証済みユーザーとroom_idからactiveなrunを検索します。
-         *     request bodyは使用しません。
-         *     activeなrunがあれば再開します。
-         *     未挑戦なら新規runをserver時刻で作成します。
-         *     クリア済みの場合は再挑戦を開始せず409を返します。
-         */
-        post: operations["startOrResumeRun"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rooms/{room_id}/runs/current": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-            };
-            cookie?: never;
-        };
-        /** 現在の挑戦状態を取得する */
-        get: operations["getCurrentRun"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rooms/{room_id}/leaderboard": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-            };
-            cookie?: never;
-        };
-        /**
-         * 部屋別leaderboardを取得する
-         * @description roomごとに、clear済みrunからユーザーごとのbest recordを1件ずつ返します。
-         *     同一ユーザーのbest recordはelapsed_ms、query_count、cleared_atの昇順で選びます。
-         *     leaderboardもelapsed_ms、query_count、cleared_atの昇順で並べます。
-         *     3項目がすべて同じrecordには同じrankを付け、次のrankを飛ばします（1, 1, 3）。
-         *     query_countにはoperation_sequence型問題の試行回数だけを含めます。
-         *     未認証、または現在のユーザーにclear recordがない場合はmeをnullにします。
-         */
-        get: operations["getRoomLeaderboard"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rooms/{room_id}/problems/{problem_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-            };
-            cookie?: never;
-        };
-        /**
-         * 問題データを取得する
-         * @description 正解、全候補、判定設定、ヒント本文は返しません。
-         */
-        get: operations["getProblem"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rooms/{room_id}/problems/{problem_id}/assets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-            };
-            cookie?: never;
-        };
-        /**
-         * 問題に登録された画像の取得URLを発行する
-         * @description 認証済みユーザーのcurrent runで解放済みのproblemに登録された画像を返します。
-         *     IMAGE_DOWNLOAD_ENABLED=trueの場合だけrouteを登録します。
-         *     無効な場合はroute自体を登録せず404を返します。
-         *     各Assetのurlは、storage objectをGETするためのpresigned URLです。
-         *     presigned URLの有効期限は発行から300秒です。
-         *     requestからobject_keyは受け取らず、problems.assetsに登録されたobject_keyだけを署名します。
-         *     responseへstorage credentialや内部object_keyは返しません。
-         */
-        get: operations["getProblemAssets"];
-        put?: never;
-        /**
-         * 作問用画像をアップロードする
-         * @description dev環境専用の作問支援APIです。
-         *     AUTH_MODE=demoかつIMAGE_UPLOAD_ENABLED=trueの場合だけrouteを登録します。
-         *     それ以外の環境ではroute自体を登録せず404を返します。
-         *     fileの実内容を検査し、storageへのuploadとproblems.assetsへの追加を行います。
-         *     client filename、object_key、storage credentialはresponseへ返しません。
-         */
-        post: operations["uploadProblemAsset"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rooms/{room_id}/problems/{problem_id}/hints/{level}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-                /**
-                 * @description ヒントの段階（1以上の整数）
-                 * @example 1
-                 */
-                level: components["parameters"]["HintLevel"];
-            };
-            cookie?: never;
-        };
-        /**
-         * 問題のヒントを取得する
-         * @description 認証済みユーザーのcurrent runで、指定されたlevelのヒントを取得します。
-         */
-        get: operations["getProblemHint"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rooms/{room_id}/problems/{problem_id}/queries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 絞り込み操作列を送信する
-         * @description 操作列全体を一度に送り、不正解も200とcorrect=falseで返します。
-         */
-        post: operations["submitQuery"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rooms/{room_id}/problems/{problem_id}/answers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 文字列回答を送信する
-         * @description 不正解も200とcorrect=falseで返します。
-         */
-        post: operations["submitAnswer"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-}
-export type webhooks = Record<string, never>;
-export interface components {
-    schemas: {
-        User: {
-            /** Format: uuid */
-            id: string;
-            display_name: string;
-        };
-        MeResponse: components["schemas"]["MeNeoshowcaseAuthenticated"] | components["schemas"]["MeNeoshowcaseUnauthenticated"] | components["schemas"]["MeDemoAuthenticated"] | components["schemas"]["MeDemoUnauthenticated"];
-        MeProgressResponse: {
-            /** Format: int32 */
-            cleared_room_count: number;
-            /** Format: int32 */
-            total_room_count: number;
-            by_genre: components["schemas"]["GenreProgress"][];
-        };
-        GenreProgress: {
-            genre: string;
-            /** Format: int32 */
-            cleared_room_count: number;
-            /** Format: int32 */
-            total_room_count: number;
-        };
-        MeNeoshowcaseAuthenticated: {
-            /** @constant */
-            authenticated: true;
-            /** @constant */
-            auth_mode: "neoshowcase";
-            user: components["schemas"]["User"];
-            login_url: null;
-            logout_url: string;
-        };
-        MeNeoshowcaseUnauthenticated: {
-            /** @constant */
-            authenticated: false;
-            /** @constant */
-            auth_mode: "neoshowcase";
-            user: null;
-            login_url: string;
-            logout_url: null;
-        };
-        MeDemoAuthenticated: {
-            /** @constant */
-            authenticated: true;
-            /** @constant */
-            auth_mode: "demo";
-            user: components["schemas"]["User"];
-            login_url: null;
-            logout_url: null;
-        };
-        MeDemoUnauthenticated: {
-            /** @constant */
-            authenticated: false;
-            /** @constant */
-            auth_mode: "demo";
-            user: null;
-            login_url: null;
-            logout_url: null;
-        };
-        GuestLoginRequest: {
-            /** @description 前後のUnicode空白をserverで除去し、除去後1〜32 Unicode code pointを許可します。 */
-            display_name: string;
-        };
-        GuestLoginResponse: {
-            /** @constant */
-            authenticated: true;
-            user: components["schemas"]["User"];
-        };
-        ActiveRunResponse: {
-            /** @constant */
-            status: "active";
-            /** Format: date-time */
-            started_at: string;
-            /** Format: int64 */
-            elapsed_ms: number;
-            cleared_problem_ids: string[];
-        };
-        RoomResponse: {
-            /** Format: uuid */
-            id: string;
-            number: number;
-            name: string;
-            genre: string;
-            description: string;
-            problem_count: number;
-            run_status: components["schemas"]["RoomRunStatus"];
-            ranking_summary: components["schemas"]["RoomRankingSummary"];
-        };
-        /** @enum {string} */
-        RoomRunStatus: "not_started" | "active" | "cleared";
-        RoomRankingSummary: {
-            player_count: number;
-            my_rank: number | null;
-        };
-        LeaderboardResponse: {
-            /** Format: uuid */
-            room_id: string;
-            entries: components["schemas"]["LeaderboardEntry"][];
-            me: components["schemas"]["LeaderboardMe"] | null;
-        };
-        LeaderboardEntry: {
-            /** Format: int32 */
-            rank: number;
-            user: components["schemas"]["User"];
-            /** Format: int64 */
-            elapsed_ms: number;
-            /** Format: int64 */
-            query_count: number;
-            /** Format: date-time */
-            cleared_at: string;
-        };
-        LeaderboardMe: {
-            /** Format: int32 */
-            rank: number;
-            /** Format: int64 */
-            elapsed_ms: number;
-            /** Format: int64 */
-            query_count: number;
-        };
-        ProblemResponse: {
-            /** Format: uuid */
-            id: string;
-            number: number;
-            type: components["schemas"]["ProblemType"];
-            title: string;
-            body_markdown: string;
-            submission_type: components["schemas"]["SubmissionType"];
-            assets: components["schemas"]["Asset"][];
-            status: components["schemas"]["ProblemStatus"];
-            input_schema: components["schemas"]["ProblemInputSchema"];
-            hint_count: number;
-        };
-        ProblemHintResponse: {
-            level: number;
-            body_markdown: string;
-        };
-        /** @enum {string} */
-        ProblemType: "small" | "final";
-        /** @enum {string} */
-        SubmissionType: "operation_sequence" | "string";
-        /** @enum {string} */
-        ProblemStatus: "locked" | "available" | "cleared";
-        /** @enum {string} */
-        RunStatus: "active" | "cleared";
-        ProblemAssetsResponse: {
-            items: components["schemas"]["Asset"][];
-        };
-        Asset: {
-            type: string;
-            url: string;
-            alt: string;
-        };
-        ProblemInputSchema: {
-            query: components["schemas"]["QueryInputSchema"];
-            answer: components["schemas"]["AnswerInputSchema"];
-        };
-        QueryInputSchema: {
-            /** @constant */
-            type: "operation_sequence";
-            allowed_controls: string[];
-            max_operations: number;
-        };
-        AnswerInputSchema: {
-            /** @constant */
-            type: "string";
-            max_length: number;
-        };
-        Operation: {
-            control: string;
-            count: number;
-        };
-        QueryRequest: {
-            source: string;
-            operations: components["schemas"]["Operation"][];
-        };
-        QueryResponse: components["schemas"]["IncorrectQueryResponse"] | components["schemas"]["CorrectQueryResponse"];
-        IncorrectQueryResponse: {
-            /** Format: uuid */
-            query_id: string;
-            /** @constant */
-            correct: false;
-            normalized_operations: components["schemas"]["Operation"][];
-            remaining_pattern_count: number;
-            /** Format: int64 */
-            query_count: number;
-            /** @constant */
-            problem_status: "available";
-        };
-        CorrectQueryResponse: {
-            /** Format: uuid */
-            query_id: string;
-            /** @constant */
-            correct: true;
-            normalized_operations: components["schemas"]["Operation"][];
-            remaining_pattern_count: number;
-            /** Format: int64 */
-            query_count: number;
-            /** @constant */
-            problem_status: "cleared";
-        };
-        AnswerRequest: {
-            answer: string;
-        };
-        AnswerResponse: components["schemas"]["IncorrectAnswerResponse"] | components["schemas"]["CorrectAnswerResponse"];
-        IncorrectAnswerResponse: {
-            /** @constant */
-            correct: false;
-            answer_attempt_count: number;
-            /** @constant */
-            problem_status: "available";
-            /** @constant */
-            run_status: "active";
-        };
-        CorrectAnswerResponse: {
-            /** @constant */
-            correct: true;
-            /** @constant */
-            problem_status: "cleared";
-            unlocked_problem_ids: string[];
-            run_status: components["schemas"]["RunStatus"];
-            progress: components["schemas"]["Progress"];
-            /** Format: int64 */
-            elapsed_ms: number;
-        };
-        /** @enum {string} */
-        ProgressStatus: "not_started" | "active" | "cleared";
-        Progress: {
-            status: components["schemas"]["ProgressStatus"];
-            cleared_count: number;
-            required_count: number;
-        };
-        BestRecord: {
-            /** Format: int64 */
-            elapsed_ms: number;
-            rank: number;
-            /** Format: int64 */
-            query_count: number;
-        };
-        RoomItem: {
-            /** Format: uuid */
-            room_id: string;
-            number: number;
-            name: string;
-            genre: string;
-            description: string;
-            problem_count: number;
-            progress: components["schemas"]["Progress"];
-            best_record: components["schemas"]["BestRecord"] | null;
-        };
-        RoomsResponse: {
-            items: components["schemas"]["RoomItem"][];
-        };
-        ErrorResponse: {
-            error: {
-                code: string;
-                message: string;
-                details: Record<string, never>;
-            };
-        };
-    };
-    responses: {
-        /** @description 現在のログイン状態 */
-        MeSuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["MeResponse"];
-            };
-        };
-        /** @description 公開部屋一覧の取得成功 */
-        RoomsSuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["RoomsResponse"];
-            };
-        };
-        /** @description ログイン中のユーザーの公開room全体に対する進捗 */
-        MeProgressSuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["MeProgressResponse"];
-            };
-        };
-        /** @description デモ用ユーザーを取得または作成し、session Cookieを発行した状態 */
-        GuestLoginSuccess: {
-            headers: {
-                /** @description demo_session Cookie。Path=/、HttpOnly、SameSite=Lax、Domainなし、有効期限なしのsession Cookieです。デプロイ環境ではSecureを付けます。 */
-                "Set-Cookie"?: string;
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["GuestLoginResponse"];
-            };
-        };
-        /** @description trim後の表示名が空、または32 Unicode code pointを超えています。 */
-        GuestLoginValidationError: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description activeな挑戦状態 */
-        RunStartOrResumeSuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ActiveRunResponse"];
-            };
-        };
-        /** @description 現在のactiveな挑戦状態 */
-        CurrentRunSuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ActiveRunResponse"];
-            };
-        };
-        /** @description 部屋詳細情報 */
-        RoomSuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["RoomResponse"];
-            };
-        };
-        /** @description 部屋別leaderboard */
-        LeaderboardSuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["LeaderboardResponse"];
-            };
-        };
-        /** @description 公開可能な問題データ */
-        ProblemSuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ProblemResponse"];
-            };
-        };
-        /** @description 対象problemに登録された画像と、300秒間有効なpresigned GET URL */
-        ProblemAssetsSuccess: {
-            headers: {
-                /** @description presigned URLを共有cacheへ保存させません。 */
-                "Cache-Control"?: string;
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ProblemAssetsResponse"];
-            };
-        };
-        /**
-         * @description room_idまたはproblem_idがUUIDではありません。
-         *     error.codeはINVALID_PATH_PARAMETERです。
-         */
-        ProblemAssetsBadRequest: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /**
-         * @description activeなrunがないか、指定されたproblemに取得可能な画像がありません。
-         *     error.codeはRUN_NOT_FOUNDまたはIMAGE_NOT_FOUNDです。
-         */
-        ProblemAssetsNotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /**
-         * @description DBアクセスまたはpresigned URL生成に失敗しました。
-         *     error.codeはINTERNAL_SERVER_ERRORです。
-         */
-        ProblemAssetsInternalServerError: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description 画像をuploadし、対象problemへの紐付けが完了しました。 */
-        ProblemAssetUploadSuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["Asset"];
-            };
-        };
-        /**
-         * @description upload requestの形式が不正です。
-         *     error.codeはINVALID_PATH_PARAMETER、INVALID_MULTIPART、
-         *     IDEMPOTENCY_KEY_REQUIRED、INVALID_IDEMPOTENCY_KEYのいずれかです。
-         */
-        ProblemAssetUploadBadRequest: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /**
-         * @description roomまたはproblemが存在しないか、problemが指定されたroomに属していません。
-         *     error.codeはROOM_OR_PROBLEM_NOT_FOUNDです。
-         */
-        ProblemAssetUploadNotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /**
-         * @description 公開済みroomまたはidempotencyの状態によりuploadできません。
-         *     error.codeはPUBLISHED_ROOM_IMMUTABLE、IDEMPOTENCY_KEY_REUSED、
-         *     IDEMPOTENCY_REQUEST_IN_PROGRESSのいずれかです。
-         */
-        ProblemAssetUploadConflict: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /**
-         * @description file sizeが5,242,880 bytesを超えています。
-         *     error.codeはIMAGE_TOO_LARGEです。
-         */
-        ProblemAssetUploadTooLarge: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /**
-         * @description 実file内容がPNG、JPEG、WebPではありません。SVGも許可しません。
-         *     error.codeはUNSUPPORTED_IMAGE_TYPEです。
-         */
-        ProblemAssetUploadUnsupportedMediaType: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /**
-         * @description file内容、画像寸法、またはtrim後のaltが不正です。
-         *     error.codeはEMPTY_FILE、INVALID_IMAGE、IMAGE_DIMENSIONS_EXCEEDED、
-         *     INVALID_ALTのいずれかです。
-         */
-        ProblemAssetUploadValidationError: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /**
-         * @description DB更新失敗などのserver内部エラーです。
-         *     error.codeはINTERNAL_SERVER_ERRORです。
-         */
-        ProblemAssetUploadInternalServerError: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /**
-         * @description storage providerが4xx responseを返しました。
-         *     error.codeはSTORAGE_PROVIDER_ERRORです。
-         */
-        ProblemAssetUploadProviderError: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /**
-         * @description storage providerへの接続失敗、10秒のtimeout、またはproviderの5xxです。
-         *     error.codeはSTORAGE_UNAVAILABLEです。
-         */
-        ProblemAssetUploadUnavailable: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description ヒント本文 */
-        ProblemHintSuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ProblemHintResponse"];
-            };
-        };
-        /** @description 操作列の判定結果。不正解もこの200 responseを使用します。 */
-        QuerySuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["QueryResponse"];
-            };
-        };
-        /** @description 文字列回答の判定結果。不正解もこの200 responseを使用します。 */
-        AnswerSuccess: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["AnswerResponse"];
-            };
-        };
-        /** @description JSON構文不正またはpath parameterのUUID形式不正。具体的なerror.codeは未確定です。 */
-        BadRequest: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description 未ログイン */
-        Unauthorized: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description 対象resourceが存在しないか、現在のAUTH_MODEではendpointが有効ではありません。具体的なerror.codeは未確定です。 */
-        NotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description activeなrunが存在しません。 */
-        RunNotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description 問題がまだ解放されていません。 */
-        ProblemLocked: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description 操作列を送信できない問題状態です。 */
-        QueryConflict: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description 文字列回答を送信できない問題状態です。 */
-        AnswerConflict: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description 操作列またはsourceが問題ごとの制約に違反しています。 */
-        QueryValidationError: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description 文字数超過など入力内容が不正です。具体的なerror.codeは未確定です。 */
-        UnprocessableEntity: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description server内部エラー。具体的なerror.codeは未確定です。 */
-        InternalServerError: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-    };
+  '/openapi.yaml': {
     parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** OpenAPI文書を取得する */
+    get: operations['getOpenApi']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/me': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** ログイン状態を取得する */
+    get: operations['getMe']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/me/progress': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * ログイン中のユーザーの全体進捗を取得する
+     * @description 公開room全体のclear数、総数、genre別内訳を返します。
+     *     同じroomを複数回clearしていても、clear数には1回だけ加算します。
+     *     非公開roomは全体とgenre別のどちらにも含めません。
+     *     by_genreはgenreの昇順で返します。
+     */
+    get: operations['getMeProgress']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/auth/guest': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * デモ環境で名前を登録する
+     * @description AUTH_MODE=demoのときだけ有効です。NeoShowcase modeでは404を返します。
+     */
+    post: operations['loginGuest']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/auth/logout': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * デモ環境からログアウトする
+     * @description AUTH_MODE=demoのときだけ使用し、デモsessionとCookieを無効化します。NeoShowcase modeでは404を返します。
+     */
+    post: operations['logoutDemo']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/rooms/{room_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
         /**
          * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
          * @example 11111111-1111-4111-8111-111111111111
          */
-        RoomId: string;
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    /**
+     * 部屋詳細を取得する
+     * @description 公開されている部屋の基本情報、問題数、現在のユーザーの挑戦状態、およびランキング概要を取得します。
+     *     未認証、または未挑戦の場合は run_status は not_started となり、my_rank は null になります。
+     */
+    get: operations['getRoom']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/rooms': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 公開部屋一覧を取得する
+     * @description 公開されている部屋の一覧をnumber昇順で取得します。
+     *     未認証時は進捗がnot_started、best_recordがnullで返ります。
+     *     認証時は現在のユーザーの進捗とベストレコードを含めて返します。
+     */
+    get: operations['getRooms']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/rooms/{room_id}/runs': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * 挑戦を開始または再開する
+     * @description 認証済みユーザーとroom_idからactiveなrunを検索します。
+     *     request bodyは使用しません。
+     *     activeなrunがあれば再開します。
+     *     未挑戦なら新規runをserver時刻で作成します。
+     *     クリア済みの場合は再挑戦を開始せず409を返します。
+     */
+    post: operations['startOrResumeRun']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/rooms/{room_id}/runs/current': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    /** 現在の挑戦状態を取得する */
+    get: operations['getCurrentRun']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/rooms/{room_id}/leaderboard': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    /**
+     * 部屋別leaderboardを取得する
+     * @description roomごとに、clear済みrunからユーザーごとのbest recordを1件ずつ返します。
+     *     同一ユーザーのbest recordはelapsed_ms、query_count、cleared_atの昇順で選びます。
+     *     leaderboardもelapsed_ms、query_count、cleared_atの昇順で並べます。
+     *     3項目がすべて同じrecordには同じrankを付け、次のrankを飛ばします（1, 1, 3）。
+     *     query_countにはoperation_sequence型問題の試行回数だけを含めます。
+     *     未認証、または現在のユーザーにclear recordがない場合はmeをnullにします。
+     */
+    get: operations['getRoomLeaderboard']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/rooms/{room_id}/problems/{problem_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
         /**
          * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
          * @example 22222222-2222-4222-8222-222222222221
          */
-        ProblemId: string;
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    /**
+     * 問題データを取得する
+     * @description 正解、全候補、判定設定、ヒント本文は返しません。
+     */
+    get: operations['getProblem']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/rooms/{room_id}/problems/{problem_id}/assets': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    /**
+     * 問題に登録された画像の取得URLを発行する
+     * @description 認証済みユーザーのcurrent runで解放済みのproblemに登録された画像を返します。
+     *     IMAGE_DOWNLOAD_ENABLED=trueの場合だけrouteを登録します。
+     *     無効な場合はroute自体を登録せず404を返します。
+     *     各Assetのurlは、storage objectをGETするためのpresigned URLです。
+     *     presigned URLの有効期限は発行から300秒です。
+     *     requestからobject_keyは受け取らず、problems.assetsに登録されたobject_keyだけを署名します。
+     *     responseへstorage credentialや内部object_keyは返しません。
+     */
+    get: operations['getProblemAssets']
+    put?: never
+    /**
+     * 作問用画像をアップロードする
+     * @description dev環境専用の作問支援APIです。
+     *     AUTH_MODE=demoかつIMAGE_UPLOAD_ENABLED=trueの場合だけrouteを登録します。
+     *     それ以外の環境ではroute自体を登録せず404を返します。
+     *     fileの実内容を検査し、storageへのuploadとproblems.assetsへの追加を行います。
+     *     client filename、object_key、storage credentialはresponseへ返しません。
+     */
+    post: operations['uploadProblemAsset']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/rooms/{room_id}/problems/{problem_id}/hints/{level}': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
         /**
          * @description ヒントの段階（1以上の整数）
          * @example 1
          */
-        HintLevel: number;
+        level: components['parameters']['HintLevel']
+      }
+      cookie?: never
+    }
+    /**
+     * 問題のヒントを取得する
+     * @description 認証済みユーザーのcurrent runで、指定されたlevelのヒントを取得します。
+     */
+    get: operations['getProblemHint']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/rooms/{room_id}/problems/{problem_id}/queries': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * 絞り込み操作列を送信する
+     * @description 操作列全体を一度に送り、不正解も200とcorrect=falseで返します。
+     */
+    post: operations['submitQuery']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/rooms/{room_id}/problems/{problem_id}/answers': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * 文字列回答を送信する
+     * @description 不正解も200とcorrect=falseで返します。
+     */
+    post: operations['submitAnswer']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+}
+export type webhooks = Record<string, never>
+export interface components {
+  schemas: {
+    User: {
+      /** Format: uuid */
+      id: string
+      display_name: string
+    }
+    MeResponse:
+      | components['schemas']['MeNeoshowcaseAuthenticated']
+      | components['schemas']['MeNeoshowcaseUnauthenticated']
+      | components['schemas']['MeDemoAuthenticated']
+      | components['schemas']['MeDemoUnauthenticated']
+    MeProgressResponse: {
+      /** Format: int32 */
+      cleared_room_count: number
+      /** Format: int32 */
+      total_room_count: number
+      by_genre: components['schemas']['GenreProgress'][]
+    }
+    GenreProgress: {
+      genre: string
+      /** Format: int32 */
+      cleared_room_count: number
+      /** Format: int32 */
+      total_room_count: number
+    }
+    MeNeoshowcaseAuthenticated: {
+      /** @constant */
+      authenticated: true
+      /** @constant */
+      auth_mode: 'neoshowcase'
+      user: components['schemas']['User']
+      login_url: null
+      logout_url: string
+    }
+    MeNeoshowcaseUnauthenticated: {
+      /** @constant */
+      authenticated: false
+      /** @constant */
+      auth_mode: 'neoshowcase'
+      user: null
+      login_url: string
+      logout_url: null
+    }
+    MeDemoAuthenticated: {
+      /** @constant */
+      authenticated: true
+      /** @constant */
+      auth_mode: 'demo'
+      user: components['schemas']['User']
+      login_url: null
+      logout_url: null
+    }
+    MeDemoUnauthenticated: {
+      /** @constant */
+      authenticated: false
+      /** @constant */
+      auth_mode: 'demo'
+      user: null
+      login_url: null
+      logout_url: null
+    }
+    GuestLoginRequest: {
+      /** @description 前後のUnicode空白をserverで除去し、除去後1〜32 Unicode code pointを許可します。 */
+      display_name: string
+    }
+    GuestLoginResponse: {
+      /** @constant */
+      authenticated: true
+      user: components['schemas']['User']
+    }
+    ActiveRunResponse: {
+      /** @constant */
+      status: 'active'
+      /** Format: date-time */
+      started_at: string
+      /** Format: int64 */
+      elapsed_ms: number
+      cleared_problem_ids: string[]
+    }
+    RoomResponse: {
+      /** Format: uuid */
+      id: string
+      number: number
+      name: string
+      genre: string
+      description: string
+      problem_count: number
+      run_status: components['schemas']['RoomRunStatus']
+      ranking_summary: components['schemas']['RoomRankingSummary']
+    }
+    /** @enum {string} */
+    RoomRunStatus: 'not_started' | 'active' | 'cleared'
+    RoomRankingSummary: {
+      player_count: number
+      my_rank: number | null
+    }
+    LeaderboardResponse: {
+      /** Format: uuid */
+      room_id: string
+      entries: components['schemas']['LeaderboardEntry'][]
+      me: components['schemas']['LeaderboardMe'] | null
+    }
+    LeaderboardEntry: {
+      /** Format: int32 */
+      rank: number
+      user: components['schemas']['User']
+      /** Format: int64 */
+      elapsed_ms: number
+      /** Format: int64 */
+      query_count: number
+      /** Format: date-time */
+      cleared_at: string
+    }
+    LeaderboardMe: {
+      /** Format: int32 */
+      rank: number
+      /** Format: int64 */
+      elapsed_ms: number
+      /** Format: int64 */
+      query_count: number
+    }
+    ProblemResponse: {
+      /** Format: uuid */
+      id: string
+      number: number
+      type: components['schemas']['ProblemType']
+      title: string
+      body_markdown: string
+      submission_type: components['schemas']['SubmissionType']
+      assets: components['schemas']['Asset'][]
+      status: components['schemas']['ProblemStatus']
+      input_schema: components['schemas']['ProblemInputSchema']
+      hint_count: number
+    }
+    ProblemHintResponse: {
+      level: number
+      body_markdown: string
+    }
+    /** @enum {string} */
+    ProblemType: 'small' | 'final'
+    /** @enum {string} */
+    SubmissionType: 'operation_sequence' | 'string'
+    /** @enum {string} */
+    ProblemStatus: 'locked' | 'available' | 'cleared'
+    /** @enum {string} */
+    RunStatus: 'active' | 'cleared'
+    ProblemAssetsResponse: {
+      items: components['schemas']['Asset'][]
+    }
+    Asset: {
+      type: string
+      url: string
+      alt: string
+    }
+    ProblemInputSchema: {
+      query: components['schemas']['QueryInputSchema']
+      answer: components['schemas']['AnswerInputSchema']
+    }
+    QueryInputSchema: {
+      /** @constant */
+      type: 'operation_sequence'
+      allowed_controls: string[]
+      max_operations: number
+    }
+    AnswerInputSchema: {
+      /** @constant */
+      type: 'string'
+      max_length: number
+    }
+    Operation: {
+      control: string
+      count: number
+    }
+    QueryRequest: {
+      source: string
+      operations: components['schemas']['Operation'][]
+    }
+    QueryResponse:
+      | components['schemas']['IncorrectQueryResponse']
+      | components['schemas']['CorrectQueryResponse']
+    IncorrectQueryResponse: {
+      /** Format: uuid */
+      query_id: string
+      /** @constant */
+      correct: false
+      normalized_operations: components['schemas']['Operation'][]
+      remaining_pattern_count: number
+      /** Format: int64 */
+      query_count: number
+      /** @constant */
+      problem_status: 'available'
+    }
+    CorrectQueryResponse: {
+      /** Format: uuid */
+      query_id: string
+      /** @constant */
+      correct: true
+      normalized_operations: components['schemas']['Operation'][]
+      remaining_pattern_count: number
+      /** Format: int64 */
+      query_count: number
+      /** @constant */
+      problem_status: 'cleared'
+    }
+    AnswerRequest: {
+      answer: string
+    }
+    AnswerResponse:
+      | components['schemas']['IncorrectAnswerResponse']
+      | components['schemas']['CorrectAnswerResponse']
+    IncorrectAnswerResponse: {
+      /** @constant */
+      correct: false
+      answer_attempt_count: number
+      /** @constant */
+      problem_status: 'available'
+      /** @constant */
+      run_status: 'active'
+    }
+    CorrectAnswerResponse: {
+      /** @constant */
+      correct: true
+      /** @constant */
+      problem_status: 'cleared'
+      unlocked_problem_ids: string[]
+      run_status: components['schemas']['RunStatus']
+      progress: components['schemas']['Progress']
+      /** Format: int64 */
+      elapsed_ms: number
+    }
+    /** @enum {string} */
+    ProgressStatus: 'not_started' | 'active' | 'cleared'
+    Progress: {
+      status: components['schemas']['ProgressStatus']
+      cleared_count: number
+      required_count: number
+    }
+    BestRecord: {
+      /** Format: int64 */
+      elapsed_ms: number
+      rank: number
+      /** Format: int64 */
+      query_count: number
+    }
+    RoomItem: {
+      /** Format: uuid */
+      room_id: string
+      number: number
+      name: string
+      genre: string
+      description: string
+      problem_count: number
+      progress: components['schemas']['Progress']
+      best_record: components['schemas']['BestRecord'] | null
+    }
+    RoomsResponse: {
+      items: components['schemas']['RoomItem'][]
+    }
+    ErrorResponse: {
+      error: {
+        code: string
+        message: string
+        details: Record<string, never>
+      }
+    }
+  }
+  responses: {
+    /** @description 現在のログイン状態 */
+    MeSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['MeResponse']
+      }
+    }
+    /** @description 公開部屋一覧の取得成功 */
+    RoomsSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['RoomsResponse']
+      }
+    }
+    /** @description ログイン中のユーザーの公開room全体に対する進捗 */
+    MeProgressSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['MeProgressResponse']
+      }
+    }
+    /** @description デモ用ユーザーを取得または作成し、session Cookieを発行した状態 */
+    GuestLoginSuccess: {
+      headers: {
+        /** @description demo_session Cookie。Path=/、HttpOnly、SameSite=Lax、Domainなし、有効期限なしのsession Cookieです。デプロイ環境ではSecureを付けます。 */
+        'Set-Cookie'?: string
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['GuestLoginResponse']
+      }
+    }
+    /** @description trim後の表示名が空、または32 Unicode code pointを超えています。 */
+    GuestLoginValidationError: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description activeな挑戦状態 */
+    RunStartOrResumeSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ActiveRunResponse']
+      }
+    }
+    /** @description 現在のactiveな挑戦状態 */
+    CurrentRunSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ActiveRunResponse']
+      }
+    }
+    /** @description 部屋詳細情報 */
+    RoomSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['RoomResponse']
+      }
+    }
+    /** @description 部屋別leaderboard */
+    LeaderboardSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['LeaderboardResponse']
+      }
+    }
+    /** @description 公開可能な問題データ */
+    ProblemSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ProblemResponse']
+      }
+    }
+    /** @description 対象problemに登録された画像と、300秒間有効なpresigned GET URL */
+    ProblemAssetsSuccess: {
+      headers: {
+        /** @description presigned URLを共有cacheへ保存させません。 */
+        'Cache-Control'?: string
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ProblemAssetsResponse']
+      }
+    }
+    /**
+     * @description room_idまたはproblem_idがUUIDではありません。
+     *     error.codeはINVALID_PATH_PARAMETERです。
+     */
+    ProblemAssetsBadRequest: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description activeなrunがないか、指定されたproblemに取得可能な画像がありません。
+     *     error.codeはRUN_NOT_FOUNDまたはIMAGE_NOT_FOUNDです。
+     */
+    ProblemAssetsNotFound: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description DBアクセスまたはpresigned URL生成に失敗しました。
+     *     error.codeはINTERNAL_SERVER_ERRORです。
+     */
+    ProblemAssetsInternalServerError: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 画像をuploadし、対象problemへの紐付けが完了しました。 */
+    ProblemAssetUploadSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['Asset']
+      }
+    }
+    /**
+     * @description upload requestの形式が不正です。
+     *     error.codeはINVALID_PATH_PARAMETER、INVALID_MULTIPART、
+     *     IDEMPOTENCY_KEY_REQUIRED、INVALID_IDEMPOTENCY_KEYのいずれかです。
+     */
+    ProblemAssetUploadBadRequest: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description roomまたはproblemが存在しないか、problemが指定されたroomに属していません。
+     *     error.codeはROOM_OR_PROBLEM_NOT_FOUNDです。
+     */
+    ProblemAssetUploadNotFound: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description 公開済みroomまたはidempotencyの状態によりuploadできません。
+     *     error.codeはPUBLISHED_ROOM_IMMUTABLE、IDEMPOTENCY_KEY_REUSED、
+     *     IDEMPOTENCY_REQUEST_IN_PROGRESSのいずれかです。
+     */
+    ProblemAssetUploadConflict: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description file sizeが5,242,880 bytesを超えています。
+     *     error.codeはIMAGE_TOO_LARGEです。
+     */
+    ProblemAssetUploadTooLarge: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description 実file内容がPNG、JPEG、WebPではありません。SVGも許可しません。
+     *     error.codeはUNSUPPORTED_IMAGE_TYPEです。
+     */
+    ProblemAssetUploadUnsupportedMediaType: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description file内容、画像寸法、またはtrim後のaltが不正です。
+     *     error.codeはEMPTY_FILE、INVALID_IMAGE、IMAGE_DIMENSIONS_EXCEEDED、
+     *     INVALID_ALTのいずれかです。
+     */
+    ProblemAssetUploadValidationError: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description DB更新失敗などのserver内部エラーです。
+     *     error.codeはINTERNAL_SERVER_ERRORです。
+     */
+    ProblemAssetUploadInternalServerError: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description storage providerが4xx responseを返しました。
+     *     error.codeはSTORAGE_PROVIDER_ERRORです。
+     */
+    ProblemAssetUploadProviderError: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description storage providerへの接続失敗、10秒のtimeout、またはproviderの5xxです。
+     *     error.codeはSTORAGE_UNAVAILABLEです。
+     */
+    ProblemAssetUploadUnavailable: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description ヒント本文 */
+    ProblemHintSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ProblemHintResponse']
+      }
+    }
+    /** @description 操作列の判定結果。不正解もこの200 responseを使用します。 */
+    QuerySuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['QueryResponse']
+      }
+    }
+    /** @description 文字列回答の判定結果。不正解もこの200 responseを使用します。 */
+    AnswerSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['AnswerResponse']
+      }
+    }
+    /** @description JSON構文不正またはpath parameterのUUID形式不正。具体的なerror.codeは未確定です。 */
+    BadRequest: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 未ログイン */
+    Unauthorized: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 対象resourceが存在しないか、現在のAUTH_MODEではendpointが有効ではありません。具体的なerror.codeは未確定です。 */
+    NotFound: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description activeなrunが存在しません。 */
+    RunNotFound: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 問題がまだ解放されていません。 */
+    ProblemLocked: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 操作列を送信できない問題状態です。 */
+    QueryConflict: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 文字列回答を送信できない問題状態です。 */
+    AnswerConflict: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 操作列またはsourceが問題ごとの制約に違反しています。 */
+    QueryValidationError: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 文字数超過など入力内容が不正です。具体的なerror.codeは未確定です。 */
+    UnprocessableEntity: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description server内部エラー。具体的なerror.codeは未確定です。 */
+    InternalServerError: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+  }
+  parameters: {
+    /**
+     * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+     * @example 11111111-1111-4111-8111-111111111111
+     */
+    RoomId: string
+    /**
+     * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+     * @example 22222222-2222-4222-8222-222222222221
+     */
+    ProblemId: string
+    /**
+     * @description ヒントの段階（1以上の整数）
+     * @example 1
+     */
+    HintLevel: number
+    /**
+     * @description methodとpathごとにrequestを識別するUUID v4です。
+     *     同じfileとtrim済みaltによる再送では、最初の201 responseを返します。
+     * @example 44444444-4444-4444-8444-444444444444
+     */
+    IdempotencyKey: string
+  }
+  requestBodies: {
+    GuestLogin: {
+      content: {
+        'application/json': components['schemas']['GuestLoginRequest']
+      }
+    }
+    SubmitQuery: {
+      content: {
+        'application/json': components['schemas']['QueryRequest']
+      }
+    }
+    SubmitAnswer: {
+      content: {
+        'application/json': components['schemas']['AnswerRequest']
+      }
+    }
+    UploadProblemAsset: {
+      content: {
+        'multipart/form-data': {
+          /**
+           * Format: binary
+           * @description 5,242,880 bytes以下のPNG、JPEG、WebP画像です。
+           *     filenameや申告Content-Typeではなく実内容を検証します。
+           */
+          file: string
+          /**
+           * @description 画像内容を説明する代替テキストです。
+           *     Unicode空白を前後からtrimした後、1〜200文字である必要があります。
+           */
+          alt: string
+        }
+      }
+    }
+  }
+  headers: never
+  pathItems: never
+}
+export type $defs = Record<string, never>
+export interface operations {
+  getOpenApi: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description このserver buildが使用するOpenAPI文書 */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/yaml': string
+        }
+      }
+    }
+  }
+  getMe: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['MeSuccess']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  getMeProgress: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['MeProgressSuccess']
+      401: components['responses']['Unauthorized']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  loginGuest: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: components['requestBodies']['GuestLogin']
+    responses: {
+      200: components['responses']['GuestLoginSuccess']
+      400: components['responses']['BadRequest']
+      404: components['responses']['NotFound']
+      422: components['responses']['GuestLoginValidationError']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  logoutDemo: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description ログアウト完了。response bodyはありません。 */
+      204: {
+        headers: {
+          /** @description demo_session Cookieを削除します。Path=/、Max-Age=0、過去のExpiresを指定し、デプロイ環境ではSecureを付けます。 */
+          'Set-Cookie'?: string
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      404: components['responses']['NotFound']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  getRoom: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['RoomSuccess']
+      400: components['responses']['BadRequest']
+      404: components['responses']['NotFound']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  getRooms: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['RoomsSuccess']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  startOrResumeRun: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['RunStartOrResumeSuccess']
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      404: components['responses']['NotFound']
+      /** @description この部屋をクリア済みのため再挑戦できません */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorResponse']
+        }
+      }
+      500: components['responses']['InternalServerError']
+    }
+  }
+  getCurrentRun: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['CurrentRunSuccess']
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      404: components['responses']['RunNotFound']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  getRoomLeaderboard: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['LeaderboardSuccess']
+      400: components['responses']['BadRequest']
+      404: components['responses']['NotFound']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  getProblem: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['ProblemSuccess']
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      404: components['responses']['NotFound']
+      409: components['responses']['ProblemLocked']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  getProblemAssets: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['ProblemAssetsSuccess']
+      400: components['responses']['ProblemAssetsBadRequest']
+      401: components['responses']['Unauthorized']
+      404: components['responses']['ProblemAssetsNotFound']
+      409: components['responses']['ProblemLocked']
+      500: components['responses']['ProblemAssetsInternalServerError']
+    }
+  }
+  uploadProblemAsset: {
+    parameters: {
+      query?: never
+      header: {
         /**
          * @description methodとpathごとにrequestを識別するUUID v4です。
          *     同じfileとtrim済みaltによる再送では、最初の201 responseを返します。
          * @example 44444444-4444-4444-8444-444444444444
          */
-        IdempotencyKey: string;
-    };
-    requestBodies: {
-        GuestLogin: {
-            content: {
-                "application/json": components["schemas"]["GuestLoginRequest"];
-            };
-        };
-        SubmitQuery: {
-            content: {
-                "application/json": components["schemas"]["QueryRequest"];
-            };
-        };
-        SubmitAnswer: {
-            content: {
-                "application/json": components["schemas"]["AnswerRequest"];
-            };
-        };
-        UploadProblemAsset: {
-            content: {
-                "multipart/form-data": {
-                    /**
-                     * Format: binary
-                     * @description 5,242,880 bytes以下のPNG、JPEG、WebP画像です。
-                     *     filenameや申告Content-Typeではなく実内容を検証します。
-                     */
-                    file: string;
-                    /**
-                     * @description 画像内容を説明する代替テキストです。
-                     *     Unicode空白を前後からtrimした後、1〜200文字である必要があります。
-                     */
-                    alt: string;
-                };
-            };
-        };
-    };
-    headers: never;
-    pathItems: never;
-}
-export type $defs = Record<string, never>;
-export interface operations {
-    getOpenApi: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description このserver buildが使用するOpenAPI文書 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/yaml": string;
-                };
-            };
-        };
-    };
-    getMe: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["MeSuccess"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    getMeProgress: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["MeProgressSuccess"];
-            401: components["responses"]["Unauthorized"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    loginGuest: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["GuestLogin"];
-        responses: {
-            200: components["responses"]["GuestLoginSuccess"];
-            400: components["responses"]["BadRequest"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["GuestLoginValidationError"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    logoutDemo: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ログアウト完了。response bodyはありません。 */
-            204: {
-                headers: {
-                    /** @description demo_session Cookieを削除します。Path=/、Max-Age=0、過去のExpiresを指定し、デプロイ環境ではSecureを付けます。 */
-                    "Set-Cookie"?: string;
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["NotFound"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    getRoom: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["RoomSuccess"];
-            400: components["responses"]["BadRequest"];
-            404: components["responses"]["NotFound"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    getRooms: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["RoomsSuccess"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    startOrResumeRun: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["RunStartOrResumeSuccess"];
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            /** @description この部屋をクリア済みのため再挑戦できません */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    getCurrentRun: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["CurrentRunSuccess"];
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["RunNotFound"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    getRoomLeaderboard: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["LeaderboardSuccess"];
-            400: components["responses"]["BadRequest"];
-            404: components["responses"]["NotFound"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    getProblem: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["ProblemSuccess"];
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["ProblemLocked"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    getProblemAssets: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["ProblemAssetsSuccess"];
-            400: components["responses"]["ProblemAssetsBadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["ProblemAssetsNotFound"];
-            409: components["responses"]["ProblemLocked"];
-            500: components["responses"]["ProblemAssetsInternalServerError"];
-        };
-    };
-    uploadProblemAsset: {
-        parameters: {
-            query?: never;
-            header: {
-                /**
-                 * @description methodとpathごとにrequestを識別するUUID v4です。
-                 *     同じfileとtrim済みaltによる再送では、最初の201 responseを返します。
-                 * @example 44444444-4444-4444-8444-444444444444
-                 */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-            };
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["UploadProblemAsset"];
-        responses: {
-            201: components["responses"]["ProblemAssetUploadSuccess"];
-            400: components["responses"]["ProblemAssetUploadBadRequest"];
-            404: components["responses"]["ProblemAssetUploadNotFound"];
-            409: components["responses"]["ProblemAssetUploadConflict"];
-            413: components["responses"]["ProblemAssetUploadTooLarge"];
-            415: components["responses"]["ProblemAssetUploadUnsupportedMediaType"];
-            422: components["responses"]["ProblemAssetUploadValidationError"];
-            500: components["responses"]["ProblemAssetUploadInternalServerError"];
-            502: components["responses"]["ProblemAssetUploadProviderError"];
-            503: components["responses"]["ProblemAssetUploadUnavailable"];
-        };
-    };
-    getProblemHint: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-                /**
-                 * @description ヒントの段階（1以上の整数）
-                 * @example 1
-                 */
-                level: components["parameters"]["HintLevel"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["ProblemHintSuccess"];
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["ProblemLocked"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    submitQuery: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-            };
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["SubmitQuery"];
-        responses: {
-            200: components["responses"]["QuerySuccess"];
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["QueryConflict"];
-            422: components["responses"]["QueryValidationError"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
-    submitAnswer: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /**
-                 * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
-                 * @example 11111111-1111-4111-8111-111111111111
-                 */
-                room_id: components["parameters"]["RoomId"];
-                /**
-                 * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
-                 * @example 22222222-2222-4222-8222-222222222221
-                 */
-                problem_id: components["parameters"]["ProblemId"];
-            };
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["SubmitAnswer"];
-        responses: {
-            200: components["responses"]["AnswerSuccess"];
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["AnswerConflict"];
-            422: components["responses"]["UnprocessableEntity"];
-            500: components["responses"]["InternalServerError"];
-        };
-    };
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+      }
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    requestBody: components['requestBodies']['UploadProblemAsset']
+    responses: {
+      201: components['responses']['ProblemAssetUploadSuccess']
+      400: components['responses']['ProblemAssetUploadBadRequest']
+      404: components['responses']['ProblemAssetUploadNotFound']
+      409: components['responses']['ProblemAssetUploadConflict']
+      413: components['responses']['ProblemAssetUploadTooLarge']
+      415: components['responses']['ProblemAssetUploadUnsupportedMediaType']
+      422: components['responses']['ProblemAssetUploadValidationError']
+      500: components['responses']['ProblemAssetUploadInternalServerError']
+      502: components['responses']['ProblemAssetUploadProviderError']
+      503: components['responses']['ProblemAssetUploadUnavailable']
+    }
+  }
+  getProblemHint: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+        /**
+         * @description ヒントの段階（1以上の整数）
+         * @example 1
+         */
+        level: components['parameters']['HintLevel']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['ProblemHintSuccess']
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      404: components['responses']['NotFound']
+      409: components['responses']['ProblemLocked']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  submitQuery: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    requestBody: components['requestBodies']['SubmitQuery']
+    responses: {
+      200: components['responses']['QuerySuccess']
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      404: components['responses']['NotFound']
+      409: components['responses']['QueryConflict']
+      422: components['responses']['QueryValidationError']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  submitAnswer: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    requestBody: components['requestBodies']['SubmitAnswer']
+    responses: {
+      200: components['responses']['AnswerSuccess']
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      404: components['responses']['NotFound']
+      409: components['responses']['AnswerConflict']
+      422: components['responses']['UnprocessableEntity']
+      500: components['responses']['InternalServerError']
+    }
+  }
 }
