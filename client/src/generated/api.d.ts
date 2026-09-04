@@ -101,6 +101,33 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/rooms/{room_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    /**
+     * 部屋詳細を取得する
+     * @description 公開されている部屋の基本情報、問題数、現在のユーザーの挑戦状態、およびランキング概要を取得します。
+     *     未認証、または未挑戦の場合は run_status は not_started となり、my_rank は null になります。
+     */
+    get: operations['getRoom']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/rooms': {
     parameters: {
       query?: never
@@ -463,6 +490,23 @@ export interface components {
       elapsed_ms: number
       cleared_problem_ids: string[]
     }
+    RoomResponse: {
+      /** Format: uuid */
+      id: string
+      number: number
+      name: string
+      genre: string
+      description: string
+      problem_count: number
+      run_status: components['schemas']['RoomRunStatus']
+      ranking_summary: components['schemas']['RoomRankingSummary']
+    }
+    /** @enum {string} */
+    RoomRunStatus: 'not_started' | 'active' | 'cleared'
+    RoomRankingSummary: {
+      player_count: number
+      my_rank: number | null
+    }
     LeaderboardResponse: {
       /** Format: uuid */
       room_id: string
@@ -697,6 +741,15 @@ export interface components {
       }
       content: {
         'application/json': components['schemas']['ActiveRunResponse']
+      }
+    }
+    /** @description 部屋詳細情報 */
+    RoomSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['RoomResponse']
       }
     }
     /** @description 部屋別leaderboard */
@@ -1145,6 +1198,27 @@ export interface operations {
         }
         content?: never
       }
+      404: components['responses']['NotFound']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  getRoom: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['RoomSuccess']
+      400: components['responses']['BadRequest']
       404: components['responses']['NotFound']
       500: components['responses']['InternalServerError']
     }

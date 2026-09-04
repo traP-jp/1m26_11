@@ -17,8 +17,9 @@ use server::{
     problem::{Asset, AssetUrlResolveError, AssetUrlResolver, InputSchema},
     repository::{
         AnswerRunStatus, AnswerSubmission, AnswerSubmissionResult, AuthProvider, AuthRepository,
-        AuthUserRecord, HintRecord, ProblemDetailRecord, QuerySubmission, QuerySubmissionResult,
-        RepositoryError, RoomBestRecordRecord, RoomRecord, RoomSummaryRecord, RunRecord,
+        AuthUserRecord, HintRecord, LeaderboardRecord, ProblemDetailRecord, QuerySubmission,
+        QuerySubmissionResult, RepositoryError, RoomBestRecordRecord, RoomRecord,
+        RoomSummaryRecord, RunRecord,
     },
 };
 use sqlx::{
@@ -284,6 +285,17 @@ impl AuthRepository for StubAuthRepository {
         } else {
             Ok(None)
         }
+    }
+
+    async fn count_problems_by_room_id(&self, _room_id: Uuid) -> Result<u32, RepositoryError> {
+        Ok(4)
+    }
+
+    async fn find_leaderboard_by_room_id(
+        &self,
+        _room_id: Uuid,
+    ) -> Result<Vec<LeaderboardRecord>, RepositoryError> {
+        Ok(Vec::new())
     }
 
     async fn find_cleared_problem_ids(&self, run_id: Uuid) -> Result<Vec<Uuid>, RepositoryError> {

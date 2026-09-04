@@ -624,6 +624,10 @@ pub trait AuthRepository: Send + Sync {
         unimplemented!("find_problems_by_room_id is not implemented for this repository")
     }
 
+    async fn count_problems_by_room_id(&self, _room_id: Uuid) -> Result<u32, RepositoryError> {
+        unimplemented!("count_problems_by_room_id is not implemented for this repository")
+    }
+
     async fn find_cleared_problem_ids(&self, _run_id: Uuid) -> Result<Vec<Uuid>, RepositoryError> {
         unimplemented!("find_cleared_problem_ids is not implemented for this repository")
     }
@@ -2122,6 +2126,22 @@ impl AuthRepository for SqlxUserRepository {
         .map_err(RepositoryError::Database)?;
 
         Ok(problems)
+    }
+
+    async fn count_problems_by_room_id(&self, room_id: Uuid) -> Result<u32, RepositoryError> {
+        let count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)
+            FROM problems
+            WHERE room_id = ?
+            "#,
+        )
+        .bind(room_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        u32::try_from(count).map_err(|_| RepositoryError::InvalidProgressCount)
     }
 
     async fn find_cleared_problem_ids(&self, run_id: Uuid) -> Result<Vec<Uuid>, RepositoryError> {
