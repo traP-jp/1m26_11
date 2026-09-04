@@ -3,8 +3,8 @@ use openapi_generated::{
     models::{
         ActiveRunResponse, Asset, CorrectQueryResponse, GetProblemAssetsPathParams,
         IncorrectQueryResponse, LeaderboardResponse, MeDemoUnauthenticated, MeProgressResponse,
-        Operation, ProblemAssetsResponse, UploadProblemAssetHeaderParams,
-        UploadProblemAssetPathParams,
+        Operation, ProblemAssetsResponse, RoomResponse, RoomRunStatus,
+        UploadProblemAssetHeaderParams, UploadProblemAssetPathParams,
     },
     types::Nullable,
 };
