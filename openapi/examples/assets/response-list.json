@@ -1,0 +1,14 @@
+{
+  "items": [
+    {
+      "type": "image",
+      "url": "https://storage.example.invalid/example-bucket/v1/problems/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222221/33333333-3333-4333-8333-333333333333.png?X-Amz-Expires=300&X-Amz-Signature=example-signature-1",
+      "alt": "ろうそくが立った誕生日ケーキ"
+    },
+    {
+      "type": "image",
+      "url": "https://storage.example.invalid/example-bucket/v1/problems/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222221/55555555-5555-4555-8555-555555555555.webp?X-Amz-Expires=300&X-Amz-Signature=example-signature-2",
+      "alt": "問題を解くための補足画像"
+    }
+  ]
+}

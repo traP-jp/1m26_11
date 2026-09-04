@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "IMAGE_NOT_FOUND",
+    "message": "image not found",
+    "details": {}
+  }
+}

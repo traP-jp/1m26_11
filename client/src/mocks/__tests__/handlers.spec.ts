@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { setupServer } from 'msw/node'
 
+import imageNotFound from '../../../../openapi/examples/assets/error-image-not-found.json'
+import problemAssets from '../../../../openapi/examples/assets/response-list.json'
 import answerCleared from '../../../../openapi/examples/answers/response-correct-cleared.json'
 import displayNameRequired from '../../../../openapi/examples/auth/error-display-name-required.json'
 import displayNameTooLong from '../../../../openapi/examples/auth/error-display-name-too-long.json'
@@ -11,6 +13,7 @@ import unauthorized from '../../../../openapi/examples/auth/error-unauthorized.j
 import problemLocked from '../../../../openapi/examples/problems/error-problem-locked.json'
 import queryCorrect from '../../../../openapi/examples/queries/response-correct.json'
 import currentRun from '../../../../openapi/examples/runs/active-response.json'
+import runNotFound from '../../../../openapi/examples/runs/error-run-not-found.json'
 import newRun from '../../../../openapi/examples/runs/start-new-response.json'
 import openApiSource from '../../../../openapi/openapi-v1.yaml?raw'
 import scenarioSource from '../../../../openapi/scenarios/p0-cases.yaml?raw'
@@ -175,6 +178,50 @@ describe('OpenAPI-backed MSW handlers', () => {
     expect(response.status).toBe(409)
     expect(await response.json()).toEqual(problemLocked)
   })
+
+  it('returns presigned problem assets with no-store', async () => {
+    startMock('get_problem_assets')
+
+    const response = await fetch(`${BASE_URL}/api/rooms/${ROOM_ID}/problems/${PROBLEM_ID}/assets`)
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(await response.json()).toEqual(problemAssets)
+  })
+
+  it.each([
+    {
+      scenarioId: 'get_problem_assets_unauthorized',
+      expectedStatus: 401,
+      expectedBody: unauthorized,
+    },
+    {
+      scenarioId: 'get_problem_assets_without_active_run',
+      expectedStatus: 404,
+      expectedBody: runNotFound,
+    },
+    {
+      scenarioId: 'get_problem_assets_not_found',
+      expectedStatus: 404,
+      expectedBody: imageNotFound,
+    },
+    {
+      scenarioId: 'get_problem_assets_locked',
+      expectedStatus: 409,
+      expectedBody: problemLocked,
+    },
+  ])(
+    'returns the shared fixture for $scenarioId',
+    async ({ scenarioId, expectedStatus, expectedBody }) => {
+      startMock(scenarioId)
+
+      const response = await fetch(`${BASE_URL}/api/rooms/${ROOM_ID}/problems/${PROBLEM_ID}/assets`)
+
+      expect(response.status).toBe(expectedStatus)
+      expect(response.headers.get('content-type')).toContain('application/json')
+      expect(await response.json()).toEqual(expectedBody)
+    },
+  )
 
   it('uses scenario judgments for query and answer submissions', async () => {
     startMock('query_correct')

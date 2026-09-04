@@ -167,6 +167,73 @@ cases:
           status: 200
           example: available_problem
 
+  - id: get_problem_assets
+    preconditions:
+      authenticated: true
+      room_exists: true
+      active_run_exists: true
+      problem_exists: true
+      problem_status: available
+      problem_has_assets: true
+    steps:
+      - operation_id: getProblemAssets
+        response:
+          status: 200
+          example: listed
+
+  - id: get_problem_assets_unauthorized
+    preconditions:
+      authenticated: false
+      room_exists: true
+      problem_exists: true
+      problem_has_assets: true
+    steps:
+      - operation_id: getProblemAssets
+        response:
+          status: 401
+          example: unauthorized
+
+  - id: get_problem_assets_without_active_run
+    preconditions:
+      authenticated: true
+      room_exists: true
+      active_run_exists: false
+      problem_exists: true
+      problem_has_assets: true
+    steps:
+      - operation_id: getProblemAssets
+        response:
+          status: 404
+          example: run_not_found
+
+  - id: get_problem_assets_not_found
+    preconditions:
+      authenticated: true
+      room_exists: true
+      active_run_exists: true
+      problem_exists: true
+      problem_status: available
+      problem_has_assets: false
+    steps:
+      - operation_id: getProblemAssets
+        response:
+          status: 404
+          example: image_not_found
+
+  - id: get_problem_assets_locked
+    preconditions:
+      authenticated: true
+      room_exists: true
+      active_run_exists: true
+      problem_exists: true
+      problem_status: locked
+      problem_has_assets: true
+    steps:
+      - operation_id: getProblemAssets
+        response:
+          status: 409
+          example: problem_locked
+
   - id: problem_not_found
     preconditions:
       authenticated: true

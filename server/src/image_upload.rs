@@ -3,6 +3,7 @@ use std::{io::Cursor, time::Duration};
 use async_trait::async_trait;
 use aws_sdk_s3::{
     config::{BehaviorVersion, Credentials, Region},
+    presigning::PresigningConfig,
     primitives::ByteStream,
 };
 use image::{ImageFormat, ImageReader};
@@ -19,6 +20,7 @@ pub(crate) const MAX_IMAGE_PIXELS: u64 = 16_777_216;
 pub(crate) const MAX_ALT_CHARACTERS: usize = 200;
 pub(crate) const IMAGE_STORAGE_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const IMAGE_CACHE_CONTROL: &str = "public, max-age=31536000, immutable";
+pub(crate) const IMAGE_PRESIGNED_URL_TTL: Duration = Duration::from_secs(300);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ValidatedImage {
@@ -64,6 +66,24 @@ pub enum ImageStorageError {
 
     #[error("storage provider is unavailable")]
     Unavailable,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
+pub enum ImageUrlSigningError {
+    #[error("presigned URL expiration is invalid")]
+    InvalidExpiration,
+
+    #[error("image GET request could not be signed")]
+    Signing,
+}
+
+#[async_trait]
+pub trait ImageUrlSigner: Send + Sync {
+    async fn presign_get(
+        &self,
+        object_key: &str,
+        expires_in: Duration,
+    ) -> Result<String, ImageUrlSigningError>;
 }
 
 #[async_trait]
@@ -128,6 +148,29 @@ impl ImageStorage for S3ImageStorage {
 
             Err(_) => Err(ImageStorageError::Unavailable),
         }
+    }
+}
+
+#[async_trait]
+impl ImageUrlSigner for S3ImageStorage {
+    async fn presign_get(
+        &self,
+        object_key: &str,
+        expires_in: Duration,
+    ) -> Result<String, ImageUrlSigningError> {
+        let config = PresigningConfig::expires_in(expires_in)
+            .map_err(|_| ImageUrlSigningError::InvalidExpiration)?;
+
+        let request = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(object_key)
+            .presigned(config)
+            .await
+            .map_err(|_| ImageUrlSigningError::Signing)?;
+
+        Ok(request.uri().to_owned())
     }
 }
 
@@ -215,9 +258,9 @@ mod tests {
     use crate::config::StorageConfig;
 
     use super::{
-        ImageStorage, ImageStorageError, ImageValidationError, MAX_ALT_CHARACTERS, MAX_IMAGE_EDGE,
-        MAX_IMAGE_FILE_BYTES, S3ImageStorage, build_image_object_key, classify_storage_error,
-        validate_image,
+        IMAGE_PRESIGNED_URL_TTL, ImageStorage, ImageStorageError, ImageUrlSigner,
+        ImageValidationError, MAX_ALT_CHARACTERS, MAX_IMAGE_EDGE, MAX_IMAGE_FILE_BYTES,
+        S3ImageStorage, build_image_object_key, classify_storage_error, validate_image,
     };
 
     fn encoded_image(width: u32, height: u32, format: ImageFormat) -> Vec<u8> {
@@ -370,10 +413,36 @@ mod tests {
             secret_access_key: "test-secret-key".to_owned(),
             region: "test-region".to_owned(),
             force_path_style: true,
-            public_base_url: "http://127.0.0.1:9000/test-bucket".to_owned(),
+            public_base_url: Some("http://127.0.0.1:9000/test-bucket".to_owned()),
         };
 
         let _storage = S3ImageStorage::new(&config);
         assert_image_storage::<S3ImageStorage>();
+    }
+
+    #[tokio::test]
+    async fn creates_get_presigned_url_without_sending_a_request() {
+        let storage = S3ImageStorage::new(&StorageConfig {
+            endpoint: "http://127.0.0.1:9000".to_owned(),
+            bucket: "test-bucket".to_owned(),
+            access_key_id: "test-access-key".to_owned(),
+            secret_access_key: "test-secret-key".to_owned(),
+            region: "us-east-1".to_owned(),
+            force_path_style: true,
+            public_base_url: Some("http://127.0.0.1:9000/test-bucket".to_owned()),
+        });
+
+        let url = storage
+            .presign_get(
+                "v1/problems/room-id/problem-id/image.png",
+                IMAGE_PRESIGNED_URL_TTL,
+            )
+            .await
+            .expect("presigning should succeed");
+
+        assert!(url.starts_with(
+            "http://127.0.0.1:9000/test-bucket/v1/problems/room-id/problem-id/image.png?"
+        ));
+        assert!(url.contains("X-Amz-Expires=300"));
     }
 }

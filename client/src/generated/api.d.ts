@@ -256,7 +256,17 @@ export interface paths {
       }
       cookie?: never
     }
-    get?: never
+    /**
+     * 問題に登録された画像の取得URLを発行する
+     * @description 認証済みユーザーのcurrent runで解放済みのproblemに登録された画像を返します。
+     *     IMAGE_DOWNLOAD_ENABLED=trueの場合だけrouteを登録します。
+     *     無効な場合はroute自体を登録せず404を返します。
+     *     各Assetのurlは、storage objectをGETするためのpresigned URLです。
+     *     presigned URLの有効期限は発行から300秒です。
+     *     requestからobject_keyは受け取らず、problems.assetsに登録されたobject_keyだけを署名します。
+     *     responseへstorage credentialや内部object_keyは返しません。
+     */
+    get: operations['getProblemAssets']
     put?: never
     /**
      * 作問用画像をアップロードする
@@ -503,6 +513,9 @@ export interface components {
     ProblemStatus: 'locked' | 'available' | 'cleared'
     /** @enum {string} */
     RunStatus: 'active' | 'cleared'
+    ProblemAssetsResponse: {
+      items: components['schemas']['Asset'][]
+    }
     Asset: {
       type: string
       url: string
@@ -702,6 +715,53 @@ export interface components {
       }
       content: {
         'application/json': components['schemas']['ProblemResponse']
+      }
+    }
+    /** @description 対象problemに登録された画像と、300秒間有効なpresigned GET URL */
+    ProblemAssetsSuccess: {
+      headers: {
+        /** @description presigned URLを共有cacheへ保存させません。 */
+        'Cache-Control'?: string
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ProblemAssetsResponse']
+      }
+    }
+    /**
+     * @description room_idまたはproblem_idがUUIDではありません。
+     *     error.codeはINVALID_PATH_PARAMETERです。
+     */
+    ProblemAssetsBadRequest: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description activeなrunがないか、指定されたproblemに取得可能な画像がありません。
+     *     error.codeはRUN_NOT_FOUNDまたはIMAGE_NOT_FOUNDです。
+     */
+    ProblemAssetsNotFound: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /**
+     * @description DBアクセスまたはpresigned URL生成に失敗しました。
+     *     error.codeはINTERNAL_SERVER_ERRORです。
+     */
+    ProblemAssetsInternalServerError: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ErrorResponse']
       }
     }
     /** @description 画像をuploadし、対象problemへの紐付けが完了しました。 */
@@ -1202,6 +1262,34 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['ProblemLocked']
       500: components['responses']['InternalServerError']
+    }
+  }
+  getProblemAssets: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+        /**
+         * @description 問題のUUID。下記は契約用例示値であり、開始導線の実problem_idではありません。
+         * @example 22222222-2222-4222-8222-222222222221
+         */
+        problem_id: components['parameters']['ProblemId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['ProblemAssetsSuccess']
+      400: components['responses']['ProblemAssetsBadRequest']
+      401: components['responses']['Unauthorized']
+      404: components['responses']['ProblemAssetsNotFound']
+      409: components['responses']['ProblemLocked']
+      500: components['responses']['ProblemAssetsInternalServerError']
     }
   }
   uploadProblemAsset: {

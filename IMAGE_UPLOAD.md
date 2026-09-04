@@ -55,6 +55,7 @@ v1/problems/{room_id}/{problem_id}/{asset_id}.{extension}
 | `AUTH_MODE` | `demo`にする |
 | `DEMO_COOKIE_SECURE` | localhostのHTTP開発では`false`にする |
 | `IMAGE_UPLOAD_ENABLED` | `true`にする |
+| `IMAGE_DOWNLOAD_ENABLED` | 画像取得用presigned URL発行APIも確認する場合は`true`にする |
 | `DATABASE_URL` | serverから接続できるMariaDBのURL |
 | `S3_ENDPOINT` | S3互換APIのendpoint |
 | `S3_BUCKET` | upload先bucket |
@@ -66,7 +67,7 @@ v1/problems/{room_id}/{problem_id}/{asset_id}.{extension}
 
 `ASSET_PUBLIC_BASE_URL`はresponseの`url`を生成するために使用します。この設定だけでstorage objectが匿名公開されるわけではありません。
 
-storageへのuploadはserverがcredentialを使用して行います。credentialを持たないclientがstorageへ直接uploadすることはありません。生成された`url`から画像を取得する方法と、その取得時の認証は本機能の対象外です。
+storageへのuploadはserverがcredentialを使用して行います。credentialを持たないclientがstorageへ直接uploadすることはありません。認証必須の画像取得APIを使用する場合は、`IMAGE_DOWNLOAD_ENABLED=true`を設定し、`GET /api/rooms/{room_id}/problems/{problem_id}/assets`が返すpresigned URLから画像を取得します。
 
 `S3_FORCE_PATH_STYLE`、`IMAGE_UPLOAD_ENABLED`などのboolean値は、小文字の`true`または`false`だけを使用してください。
 
@@ -87,6 +88,7 @@ APP_ADDR='127.0.0.1:8080'
 AUTH_MODE='demo'
 DEMO_COOKIE_SECURE='false'
 IMAGE_UPLOAD_ENABLED='true'
+IMAGE_DOWNLOAD_ENABLED='true'
 
 DATABASE_URL='mysql://replace-with-user:replace-with-password@127.0.0.1:3306/replace-with-database'
 
@@ -111,7 +113,7 @@ ASSET_PUBLIC_BASE_URL='https://replace-with-public-base-url'
 
 ## serverの起動
 
-現在の`compose.yaml`では画像アップロードが明示的に無効化されています。画像アップロードを試す場合は、環境変数を読み込んでserverを直接起動します。
+現在の`compose.yaml`では画像アップロードと画像取得が明示的に無効化されています。両方を試す場合は、storage設定を含む環境変数を読み込んでserverを直接起動します。
 
 ```sh
 set -a
@@ -187,7 +189,7 @@ upload成功時には、対象problemの内部`assets`へ次の情報が自動�
 }
 ```
 
-内部`object_key`は`AssetUrlResolver`によってAssetの`url`へ変換されます。この`url`から画像を取得する方法と、取得時に必要な認証は別途定めます。
+内部の`object_key`はupload responseでは`AssetUrlResolver`によって`Asset.url`へ変換されます。認証必須のstorageからゲームclientが画像を取得する場合は、`GET /api/rooms/{room_id}/problems/{problem_id}/assets`で有効期限300秒のpresigned GET URLを発行します。
 
 ## アップロード結果の確認
 
@@ -197,7 +199,7 @@ upload APIが`201 Created`を返し、responseに`type`、`url`、`alt`が含ま
 
 storageへのuploadにはserver-side credentialを使用します。credentialをHTTP requestやfrontendへ含めないでください。
 
-生成された`url`から画像を取得する方法は本機能の対象外です。storageが認証を要求する場合、未認証のGET requestが`403`になることがありますが、これはuploadの失敗を意味しません。確認のためにbucketを匿名公開しないでください。
+upload responseの`url`へ未認証で直接GETすると、storageの設定によって`403`になることがあります。ゲームclientは画像取得APIが返すpresigned URLを使用してください。確認のためにbucketを匿名公開しないでください。
 
 ## Idempotency-Keyと再送
 

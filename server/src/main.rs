@@ -31,11 +31,21 @@ async fn run() -> Result<(), Box<dyn Error>> {
         .with_demo_cookie_secure(config.demo_cookie_secure);
 
     if let Some(storage_config) = config.storage.as_ref() {
-        state = state
-            .with_image_storage(Arc::new(S3ImageStorage::new(storage_config)))
-            .with_asset_url_resolver(Arc::new(PublicBaseAssetUrlResolver::new(
-                &storage_config.public_base_url,
+        let storage = Arc::new(S3ImageStorage::new(storage_config));
+
+        if let Some(public_base_url) = storage_config.public_base_url.as_deref() {
+            state = state.with_asset_url_resolver(Arc::new(PublicBaseAssetUrlResolver::new(
+                public_base_url,
             )));
+        }
+
+        if config.image_upload_enabled {
+            state = state.with_image_storage(storage.clone());
+        }
+
+        if config.image_download_enabled {
+            state = state.with_image_url_signer(storage);
+        }
     }
     let listener = TcpListener::bind(config.app_addr).await?;
     info!(address = %config.app_addr, "listening");
