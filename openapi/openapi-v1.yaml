@@ -199,6 +199,26 @@ paths:
   /api/rooms/{room_id}/problems:
     parameters:
       - $ref: "#/components/parameters/RoomId"
+    get:
+      summary: 挑戦中の部屋の問題一覧を取得する
+      description: |
+        認証済みユーザーのactive runに属する問題をnumber昇順で返します。
+        locked状態の問題もid、number、title、statusを返します。
+        問題文、入力設定、ヒント、画像、正解、判定設定は返しません。
+      operationId: getProblems
+      tags:
+        - problems
+      responses:
+        "200":
+          $ref: "#/components/responses/ProblemsSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/RunNotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
     post:
       summary: 作問用の問題を新規作成する
       description: |
@@ -702,6 +722,16 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+    ProblemsSuccess:
+      description: 挑戦中の部屋の問題一覧
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProblemsResponse"
+          examples:
+            listed:
+              summary: 挑戦中の問題一覧
+              externalValue: ./examples/problems/list-response.json
     ProblemSuccess:
       description: 公開可能な問題データ
       content:
@@ -1410,6 +1440,32 @@ components:
           type: boolean
         case_sensitive:
           type: boolean
+    ProblemsResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProblemListItem"
+    ProblemListItem:
+      type: object
+      required:
+        - id
+        - number
+        - title
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: integer
+        title:
+          type: string
+        status:
+          $ref: "#/components/schemas/ProblemStatus"
     ProblemResponse:
       type: object
       required:

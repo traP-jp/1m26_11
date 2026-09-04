@@ -5,8 +5,8 @@ use openapi_generated::{
         CreateProblemJudgeConfig, CreateProblemPathParams, CreateProblemRequest,
         CreateProblemResponse, GetProblemAssetsPathParams, IncorrectQueryResponse,
         LeaderboardResponse, MeDemoUnauthenticated, MeProgressResponse, Operation,
-        ProblemAssetsResponse, RoomResponse, RoomRunStatus, UploadProblemAssetHeaderParams,
-        UploadProblemAssetPathParams,
+        ProblemAssetsResponse, ProblemsResponse, RoomResponse, RoomRunStatus,
+        UploadProblemAssetHeaderParams, UploadProblemAssetPathParams,
     },
     types::Nullable,
 };
@@ -80,6 +80,11 @@ const CREATE_STRING_PROBLEM_REQUEST: &str = include_str!(concat!(
 const CREATE_PROBLEM_RESPONSE: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../openapi/examples/problems/create-response.json"
+));
+
+const PROBLEMS_LIST: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../openapi/examples/problems/list-response.json"
 ));
 
 #[test]
@@ -503,5 +508,19 @@ fn generated_room_responses_match_fixtures() {
     assert!(
         serde_json::from_value::<RoomResponse>(missing_my_rank).is_err(),
         "my_rank must be required in ranking_summary even though it accepts null"
+    );
+}
+
+#[test]
+fn generated_problem_list_contract_matches_fixture() {
+    let expected: serde_json::Value =
+        serde_json::from_str(PROBLEMS_LIST).expect("problem list fixture should be valid JSON");
+
+    let model: ProblemsResponse = serde_json::from_value(expected.clone())
+        .expect("problem list fixture should match generated model");
+
+    assert_eq!(
+        serde_json::to_value(model).expect("generated problem list should serialize"),
+        expected
     );
 }

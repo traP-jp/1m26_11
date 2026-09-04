@@ -403,6 +403,14 @@ pub struct ProblemProgressRecord {
     pub cleared_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, FromRow)]
+pub struct ProblemListItemRecord {
+    pub id: Uuid,
+    pub number: i32,
+    pub title: String,
+    pub status: String,
+}
+
 #[derive(Clone, Eq, PartialEq, FromRow)]
 pub struct ProblemDetailRecord {
     pub id: Uuid,
@@ -632,6 +640,14 @@ pub trait AuthRepository: Send + Sync {
         _problem_id: Uuid,
     ) -> Result<Option<ProblemDetailRecord>, RepositoryError> {
         unimplemented!("find_problem_for_run is not implemented for this repository")
+    }
+
+    async fn find_problems_for_run(
+        &self,
+        _run_id: Uuid,
+        _room_id: Uuid,
+    ) -> Result<Vec<ProblemListItemRecord>, RepositoryError> {
+        unimplemented!("find_problems_for_run is not implemented for this repository")
     }
 
     async fn record_query_judgement(
@@ -1718,6 +1734,33 @@ impl AuthRepository for SqlxUserRepository {
         .bind(user_id)
         .bind(room_id)
         .fetch_optional(&self.pool)
+        .await
+        .map_err(RepositoryError::Database)
+    }
+
+    async fn find_problems_for_run(
+        &self,
+        run_id: Uuid,
+        room_id: Uuid,
+    ) -> Result<Vec<ProblemListItemRecord>, RepositoryError> {
+        sqlx::query_as::<_, ProblemListItemRecord>(
+            r#"
+            SELECT
+                problems.problem_id AS id,
+                problems.number,
+                problems.title,
+                problem_progress.status
+            FROM problems
+            INNER JOIN problem_progress
+                ON problem_progress.problem_id = problems.problem_id
+               AND problem_progress.run_id = ?
+            WHERE problems.room_id = ?
+            ORDER BY problems.number ASC
+            "#,
+        )
+        .bind(run_id)
+        .bind(room_id)
+        .fetch_all(&self.pool)
         .await
         .map_err(RepositoryError::Database)
     }

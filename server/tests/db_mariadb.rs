@@ -1918,6 +1918,37 @@ async fn mariadb_problem_detail_repository_is_scoped_to_run_and_room() {
 
     let repository = SqlxUserRepository::new(pool.clone());
 
+    let problem_list = repository
+        .find_problems_for_run(run_id, room_id)
+        .await
+        .expect("problem list lookup should succeed");
+
+    assert_eq!(problem_list.len(), 1);
+    assert_eq!(problem_list[0].id, problem_id);
+    assert_eq!(problem_list[0].number, 1);
+    assert_eq!(problem_list[0].title, "MariaDB test problem");
+    assert_eq!(problem_list[0].status, "available");
+
+    let wrong_run_list = repository
+        .find_problems_for_run(Uuid::new_v4(), room_id)
+        .await
+        .expect("problem list lookup with another run should succeed");
+
+    assert!(
+        wrong_run_list.is_empty(),
+        "problems from another run must not be returned"
+    );
+
+    let wrong_room_list = repository
+        .find_problems_for_run(run_id, Uuid::new_v4())
+        .await
+        .expect("problem list lookup with another room should succeed");
+
+    assert!(
+        wrong_room_list.is_empty(),
+        "problems from another room must not be returned"
+    );
+
     let record = repository
         .find_problem_for_run(run_id, room_id, problem_id)
         .await

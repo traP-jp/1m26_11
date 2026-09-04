@@ -247,7 +247,13 @@ export interface paths {
       }
       cookie?: never
     }
-    get?: never
+    /**
+     * 挑戦中の部屋の問題一覧を取得する
+     * @description 認証済みユーザーのactive runに属する問題をnumber昇順で返します。
+     *     locked状態の問題もid、number、title、statusを返します。
+     *     問題文、入力設定、ヒント、画像、正解、判定設定は返しません。
+     */
+    get: operations['getProblems']
     put?: never
     /**
      * 作問用の問題を新規作成する
@@ -608,6 +614,16 @@ export interface components {
       collapse_internal_whitespace: boolean
       case_sensitive: boolean
     }
+    ProblemsResponse: {
+      items: components['schemas']['ProblemListItem'][]
+    }
+    ProblemListItem: {
+      /** Format: uuid */
+      id: string
+      number: number
+      title: string
+      status: components['schemas']['ProblemStatus']
+    }
     ProblemResponse: {
       /** Format: uuid */
       id: string
@@ -906,6 +922,15 @@ export interface components {
       }
       content: {
         'application/json': components['schemas']['ErrorResponse']
+      }
+    }
+    /** @description 挑戦中の部屋の問題一覧 */
+    ProblemsSuccess: {
+      headers: {
+        [name: string]: unknown
+      }
+      content: {
+        'application/json': components['schemas']['ProblemsResponse']
       }
     }
     /** @description 公開可能な問題データ */
@@ -1460,6 +1485,28 @@ export interface operations {
       200: components['responses']['LeaderboardSuccess']
       400: components['responses']['BadRequest']
       404: components['responses']['NotFound']
+      500: components['responses']['InternalServerError']
+    }
+  }
+  getProblems: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /**
+         * @description 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+         * @example 11111111-1111-4111-8111-111111111111
+         */
+        room_id: components['parameters']['RoomId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: components['responses']['ProblemsSuccess']
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthorized']
+      404: components['responses']['RunNotFound']
       500: components['responses']['InternalServerError']
     }
   }
