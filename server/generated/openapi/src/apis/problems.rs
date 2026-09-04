@@ -29,6 +29,27 @@ pub enum GetProblemResponse {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[must_use]
 #[allow(clippy::large_enum_variant)]
+pub enum GetProblemAssetsResponse {
+    /// 対象problemに登録された画像と、300秒間有効なpresigned GET URL
+    Status200 {
+        body: models::ProblemAssetsResponse,
+        cache_control: Option<String>,
+    },
+    /// room_idまたはproblem_idがUUIDではありません。 error.codeはINVALID_PATH_PARAMETERです。
+    Status400_Room(models::ErrorResponse),
+    /// 未ログイン
+    Status401(models::ErrorResponse),
+    /// activeなrunがないか、指定されたproblemに取得可能な画像がありません。 error.codeはRUN_NOT_FOUNDまたはIMAGE_NOT_FOUNDです。
+    Status404_Active(models::ErrorResponse),
+    /// 問題がまだ解放されていません。
+    Status409(models::ErrorResponse),
+    /// DBアクセスまたはpresigned URL生成に失敗しました。 error.codeはINTERNAL_SERVER_ERRORです。
+    Status500_DB(models::ErrorResponse),
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[must_use]
+#[allow(clippy::large_enum_variant)]
 pub enum GetProblemHintResponse {
     /// ヒント本文
     Status200(models::ProblemHintResponse),
@@ -87,6 +108,18 @@ pub trait Problems<E: std::fmt::Debug + Send + Sync + 'static = ()>:
         cookies: &CookieJar,
         path_params: &models::GetProblemPathParams,
     ) -> Result<GetProblemResponse, E>;
+
+    /// 問題に登録された画像の取得URLを発行する.
+    ///
+    /// GetProblemAssets - GET /api/rooms/{room_id}/problems/{problem_id}/assets
+    async fn get_problem_assets(
+        &self,
+
+        method: &Method,
+        host: &Host,
+        cookies: &CookieJar,
+        path_params: &models::GetProblemAssetsPathParams,
+    ) -> Result<GetProblemAssetsResponse, E>;
 
     /// 問題のヒントを取得する.
     ///

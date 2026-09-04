@@ -11,6 +11,7 @@ const DEFAULT_DB_HOST: &str = "localhost";
 const DEFAULT_DB_PORT: u16 = 3306;
 const DEFAULT_DB_NAME: &str = "app";
 const DEFAULT_IMAGE_UPLOAD_ENABLED: bool = false;
+const DEFAULT_IMAGE_DOWNLOAD_ENABLED: bool = false;
 
 #[derive(Clone)]
 pub struct StorageConfig {
@@ -20,7 +21,7 @@ pub struct StorageConfig {
     pub secret_access_key: String,
     pub region: String,
     pub force_path_style: bool,
-    pub public_base_url: String,
+    pub public_base_url: Option<String>,
 }
 
 #[derive(Clone)]
@@ -29,6 +30,7 @@ pub struct Config {
     pub auth_mode: AuthMode,
     pub demo_cookie_secure: bool,
     pub image_upload_enabled: bool,
+    pub image_download_enabled: bool,
     pub storage: Option<StorageConfig>,
     database_url: Option<String>,
     db_user: String,
@@ -51,9 +53,18 @@ impl Config {
                 ));
             }
         };
-        let image_upload_enabled = env_bool("IMAGE_UPLOAD_ENABLED", DEFAULT_IMAGE_UPLOAD_ENABLED)?;
 
-        let storage = load_storage_config(auth_mode, image_upload_enabled, required_env)?;
+        let image_upload_enabled = env_bool("IMAGE_UPLOAD_ENABLED", DEFAULT_IMAGE_UPLOAD_ENABLED)?;
+        let image_download_enabled =
+            env_bool("IMAGE_DOWNLOAD_ENABLED", DEFAULT_IMAGE_DOWNLOAD_ENABLED)?;
+
+        let storage = load_storage_config(
+            auth_mode,
+            image_upload_enabled,
+            image_download_enabled,
+            required_env,
+        )?;
+
         let demo_cookie_secure = env_bool("DEMO_COOKIE_SECURE", DEFAULT_DEMO_COOKIE_SECURE)?;
         let app_addr = normalize_app_addr(&env_or("APP_ADDR", DEFAULT_APP_ADDR))
             .parse()
@@ -68,6 +79,7 @@ impl Config {
             auth_mode,
             demo_cookie_secure,
             image_upload_enabled,
+            image_download_enabled,
             storage,
             database_url: env::var("DATABASE_URL")
                 .ok()
@@ -102,8 +114,8 @@ pub enum ConfigError {
     InvalidAuthMode(String),
     #[error("IMAGE_UPLOAD_ENABLED=true requires AUTH_MODE=demo")]
     ImageUploadRequiresDemoAuth,
-    #[error("{key} must be set when IMAGE_UPLOAD_ENABLED=true")]
-    MissingImageUploadSetting { key: &'static str },
+    #[error("{key} must be set when image upload or download is enabled")]
+    MissingImageStorageSetting { key: &'static str },
     #[error("APP_ADDR is not a valid socket address")]
     InvalidAppAddr(#[source] std::net::AddrParseError),
     #[error("{key} must be `true` or `false`, got `{value}`")]
@@ -115,17 +127,18 @@ pub enum ConfigError {
 fn load_storage_config<F>(
     auth_mode: AuthMode,
     image_upload_enabled: bool,
+    image_download_enabled: bool,
     lookup: F,
 ) -> Result<Option<StorageConfig>, ConfigError>
 where
     F: Fn(&'static str) -> Result<String, ConfigError>,
 {
-    if !image_upload_enabled {
-        return Ok(None);
+    if image_upload_enabled && auth_mode != AuthMode::Demo {
+        return Err(ConfigError::ImageUploadRequiresDemoAuth);
     }
 
-    if auth_mode != AuthMode::Demo {
-        return Err(ConfigError::ImageUploadRequiresDemoAuth);
+    if !image_upload_enabled && !image_download_enabled {
+        return Ok(None);
     }
 
     let force_path_style_value = lookup("S3_FORCE_PATH_STYLE")?;
@@ -135,6 +148,12 @@ where
             value: force_path_style_value,
         })?;
 
+    let public_base_url = if image_upload_enabled {
+        Some(lookup("ASSET_PUBLIC_BASE_URL")?)
+    } else {
+        None
+    };
+
     Ok(Some(StorageConfig {
         endpoint: lookup("S3_ENDPOINT")?,
         bucket: lookup("S3_BUCKET")?,
@@ -142,7 +161,7 @@ where
         secret_access_key: lookup("AWS_SECRET_ACCESS_KEY")?,
         region: lookup("AWS_REGION")?,
         force_path_style,
-        public_base_url: lookup("ASSET_PUBLIC_BASE_URL")?,
+        public_base_url,
     }))
 }
 
@@ -150,7 +169,7 @@ fn required_env(key: &'static str) -> Result<String, ConfigError> {
     match env::var(key) {
         Ok(value) if !value.trim().is_empty() => Ok(value),
         Ok(_) | Err(env::VarError::NotPresent) | Err(env::VarError::NotUnicode(_)) => {
-            Err(ConfigError::MissingImageUploadSetting { key })
+            Err(ConfigError::MissingImageStorageSetting { key })
         }
     }
 }
@@ -224,7 +243,7 @@ mod tests {
             "AWS_REGION" => "test-region",
             "S3_FORCE_PATH_STYLE" => "true",
             "ASSET_PUBLIC_BASE_URL" => "https://assets.example.invalid/",
-            _ => return Err(ConfigError::MissingImageUploadSetting { key }),
+            _ => return Err(ConfigError::MissingImageStorageSetting { key }),
         };
 
         Ok(value.to_owned())
@@ -253,18 +272,18 @@ mod tests {
     }
 
     #[test]
-    fn disabled_image_upload_does_not_require_storage_settings() {
-        let storage = load_storage_config(AuthMode::Demo, false, |_| {
-            panic!("storage settings must not be read when upload is disabled")
+    fn disabled_image_storage_does_not_require_storage_settings() {
+        let storage = load_storage_config(AuthMode::Demo, false, false, |_| {
+            panic!("storage settings must not be read when image features are disabled")
         })
-        .expect("disabled upload should be valid");
+        .expect("disabled image features should be valid");
 
         assert!(storage.is_none());
     }
 
     #[test]
     fn demo_enabled_image_upload_loads_storage_settings() {
-        let storage = load_storage_config(AuthMode::Demo, true, storage_value)
+        let storage = load_storage_config(AuthMode::Demo, true, false, storage_value)
             .expect("demo upload configuration should be valid")
             .expect("enabled upload should contain storage settings");
 
@@ -272,12 +291,15 @@ mod tests {
         assert_eq!(storage.bucket, "test-bucket");
         assert_eq!(storage.region, "test-region");
         assert!(storage.force_path_style);
-        assert_eq!(storage.public_base_url, "https://assets.example.invalid/");
+        assert_eq!(
+            storage.public_base_url.as_deref(),
+            Some("https://assets.example.invalid/")
+        );
     }
 
     #[test]
     fn neoshowcase_enabled_image_upload_is_rejected() {
-        let result = load_storage_config(AuthMode::NeoShowcase, true, storage_value);
+        let result = load_storage_config(AuthMode::NeoShowcase, true, false, storage_value);
 
         assert!(matches!(
             result,
@@ -286,10 +308,28 @@ mod tests {
     }
 
     #[test]
-    fn enabled_image_upload_rejects_missing_storage_setting() {
-        let result = load_storage_config(AuthMode::Demo, true, |key| {
+    fn neoshowcase_enabled_image_download_loads_storage_settings() {
+        let storage = load_storage_config(AuthMode::NeoShowcase, false, true, |key| {
+            if key == "ASSET_PUBLIC_BASE_URL" {
+                panic!("download-only configuration must not read ASSET_PUBLIC_BASE_URL");
+            }
+            storage_value(key)
+        })
+        .expect("download storage config should load")
+        .expect("storage config should be present");
+
+        assert_eq!(storage.endpoint, "https://s3.example.invalid");
+        assert_eq!(storage.bucket, "test-bucket");
+        assert_eq!(storage.region, "test-region");
+        assert!(storage.force_path_style);
+        assert_eq!(storage.public_base_url, None);
+    }
+
+    #[test]
+    fn enabled_image_feature_rejects_missing_storage_setting() {
+        let result = load_storage_config(AuthMode::Demo, true, false, |key| {
             if key == "AWS_SECRET_ACCESS_KEY" {
-                Err(ConfigError::MissingImageUploadSetting { key })
+                Err(ConfigError::MissingImageStorageSetting { key })
             } else {
                 storage_value(key)
             }
@@ -297,7 +337,7 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(ConfigError::MissingImageUploadSetting {
+            Err(ConfigError::MissingImageStorageSetting {
                 key: "AWS_SECRET_ACCESS_KEY"
             })
         ));

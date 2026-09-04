@@ -8,7 +8,7 @@ use std::{
 use serde_yaml::Value;
 
 const OPENAPI_VERSION: &str = "3.1.0";
-const REQUIRED_OPERATIONS: [(&str, &str, &str); 9] = [
+const REQUIRED_OPERATIONS: [(&str, &str, &str); 10] = [
     ("/openapi.yaml", "get", "getOpenApi"),
     ("/api/me", "get", "getMe"),
     ("/api/auth/guest", "post", "loginGuest"),
@@ -19,6 +19,11 @@ const REQUIRED_OPERATIONS: [(&str, &str, &str); 9] = [
         "/api/rooms/{room_id}/problems/{problem_id}",
         "get",
         "getProblem",
+    ),
+    (
+        "/api/rooms/{room_id}/problems/{problem_id}/assets",
+        "get",
+        "getProblemAssets",
     ),
     (
         "/api/rooms/{room_id}/problems/{problem_id}/queries",
