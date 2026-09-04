@@ -14,6 +14,7 @@ import meUnauthenticated from '../../../openapi/examples/auth/me-demo-unauthenti
 import meNeoshowcaseAuthenticated from '../../../openapi/examples/auth/me-neoshowcase-authenticated.json'
 import meNeoshowcaseUnauthenticated from '../../../openapi/examples/auth/me-neoshowcase-unauthenticated.json'
 import problemResponse from '../../../openapi/examples/problems/available-response.json'
+import roomActive from '../../../openapi/examples/rooms/response-active.json'
 import currentRun from '../../../openapi/examples/runs/active-response.json'
 import newRun from '../../../openapi/examples/runs/start-new-response.json'
 import answerCleared from '../../../openapi/examples/answers/response-correct-cleared.json'
@@ -25,6 +26,7 @@ import {
   type GetCurrentRunResponse,
   type GetMeResponse,
   type GetProblemResponse,
+  type GetRoomResponse,
   type LoginGuestResponse,
   type StartOrResumeRunResponse,
   type SubmitAnswerResponse,
@@ -54,6 +56,9 @@ function createAppApiClient(overrides: Partial<ApiClient> = {}): ApiClient {
     getMe: vi.fn<ApiClient['getMe']>().mockResolvedValue(meAuthenticated as GetMeResponse),
     loginGuest: vi.fn<ApiClient['loginGuest']>(),
     logoutDemo: vi.fn<ApiClient['logoutDemo']>(),
+    getRoom: vi.fn<ApiClient['getRoom']>(({ room_id }) =>
+      Promise.resolve({ ...(roomActive as GetRoomResponse), id: room_id }),
+    ),
     startOrResumeRun: vi
       .fn<ApiClient['startOrResumeRun']>()
       .mockResolvedValue(newRun as StartOrResumeRunResponse),
@@ -122,6 +127,9 @@ describe('App', () => {
 
     expect(router.currentRoute.value.fullPath).toBe('/rooms/1411824c-d357-4941-af76-c76cb827dda6')
     expect(wrapper.findComponent(RoomPage).exists()).toBe(true)
+    expect(client.getRoom).toHaveBeenCalledExactlyOnceWith({
+      room_id: '1411824c-d357-4941-af76-c76cb827dda6',
+    })
     expect(client.getCurrentRun).not.toHaveBeenCalled()
     expect(client.startOrResumeRun).toHaveBeenCalledExactlyOnceWith({
       room_id: '1411824c-d357-4941-af76-c76cb827dda6',
@@ -152,6 +160,11 @@ describe('App', () => {
     })
     expect(startOrResumeRun).not.toHaveBeenCalled()
     expect(wrapper.getComponent(RoomPage).props('viewModel')).toMatchObject({
+      room: {
+        id: '1411824c-d357-4941-af76-c76cb827dda6',
+        number: roomActive.number,
+        name: roomActive.name,
+      },
       serverElapsedMs: currentRun.elapsed_ms,
       problems: [{ id: problemResponse.id, status: 'cleared', selected: true }],
       clear: { clearedCount: currentRun.cleared_problem_ids.length },

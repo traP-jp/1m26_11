@@ -31,6 +31,7 @@ function createClient(overrides: Partial<ApiClient> = {}): ApiClient {
     getMe: vi.fn<ApiClient['getMe']>(),
     loginGuest: vi.fn<ApiClient['loginGuest']>(),
     logoutDemo: vi.fn<ApiClient['logoutDemo']>(),
+    getRoom: vi.fn<ApiClient['getRoom']>(),
     startOrResumeRun: vi.fn<ApiClient['startOrResumeRun']>(),
     getCurrentRun: vi.fn<ApiClient['getCurrentRun']>(),
     getProblem: vi.fn<ApiClient['getProblem']>(),

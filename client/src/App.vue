@@ -2,7 +2,7 @@
 import { computed, inject, onMounted, ref, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 
-import { ApiClientError, apiClient } from './api/client'
+import { ApiClientError, apiClient, type GetRoomResponse } from './api/client'
 import { QueryAnswerController } from './controllers/QueryAnswerController'
 import { RunProblemController } from './controllers/RunProblemController'
 import type { Operation } from './input/InputAdapter.types'
@@ -23,6 +23,7 @@ const runProblem = new RunProblemController(client, queryAnswer)
 
 const roomLoading = ref(false)
 const roomLoadError = ref<unknown | null>(null)
+const roomDetails = ref<GetRoomResponse | null>(null)
 const bufferedOperations = ref<Operation[]>([])
 const lastSubmission = ref<'query' | 'answer' | null>(null)
 let roomLoadGeneration = 0
@@ -72,7 +73,8 @@ const visibleJudgementState = computed<JudgementState>(() => {
 const roomViewModel = computed<RoomViewModel | null>(() => {
   const run = runProblem.state.run
   const problem = runProblem.state.problem
-  if (run === null || problem === null) return null
+  const room = roomDetails.value
+  if (room === null || run === null || problem === null) return null
 
   const problemWasCleared =
     problem.status === 'cleared' ||
@@ -83,8 +85,9 @@ const roomViewModel = computed<RoomViewModel | null>(() => {
 
   return {
     room: {
-      ...roomPageFixture.room,
-      id: runProblem.state.roomId ?? roomPageFixture.room.id,
+      id: room.id,
+      number: room.number,
+      name: room.name,
     },
     problems: roomPageFixture.problems.map((item) => ({
       ...item,
@@ -181,9 +184,13 @@ async function loadRoom(roomId: string, mode: 'restore' | 'start' = 'restore'): 
   const generation = ++roomLoadGeneration
   roomLoading.value = true
   roomLoadError.value = null
+  roomDetails.value = null
   clearRoomInput()
 
   try {
+    const nextRoomDetails = await client.getRoom({ room_id: roomId })
+    if (generation !== roomLoadGeneration) return
+
     if (mode === 'start') {
       await runProblem.startOrResume(roomId)
     } else {
@@ -202,6 +209,7 @@ async function loadRoom(roomId: string, mode: 'restore' | 'start' = 'restore'): 
     }
     await runProblem.loadSelectedProblem(roomId, initialProblemId)
     if (generation !== roomLoadGeneration) return
+    roomDetails.value = nextRoomDetails
     queryAnswer.setAnswerMaxLength(runProblem.state.problem?.input_schema.answer.max_length ?? null)
   } catch (error) {
     if (generation === roomLoadGeneration) roomLoadError.value = error

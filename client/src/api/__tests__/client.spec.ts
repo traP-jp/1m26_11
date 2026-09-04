@@ -12,6 +12,7 @@ import problemLocked from '../../../../openapi/examples/problems/error-problem-l
 import problemResponse from '../../../../openapi/examples/problems/available-response.json'
 import queryRequest from '../../../../openapi/examples/queries/request-serial.json'
 import queryIncorrect from '../../../../openapi/examples/queries/response-incorrect.json'
+import roomActive from '../../../../openapi/examples/rooms/response-active.json'
 import currentRun from '../../../../openapi/examples/runs/active-response.json'
 import runNotFound from '../../../../openapi/examples/runs/error-run-not-found.json'
 import newRun from '../../../../openapi/examples/runs/start-new-response.json'
@@ -21,6 +22,7 @@ const API_ORIGIN = 'https://api.example.test'
 const ROOM_ID = '11111111-1111-4111-8111-111111111111'
 const PROBLEM_ID = '22222222-2222-4222-8222-222222222221'
 
+const roomPath = { room_id: ROOM_ID }
 const runPath = { room_id: ROOM_ID }
 const problemPath = { room_id: ROOM_ID, problem_id: PROBLEM_ID }
 const server = setupServer()
@@ -109,6 +111,14 @@ describe('ApiClient', () => {
       invoke: () => client.logoutDemo(),
       response: new HttpResponse(null, { status: 204 }),
       expectedResult: undefined,
+    },
+    {
+      name: 'getRoom',
+      method: 'GET',
+      path: `/api/rooms/${ROOM_ID}`,
+      invoke: () => client.getRoom(roomPath),
+      response: HttpResponse.json(roomActive),
+      expectedResult: roomActive,
     },
     {
       name: 'startOrResumeRun',

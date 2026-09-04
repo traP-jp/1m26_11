@@ -24,6 +24,7 @@ function createClient(overrides: Partial<ApiClient> = {}): ApiClient {
     getMe: vi.fn<ApiClient['getMe']>().mockResolvedValue(unauthenticatedFixture),
     loginGuest: vi.fn<ApiClient['loginGuest']>().mockResolvedValue(guestFixture),
     logoutDemo: vi.fn<ApiClient['logoutDemo']>().mockResolvedValue(undefined),
+    getRoom: vi.fn<ApiClient['getRoom']>(),
     startOrResumeRun: vi.fn<ApiClient['startOrResumeRun']>(),
     getCurrentRun: vi.fn<ApiClient['getCurrentRun']>(),
     getProblem: vi.fn<ApiClient['getProblem']>(),

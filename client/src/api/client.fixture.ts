@@ -20,6 +20,7 @@ export function createFixtureApiClient(): ApiClient {
     logoutDemo: async () => {
       authenticated = false
     },
+    getRoom: unsupported,
     startOrResumeRun: unsupported,
     getCurrentRun: unsupported,
     getProblem: unsupported,
