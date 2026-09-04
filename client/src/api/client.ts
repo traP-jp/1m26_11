@@ -13,6 +13,8 @@ export type GetCurrentRunPath = operations['getCurrentRun']['parameters']['path'
 export type GetCurrentRunResponse = JsonContent<operations['getCurrentRun']['responses'][200]>
 export type GetProblemPath = operations['getProblem']['parameters']['path']
 export type GetProblemResponse = JsonContent<operations['getProblem']['responses'][200]>
+export type GetProblemAssetsPath = operations['getProblemAssets']['parameters']['path']
+export type GetProblemAssetsResponse = JsonContent<operations['getProblemAssets']['responses'][200]>
 export type SubmitQueryPath = operations['submitQuery']['parameters']['path']
 export type SubmitQueryRequest = JsonContent<operations['submitQuery']['requestBody']>
 export type SubmitQueryResponse = JsonContent<operations['submitQuery']['responses'][200]>
@@ -99,6 +101,7 @@ export interface ApiClient {
   startOrResumeRun(path: StartOrResumeRunPath): Promise<StartOrResumeRunResponse>
   getCurrentRun(path: GetCurrentRunPath): Promise<GetCurrentRunResponse>
   getProblem(path: GetProblemPath): Promise<GetProblemResponse>
+  getProblemAssets(path: GetProblemAssetsPath): Promise<GetProblemAssetsResponse>
   submitQuery(path: SubmitQueryPath, body: SubmitQueryRequest): Promise<SubmitQueryResponse>
   submitAnswer(path: SubmitAnswerPath, body: SubmitAnswerRequest): Promise<SubmitAnswerResponse>
 }
@@ -252,6 +255,12 @@ export function createApiClient(
     getProblem: ({ room_id, problem_id }) =>
       requestJson<GetProblemResponse>(
         `/api/rooms/${encodeURIComponent(room_id)}/problems/${encodeURIComponent(problem_id)}`,
+        { method: 'GET' },
+      ),
+
+    getProblemAssets: ({ room_id, problem_id }) =>
+      requestJson<GetProblemAssetsResponse>(
+        `/api/rooms/${encodeURIComponent(room_id)}/problems/${encodeURIComponent(problem_id)}/assets`,
         { method: 'GET' },
       ),
 
