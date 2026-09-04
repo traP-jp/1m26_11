@@ -5,8 +5,9 @@ use axum::{
 use chrono::Utc;
 use openapi_generated::{
     models::{
-        ActiveRunResponse, BestRecord, ProblemHintResponse, ProblemResponse, Progress,
-        ProgressStatus, RoomItem, RoomRankingSummary, RoomResponse, RoomRunStatus, RoomsResponse,
+        ActiveRunResponse, BestRecord, ProblemHintResponse, ProblemListItem, ProblemResponse,
+        ProblemStatus, ProblemsResponse, Progress, ProgressStatus, RoomItem, RoomRankingSummary,
+        RoomResponse, RoomRunStatus, RoomsResponse,
     },
     types::Nullable,
 };
@@ -130,6 +131,50 @@ pub(crate) async fn start_or_resume_run(
     );
 
     Ok(Json(response))
+}
+
+pub(crate) async fn get_problems(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(room_id): Path<String>,
+) -> Result<Json<ProblemsResponse>, AppError> {
+    let room_id =
+        Uuid::parse_str(&room_id).map_err(|_| AppError::bad_request("invalid room_id"))?;
+
+    let run = state
+        .auth_repository
+        .find_active_run(user.user_id, room_id)
+        .await?
+        .ok_or(AppError::RunNotFound)?;
+
+    let items = state
+        .auth_repository
+        .find_problems_for_run(run.id, room_id)
+        .await?
+        .into_iter()
+        .map(|problem| {
+            let status = match problem.status.as_str() {
+                "locked" => ProblemStatus::Locked,
+                "available" => ProblemStatus::Available,
+                "cleared" => ProblemStatus::Cleared,
+                other => {
+                    return Err(RepositoryError::InvalidProblemStatus {
+                        status: other.to_owned(),
+                    }
+                    .into());
+                }
+            };
+
+            Ok(ProblemListItem::new(
+                problem.id,
+                problem.number,
+                problem.title,
+                status,
+            ))
+        })
+        .collect::<Result<Vec<_>, AppError>>()?;
+
+    Ok(Json(ProblemsResponse::new(items)))
 }
 
 pub(crate) async fn get_problem(

@@ -17,8 +17,8 @@ use server::{
     problem::{Asset, AssetUrlResolveError, AssetUrlResolver, InputSchema},
     repository::{
         AnswerRunStatus, AnswerSubmission, AnswerSubmissionResult, AuthProvider, AuthRepository,
-        AuthUserRecord, HintRecord, LeaderboardRecord, ProblemDetailRecord, QuerySubmission,
-        QuerySubmissionResult, RepositoryError, RoomBestRecordRecord, RoomRecord,
+        AuthUserRecord, HintRecord, LeaderboardRecord, ProblemDetailRecord, ProblemListItemRecord,
+        QuerySubmission, QuerySubmissionResult, RepositoryError, RoomBestRecordRecord, RoomRecord,
         RoomSummaryRecord, RunRecord,
     },
 };
@@ -248,6 +248,45 @@ impl AuthRepository for StubAuthRepository {
         } else {
             Ok(None)
         }
+    }
+
+    async fn find_problems_for_run(
+        &self,
+        run_id: Uuid,
+        room_id: Uuid,
+    ) -> Result<Vec<ProblemListItemRecord>, RepositoryError> {
+        let active_run_id = Uuid::from_str(MOCK_RESUME_ROOM_ID).unwrap();
+
+        if run_id != active_run_id || room_id != active_run_id {
+            return Ok(Vec::new());
+        }
+
+        Ok(vec![
+            ProblemListItemRecord {
+                id: Uuid::from_str(MOCK_CLEARED_PROBLEM_ID).unwrap(),
+                number: 1,
+                title: "生年月日".to_owned(),
+                status: "available".to_owned(),
+            },
+            ProblemListItemRecord {
+                id: Uuid::from_str(MOCK_LOCKED_PROBLEM_ID).unwrap(),
+                number: 2,
+                title: "次の問題".to_owned(),
+                status: "locked".to_owned(),
+            },
+            ProblemListItemRecord {
+                id: Uuid::from_str(MOCK_CLEARED_DETAIL_PROBLEM_ID).unwrap(),
+                number: 3,
+                title: "三番目の問題".to_owned(),
+                status: "locked".to_owned(),
+            },
+            ProblemListItemRecord {
+                id: Uuid::from_str(MOCK_DATABASE_ERROR_PROBLEM_ID).unwrap(),
+                number: 4,
+                title: "最後の問題".to_owned(),
+                status: "locked".to_owned(),
+            },
+        ])
     }
 
     async fn create_run(
