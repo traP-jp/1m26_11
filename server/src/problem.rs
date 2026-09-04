@@ -1,5 +1,6 @@
 mod answer;
 mod asset_url;
+mod authoring;
 mod loader;
 mod model;
 mod public;
@@ -14,10 +15,11 @@ use thiserror::Error;
 pub(crate) use answer::{AnswerJudgeError, judge_answer};
 pub(crate) use asset_url::UnconfiguredAssetUrlResolver;
 pub use asset_url::{AssetUrlResolveError, AssetUrlResolver, PublicBaseAssetUrlResolver};
+pub use authoring::{ProblemAuthoringError, validate_problem_draft};
 pub use loader::load_problem_data;
 pub use model::{
-    Asset, Hint, InputSchema, JudgeConfig, Operation, Problem, ProblemCatalog, ProblemType, Room,
-    SubmissionType,
+    Asset, Hint, InputSchema, JudgeConfig, Operation, Problem, ProblemCatalog, ProblemDraft,
+    ProblemType, Room, SubmissionType,
 };
 pub use public::{ProblemProjectionError, build_problem_response};
 pub(crate) use query::{QueryJudgeError, decode_stored_judge_config, judge_query};

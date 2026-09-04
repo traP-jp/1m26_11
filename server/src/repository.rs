@@ -4,7 +4,8 @@ use crate::{
         RunStatus, duration_to_elapsed_ms, plan_problem_clear,
     },
     problem::{
-        AnswerJudgeError, Asset, InputSchema, Operation, decode_stored_judge_config, judge_answer,
+        AnswerJudgeError, Asset, InputSchema, Operation, ProblemDraft, ProblemType, SubmissionType,
+        decode_stored_judge_config, judge_answer,
     },
 };
 use async_trait::async_trait;
@@ -95,6 +96,18 @@ pub enum RepositoryError {
 
     #[error("published room cannot be modified")]
     PublishedRoomImmutable,
+
+    #[error("room was not found")]
+    RoomNotFound,
+
+    #[error("problem number is already used in the room")]
+    ProblemNumberConflict,
+
+    #[error("problem dependency is invalid")]
+    InvalidProblemDependency,
+
+    #[error("problem data could not be serialized")]
+    ProblemSerialization(#[source] serde_json::Error),
 
     #[error("problem assets update affected an unexpected number of rows")]
     ProblemAssetsUpdateConflict,
@@ -301,6 +314,28 @@ pub struct ProblemRecord {
     pub is_required: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreateProblemRecordRequest {
+    pub request_method: String,
+    pub request_path: String,
+    pub idempotency_key: Uuid,
+    pub payload_sha256: [u8; 32],
+    pub draft: ProblemDraft,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CreateProblemRecordOutcome {
+    Created { problem_id: Uuid },
+    Replayed { problem_id: Uuid },
+    Reused,
+}
+
+#[derive(FromRow)]
+struct ProblemCreateIdempotencyRow {
+    payload_sha256: Vec<u8>,
+    problem_id: Uuid,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, FromRow)]
 pub struct AssetUploadTargetRecord {
     pub is_published: bool,
@@ -467,6 +502,27 @@ struct GameProgressProblemRow {
     status: String,
 }
 
+fn problem_type_name(problem_type: ProblemType) -> &'static str {
+    match problem_type {
+        ProblemType::Small => "small",
+        ProblemType::Final => "final",
+    }
+}
+
+fn submission_type_name(submission_type: SubmissionType) -> &'static str {
+    match submission_type {
+        SubmissionType::OperationSequence => "operation_sequence",
+        SubmissionType::String => "string",
+    }
+}
+
+fn serialize_problem_field<T>(value: &T) -> Result<serde_json::Value, RepositoryError>
+where
+    T: serde::Serialize + ?Sized,
+{
+    serde_json::to_value(value).map_err(RepositoryError::ProblemSerialization)
+}
+
 fn parse_problem_status(status: &str) -> Result<ProblemStatus, RepositoryError> {
     match status {
         "locked" => Ok(ProblemStatus::Locked),
@@ -520,6 +576,13 @@ pub trait AuthRepository: Send + Sync {
 
     async fn find_room_by_id(&self, _room_id: Uuid) -> Result<Option<RoomRecord>, RepositoryError> {
         unimplemented!("find_room_by_id is not implemented for this repository")
+    }
+
+    async fn create_problem(
+        &self,
+        _request: &CreateProblemRecordRequest,
+    ) -> Result<CreateProblemRecordOutcome, RepositoryError> {
+        unimplemented!("create_problem is not implemented for this repository")
     }
 
     async fn find_asset_upload_target(
@@ -1172,6 +1235,175 @@ impl AuthRepository for SqlxUserRepository {
         .fetch_optional(&self.pool)
         .await
         .map_err(RepositoryError::Database)
+    }
+
+    async fn create_problem(
+        &self,
+        request: &CreateProblemRecordRequest,
+    ) -> Result<CreateProblemRecordOutcome, RepositoryError> {
+        let input_schema = serialize_problem_field(&request.draft.input_schema)?;
+        let hints = serialize_problem_field(&request.draft.hints)?;
+        let judge_config = serialize_problem_field(&request.draft.judge_config)?;
+
+        let mut transaction = self.pool.begin().await.map_err(RepositoryError::Database)?;
+
+        let is_published = sqlx::query_scalar::<_, bool>(
+            r#"
+            SELECT is_published
+            FROM rooms
+            WHERE room_id = ?
+            FOR UPDATE
+            "#,
+        )
+        .bind(request.draft.room_id)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?
+        .ok_or(RepositoryError::RoomNotFound)?;
+
+        let existing = sqlx::query_as::<_, ProblemCreateIdempotencyRow>(
+            r#"
+            SELECT payload_sha256, problem_id
+            FROM problem_create_idempotency
+            WHERE request_method = ?
+              AND request_path = ?
+              AND idempotency_key = ?
+            FOR UPDATE
+            "#,
+        )
+        .bind(&request.request_method)
+        .bind(&request.request_path)
+        .bind(request.idempotency_key)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        if let Some(existing) = existing {
+            let outcome = if existing.payload_sha256.as_slice() == request.payload_sha256.as_slice()
+            {
+                CreateProblemRecordOutcome::Replayed {
+                    problem_id: existing.problem_id,
+                }
+            } else {
+                CreateProblemRecordOutcome::Reused
+            };
+
+            transaction
+                .commit()
+                .await
+                .map_err(RepositoryError::Database)?;
+
+            return Ok(outcome);
+        }
+
+        if is_published {
+            return Err(RepositoryError::PublishedRoomImmutable);
+        }
+
+        let existing_problem_id = sqlx::query_scalar::<_, Uuid>(
+            r#"
+            SELECT problem_id
+            FROM problems
+            WHERE room_id = ?
+              AND number = ?
+            LIMIT 1
+            "#,
+        )
+        .bind(request.draft.room_id)
+        .bind(request.draft.number)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        if existing_problem_id.is_some() {
+            return Err(RepositoryError::ProblemNumberConflict);
+        }
+
+        if let Some(dependency_id) = request.draft.depends_on_problem_id {
+            let dependency_room_id = sqlx::query_scalar::<_, Uuid>(
+                r#"
+                SELECT room_id
+                FROM problems
+                WHERE problem_id = ?
+                LIMIT 1
+                "#,
+            )
+            .bind(dependency_id)
+            .fetch_optional(&mut *transaction)
+            .await
+            .map_err(RepositoryError::Database)?;
+
+            if dependency_room_id != Some(request.draft.room_id) {
+                return Err(RepositoryError::InvalidProblemDependency);
+            }
+        }
+
+        let problem_id = Uuid::new_v4();
+
+        sqlx::query(
+            r#"
+            INSERT INTO problems (
+                problem_id,
+                room_id,
+                number,
+                problem_type,
+                title,
+                body_markdown,
+                submission_type,
+                assets,
+                input_schema,
+                hints,
+                judge_config,
+                depends_on_problem_id,
+                is_required
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(problem_id)
+        .bind(request.draft.room_id)
+        .bind(request.draft.number)
+        .bind(problem_type_name(request.draft.problem_type))
+        .bind(&request.draft.title)
+        .bind(&request.draft.body_markdown)
+        .bind(submission_type_name(request.draft.submission_type))
+        .bind(serde_json::json!([]))
+        .bind(input_schema)
+        .bind(hints)
+        .bind(judge_config)
+        .bind(request.draft.depends_on_problem_id)
+        .bind(request.draft.is_required)
+        .execute(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO problem_create_idempotency (
+                request_method,
+                request_path,
+                idempotency_key,
+                payload_sha256,
+                problem_id
+            )
+            VALUES (?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(&request.request_method)
+        .bind(&request.request_path)
+        .bind(request.idempotency_key)
+        .bind(request.payload_sha256.as_slice())
+        .bind(problem_id)
+        .execute(&mut *transaction)
+        .await
+        .map_err(RepositoryError::Database)?;
+
+        transaction
+            .commit()
+            .await
+            .map_err(RepositoryError::Database)?;
+
+        Ok(CreateProblemRecordOutcome::Created { problem_id })
     }
 
     async fn find_asset_upload_target(

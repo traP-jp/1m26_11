@@ -196,6 +196,37 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /api/rooms/{room_id}/problems:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+    post:
+      summary: 作問用の問題を新規作成する
+      description: |
+        dev環境専用の作問支援APIです。
+        AUTH_MODE=demoかつPROBLEM_AUTHORING_ENABLED=trueの場合だけrouteを登録します。
+        それ以外の環境ではroute自体を登録せず404を返します。
+        serverがproblem_idを生成し、指定された未公開roomへ問題を追加します。
+        画像はこのrequestへ含めず、作成後にuploadProblemAssetを使用します。
+      operationId: createProblem
+      tags:
+        - problems
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        $ref: "#/components/requestBodies/CreateProblem"
+      responses:
+        "201":
+          $ref: "#/components/responses/ProblemCreateSuccess"
+        "400":
+          $ref: "#/components/responses/ProblemCreateBadRequest"
+        "404":
+          $ref: "#/components/responses/ProblemCreateNotFound"
+        "409":
+          $ref: "#/components/responses/ProblemCreateConflict"
+        "422":
+          $ref: "#/components/responses/ProblemCreateValidationError"
+        "500":
+          $ref: "#/components/responses/ProblemCreateInternalServerError"
   /api/rooms/{room_id}/problems/{problem_id}:
     parameters:
       - $ref: "#/components/parameters/RoomId"
@@ -400,7 +431,8 @@ components:
       required: true
       description: |
         methodとpathごとにrequestを識別するUUID v4です。
-        同じfileとtrim済みaltによる再送では、最初の201 responseを返します。
+        同じrequest内容による再送では、最初の成功responseを返します。
+        同じkeyを異なるrequest内容へ再利用した場合は409を返します。
       schema:
         type: string
         format: uuid
@@ -449,6 +481,19 @@ components:
             too_long_for_example_problem:
               summary: max_lengthが50の例示問題に対する51文字の入力
               externalValue: ./examples/answers/request-too-long.json
+    CreateProblem:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CreateProblemRequest"
+          examples:
+            operation_sequence:
+              summary: 操作列問題を作成する
+              externalValue: ./examples/problems/create-operation-sequence-request.json
+            string:
+              summary: 文字列回答問題を作成する
+              externalValue: ./examples/problems/create-string-request.json
     UploadProblemAsset:
       required: true
       content:
@@ -605,6 +650,58 @@ components:
             empty:
               summary: clear recordがないleaderboard
               externalValue: ./examples/leaderboard/response-empty.json
+    ProblemCreateSuccess:
+      description: 問題の作成に成功しました。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CreateProblemResponse"
+          examples:
+            created:
+              summary: 新しいproblem_id
+              externalValue: ./examples/problems/create-response.json
+    ProblemCreateBadRequest:
+      description: |
+        room_id、JSON、またはIdempotency-Keyの形式が不正です。
+        error.codeはINVALID_PATH_PARAMETER、INVALID_JSON、
+        IDEMPOTENCY_KEY_REQUIRED、INVALID_IDEMPOTENCY_KEYのいずれかです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemCreateNotFound:
+      description: |
+        指定されたroomが存在しません。
+        error.codeはROOM_NOT_FOUNDです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemCreateConflict:
+      description: |
+        公開済みroom、問題番号の重複、またはidempotencyの状態により作成できません。
+        error.codeはPUBLISHED_ROOM_IMMUTABLE、PROBLEM_NUMBER_CONFLICT、
+        IDEMPOTENCY_KEY_REUSEDのいずれかです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemCreateValidationError:
+      description: |
+        問題内容、回答設定、依存関係、操作列、またはヒントが不正です。
+        error.codeはINVALID_PROBLEMです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ProblemCreateInternalServerError:
+      description: |
+        DB更新失敗などのserver内部エラーです。
+        error.codeはINTERNAL_SERVER_ERRORです。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     ProblemSuccess:
       description: 公開可能な問題データ
       content:
@@ -1177,6 +1274,142 @@ components:
           type: integer
           format: int64
           minimum: 0
+
+    CreateProblemRequest:
+      type: object
+      required:
+        - number
+        - problem_type
+        - title
+        - body_markdown
+        - submission_type
+        - input_schema
+        - hints
+        - judge_config
+        - depends_on_problem_id
+        - is_required
+      properties:
+        number:
+          type: integer
+          format: int32
+          minimum: 1
+        problem_type:
+          $ref: "#/components/schemas/ProblemType"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        body_markdown:
+          type: string
+          minLength: 1
+        submission_type:
+          $ref: "#/components/schemas/SubmissionType"
+        input_schema:
+          $ref: "#/components/schemas/ProblemInputSchema"
+        hints:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateProblemHint"
+        judge_config:
+          $ref: "#/components/schemas/CreateProblemJudgeConfig"
+        depends_on_problem_id:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: "null"
+        is_required:
+          type: boolean
+
+    CreateProblemResponse:
+      type: object
+      required:
+        - problem_id
+      properties:
+        problem_id:
+          type: string
+          format: uuid
+
+    CreateProblemHint:
+      type: object
+      required:
+        - body_markdown
+      properties:
+        body_markdown:
+          type: string
+          minLength: 1
+
+    CreateProblemJudgeConfig:
+      oneOf:
+        - $ref: "#/components/schemas/CreateOperationSequenceJudgeConfig"
+        - $ref: "#/components/schemas/CreateStringJudgeConfig"
+
+    CreateOperationSequenceJudgeConfig:
+      type: object
+      required:
+        - type
+        - correct_operations
+        - candidates
+      properties:
+        type:
+          type: string
+          const: operation_sequence
+        correct_operations:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/Operation"
+        candidates:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/CreateProblemCandidate"
+
+    CreateProblemCandidate:
+      type: object
+      required:
+        - candidate_id
+        - operations
+      properties:
+        candidate_id:
+          type: string
+          minLength: 1
+        operations:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/Operation"
+    CreateStringJudgeConfig:
+      type: object
+      required:
+        - type
+        - accepted_answer
+        - normalization
+      properties:
+        type:
+          type: string
+          const: string
+        accepted_answer:
+          type: string
+          minLength: 1
+        normalization:
+          $ref: "#/components/schemas/CreateStringNormalization"
+    CreateStringNormalization:
+      type: object
+      required:
+        - unicode
+        - trim_outer_whitespace
+        - collapse_internal_whitespace
+        - case_sensitive
+      properties:
+        unicode:
+          type: string
+          const: nfkc
+        trim_outer_whitespace:
+          type: boolean
+        collapse_internal_whitespace:
+          type: boolean
+        case_sensitive:
+          type: boolean
     ProblemResponse:
       type: object
       required:

@@ -485,4 +485,3 @@ cases:
         response:
           status: 200
           example: cleared
-

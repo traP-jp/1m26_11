@@ -4,7 +4,7 @@ import { createMemoryHistory } from 'vue-router'
 import { createAppRouter } from '../router'
 
 describe('router', () => {
-  it('resolves the application routes and the development device PoC route', () => {
+  it('resolves the application routes and the development-only routes', () => {
     const router = createAppRouter(createMemoryHistory())
 
     expect(router.resolve('/').name).toBe('portal')
@@ -14,6 +14,10 @@ describe('router', () => {
     })
     expect(router.resolve('/rooms/room-1/clear')).toMatchObject({
       name: 'clear',
+      params: { roomId: 'room-1' },
+    })
+    expect(router.resolve('/author/rooms/room-1/problems/new')).toMatchObject({
+      name: 'problem-author-new',
       params: { roomId: 'room-1' },
     })
     expect(router.resolve('/device-poc').name).toBe('device-poc')

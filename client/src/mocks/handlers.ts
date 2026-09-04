@@ -21,9 +21,19 @@ export interface MockApi {
 
 const http = createOpenApiHttp<paths>()
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function isUuid(value: string): boolean {
   return UUID_PATTERN.test(value)
+}
+
+function hasValidIdempotencyKey(request: Request): boolean {
+  const value = request.headers.get('idempotency-key')
+  return value !== null && UUID_V4_PATTERN.test(value)
+}
+
+async function readRequestText(request: Request): Promise<string> {
+  return request.text()
 }
 
 function errorBody(status: number): Schemas['ErrorResponse'] {
@@ -275,6 +285,64 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
       return HttpResponse.json(result.body, { status: result.status })
     }),
 
+    http.post('/api/rooms/{room_id}/problems', async ({ params, request, response }) => {
+      if (state.get('auth_mode') !== 'demo' || state.get('problem_authoring_enabled') !== true) {
+        return response(404).json(errorBody(404))
+      }
+      if (!requestHasValidResourceIds(params)) {
+        return response(400).json(errorBody(400))
+      }
+      if (!hasValidIdempotencyKey(request)) {
+        return response(400).json(errorBody(400))
+      }
+      if (!state.get('room_exists')) {
+        return response(404).json(errorBody(404))
+      }
+      if (state.get('room_is_published') || state.get('problem_number_is_available') === false) {
+        return response(409).json(errorBody(409))
+      }
+
+      let body: Schemas['CreateProblemRequest']
+      try {
+        body = await request.json()
+      } catch {
+        return response(400).json(errorBody(400))
+      }
+
+      if (
+        typeof body !== 'object' ||
+        body === null ||
+        !Number.isInteger(body.number) ||
+        body.number < 1 ||
+        typeof body.title !== 'string' ||
+        body.title.trim().length === 0 ||
+        typeof body.body_markdown !== 'string' ||
+        body.body_markdown.trim().length === 0 ||
+        !Array.isArray(body.hints)
+      ) {
+        return response(422).json(errorBody(422))
+      }
+
+      const judgeType = body.judge_config?.type
+      if (
+        (judgeType !== 'string' && judgeType !== 'operation_sequence') ||
+        body.submission_type !== judgeType
+      ) {
+        return response(422).json(errorBody(422))
+      }
+
+      const scenarioId =
+        judgeType === 'string' ? 'create_string_problem' : 'create_operation_sequence_problem'
+      const result = responseFromStep<Schemas['CreateProblemResponse']>(
+        contract,
+        state,
+        scenarioId,
+        'createProblem',
+      )
+
+      return HttpResponse.json(result.body, { status: result.status })
+    }),
+
     http.get('/api/rooms/{room_id}/problems/{problem_id}', ({ params, response }) => {
       if (!requestHasValidResourceIds(params)) return response(400).json(errorBody(400))
       if (!state.get('authenticated')) {
@@ -366,6 +434,46 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
         headers: { 'cache-control': 'no-store' },
       })
     }),
+
+    http.post(
+      '/api/rooms/{room_id}/problems/{problem_id}/assets',
+      async ({ params, request, response }) => {
+        if (state.get('auth_mode') !== 'demo' || state.get('image_upload_enabled') !== true) {
+          return response(404).json(errorBody(404))
+        }
+        if (!requestHasValidResourceIds(params)) {
+          return response(400).json(errorBody(400))
+        }
+        if (!hasValidIdempotencyKey(request)) {
+          return response(400).json(errorBody(400))
+        }
+        if (!state.get('room_exists') || !state.get('problem_exists')) {
+          return response(404).json(errorBody(404))
+        }
+        if (state.get('room_is_published')) {
+          return response(409).json(errorBody(409))
+        }
+
+        const contentType = request.headers.get('content-type')?.toLowerCase()
+        if (!contentType?.startsWith('multipart/form-data;')) {
+          return response(400).json(errorBody(400))
+        }
+
+        const multipartBody = await readRequestText(request)
+        if (!multipartBody.includes('name="file"') || !multipartBody.includes('name="alt"')) {
+          return response(422).json(errorBody(422))
+        }
+
+        const result = responseFromStep<Schemas['Asset']>(
+          contract,
+          state,
+          'upload_problem_asset',
+          'uploadProblemAsset',
+        )
+
+        return HttpResponse.json(result.body, { status: result.status })
+      },
+    ),
 
     http.post(
       '/api/rooms/{room_id}/problems/{problem_id}/queries',

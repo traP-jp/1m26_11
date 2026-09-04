@@ -50,6 +50,7 @@ pub struct AppState {
     pub(crate) asset_url_resolver: Arc<dyn AssetUrlResolver>,
     pub(crate) image_storage: Option<Arc<dyn ImageStorage>>,
     pub(crate) image_url_signer: Option<Arc<dyn ImageUrlSigner>>,
+    pub(crate) problem_authoring_enabled: bool,
 }
 
 impl AppState {
@@ -62,7 +63,14 @@ impl AppState {
             asset_url_resolver: Arc::new(UnconfiguredAssetUrlResolver),
             image_storage: None,
             image_url_signer: None,
+            problem_authoring_enabled: false,
         }
+    }
+
+    #[must_use]
+    pub fn with_problem_authoring_enabled(mut self, enabled: bool) -> Self {
+        self.problem_authoring_enabled = enabled;
+        self
     }
 
     #[must_use]
@@ -94,6 +102,8 @@ impl AppState {
 }
 
 pub fn app(state: AppState) -> Router {
+    let problem_authoring_route_enabled =
+        state.auth_mode == AuthMode::Demo && state.problem_authoring_enabled;
     let image_download_route_enabled = state.image_url_signer.is_some();
     let image_upload_route_enabled =
         state.auth_mode == AuthMode::Demo && state.image_storage.is_some();
@@ -159,6 +169,14 @@ pub fn app(state: AppState) -> Router {
             "/api/rooms/{room_id}/problems/{problem_id}/answers",
             post(handler::submit_answer).fallback(handler::method_not_allowed),
         );
+
+    if problem_authoring_route_enabled {
+        router = router.route(
+            "/api/rooms/{room_id}/problems",
+            post(handler::create_problem).fallback(handler::method_not_allowed),
+        );
+    }
+
     if image_download_route_enabled && image_upload_route_enabled {
         router = router.route(
             "/api/rooms/{room_id}/problems/{problem_id}/assets",
