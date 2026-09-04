@@ -66,6 +66,7 @@ mise run docker-build
 | `RUST_LOG` | `server=info,tower_http=info` | tracing filter |
 | `AUTH_MODE` | 既定値なし | `demo`または`neoshowcase`。起動時に必須 |
 | `DEMO_COOKIE_SECURE` | `true` | demo session Cookieへ`Secure`属性を付けるか。localhostのHTTP開発時だけ`false` |
+| `PROBLEM_AUTHORING_ENABLED` | `false` | dev用問題作成APIを有効化する。`true`は`AUTH_MODE=demo`でのみ使用可能 |
 | `IMAGE_UPLOAD_ENABLED` | `false` | dev用画像upload APIを有効化する。`true`は`AUTH_MODE=demo`でのみ使用可能 |
 | `IMAGE_DOWNLOAD_ENABLED` | `false` | 画像取得用presigned URL発行APIを有効化する。demoとneoshowcaseの両方で使用可能 |
 | `S3_ENDPOINT` | 未設定 | upload先のS3互換endpoint。uploadまたはdownload有効時は必須 |

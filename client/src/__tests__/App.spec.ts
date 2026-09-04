@@ -4,9 +4,11 @@ import { createMemoryHistory, type Router } from 'vue-router'
 
 import App from '../App.vue'
 import PortalPage from '../PortalPage.vue'
+import { portalPageFixtures } from '../PortalPage.fixture'
 import RoomPage from '../RoomPage.vue'
 import AuthActionButton from '../components/auth/AuthActionButton.vue'
 import UserMenu from '../components/auth/UserMenu.vue'
+import AuthorProblemPage from '../AuthorProblemPage.vue'
 import { createAppRouter } from '../router'
 import guestResponse from '../../../openapi/examples/auth/guest-response.json'
 import meAuthenticated from '../../../openapi/examples/auth/me-demo-authenticated.json'
@@ -29,6 +31,8 @@ const apiClient: ApiClient = {
   getProblem: vi.fn<ApiClient['getProblem']>(),
   submitQuery: vi.fn<ApiClient['submitQuery']>(),
   submitAnswer: vi.fn<ApiClient['submitAnswer']>(),
+  createProblem: vi.fn<ApiClient['createProblem']>(),
+  uploadProblemAsset: vi.fn<ApiClient['uploadProblemAsset']>(),
 }
 
 async function mountAt(
@@ -80,6 +84,17 @@ describe('App', () => {
 
     expect(router.currentRoute.value.fullPath).toBe('/')
     expect(wrapper.findComponent(PortalPage).exists()).toBe(true)
+  })
+
+  it('navigates from the Demo Portal to problem authoring', async () => {
+    const { router, wrapper } = await mountAt('/')
+    const roomId = portalPageFixtures.demoAuthenticated.requiredRoom.room_id
+
+    await wrapper.get('[data-testid="portal-author-problem"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.fullPath).toBe(`/author/rooms/${roomId}/problems/new`)
+    expect(wrapper.getComponent(AuthorProblemPage).props('roomId')).toBe(roomId)
   })
 
   it('connects Demo guest login to the auth flow', async () => {

@@ -252,7 +252,7 @@ pub(crate) async fn upload_problem_asset(
     public_asset_response(&state, asset)
 }
 
-fn parse_idempotency_key(headers: &HeaderMap) -> Result<Uuid, AppError> {
+pub(super) fn parse_idempotency_key(headers: &HeaderMap) -> Result<Uuid, AppError> {
     let mut values = headers.get_all("idempotency-key").iter();
 
     let value = values.next().ok_or_else(|| {

@@ -15,14 +15,21 @@ import queryIncorrect from '../../../../openapi/examples/queries/response-incorr
 import currentRun from '../../../../openapi/examples/runs/active-response.json'
 import runNotFound from '../../../../openapi/examples/runs/error-run-not-found.json'
 import newRun from '../../../../openapi/examples/runs/start-new-response.json'
-import { ApiClientError, createApiClient } from '@/api/client'
+import { ApiClientError, createApiClient, type CreateProblemRequest } from '@/api/client'
+import assetCreated from '../../../../openapi/examples/assets/response-created.json'
+import createProblemRequest from '../../../../openapi/examples/problems/create-string-request.json'
+import createProblemResponse from '../../../../openapi/examples/problems/create-response.json'
 
 const API_ORIGIN = 'https://api.example.test'
 const ROOM_ID = '11111111-1111-4111-8111-111111111111'
 const PROBLEM_ID = '22222222-2222-4222-8222-222222222221'
+const IDEMPOTENCY_KEY = '44444444-4444-4444-8444-444444444444'
 
 const runPath = { room_id: ROOM_ID }
 const problemPath = { room_id: ROOM_ID, problem_id: PROBLEM_ID }
+const createProblemPath = { room_id: ROOM_ID }
+const idempotencyHeaders = { 'Idempotency-Key': IDEMPOTENCY_KEY }
+const typedCreateProblemRequest = createProblemRequest as CreateProblemRequest
 const server = setupServer()
 let client: ReturnType<typeof createApiClient>
 
@@ -31,6 +38,7 @@ interface ObservedRequest {
   method: string
   credentials: RequestCredentials
   contentType: string | null
+  idempotencyKey: string | null
   body: string
 }
 
@@ -44,6 +52,7 @@ function captureResponse(response: Response): () => ObservedRequest {
         method: request.method,
         credentials: request.credentials,
         contentType: request.headers.get('content-type'),
+        idempotencyKey: request.headers.get('idempotency-key'),
         body: await request.text(),
       }
       return response
@@ -173,6 +182,67 @@ describe('ApiClient', () => {
       expect(observed.body).toBe(expectedBody === undefined ? '' : JSON.stringify(expectedBody))
     },
   )
+
+  it('creates a problem with the contract body and idempotency key', async () => {
+    const getObserved = captureResponse(
+      HttpResponse.json(createProblemResponse, {
+        status: 201,
+      }),
+    )
+
+    const result = await client.createProblem(
+      createProblemPath,
+      idempotencyHeaders,
+      typedCreateProblemRequest,
+    )
+
+    expect(result).toEqual(createProblemResponse)
+    expect(getObserved()).toMatchObject({
+      url: `${API_ORIGIN}/api/rooms/${ROOM_ID}/problems`,
+      method: 'POST',
+      credentials: 'include',
+      contentType: 'application/json',
+      idempotencyKey: IDEMPOTENCY_KEY,
+      body: JSON.stringify(typedCreateProblemRequest),
+    })
+  })
+
+  it('uploads a problem image as multipart data without setting content-type manually', async () => {
+    const getObserved = captureResponse(
+      HttpResponse.json(assetCreated, {
+        status: 201,
+      }),
+    )
+    const file = new File(['api-client-image'], 'question.png', {
+      type: 'image/png',
+    })
+
+    const result = await client.uploadProblemAsset(
+      {
+        room_id: ROOM_ID,
+        problem_id: PROBLEM_ID,
+      },
+      idempotencyHeaders,
+      {
+        file,
+        alt: '問題画像',
+      },
+    )
+
+    expect(result).toEqual(assetCreated)
+
+    const observed = getObserved()
+    expect(observed).toMatchObject({
+      url: `${API_ORIGIN}/api/rooms/${ROOM_ID}/problems/${PROBLEM_ID}/assets`,
+      method: 'POST',
+      credentials: 'include',
+      idempotencyKey: IDEMPOTENCY_KEY,
+    })
+    expect(observed.contentType).toMatch(/^multipart\/form-data; boundary=/)
+    expect(observed.body).toContain('name="file"')
+    expect(observed.body).toContain('name="alt"')
+    expect(observed.body).toContain('問題画像')
+  })
 
   it('uses the current origin when baseUrl is omitted', async () => {
     const defaultClient = createApiClient()

@@ -9,6 +9,7 @@ import {
 import ClearPage from './ClearPage.vue'
 import PortalPage from './PortalPage.vue'
 import RoomPage from './RoomPage.vue'
+import AuthorProblemPage from './AuthorProblemPage.vue'
 
 const developmentRoutes: RouteRecordRaw[] = import.meta.env.DEV
   ? [
@@ -35,6 +36,12 @@ export const routes: RouteRecordRaw[] = [
     path: '/rooms/:roomId/clear',
     name: 'clear',
     component: ClearPage,
+  },
+  {
+    path: '/author/rooms/:roomId/problems/new',
+    name: 'problem-author-new',
+    component: AuthorProblemPage,
+    props: true,
   },
   ...developmentRoutes,
   {

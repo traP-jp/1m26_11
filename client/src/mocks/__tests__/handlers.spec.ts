@@ -17,11 +17,16 @@ import runNotFound from '../../../../openapi/examples/runs/error-run-not-found.j
 import newRun from '../../../../openapi/examples/runs/start-new-response.json'
 import openApiSource from '../../../../openapi/openapi-v1.yaml?raw'
 import scenarioSource from '../../../../openapi/scenarios/p0-cases.yaml?raw'
+import assetCreated from '../../../../openapi/examples/assets/response-created.json'
+import createOperationProblem from '../../../../openapi/examples/problems/create-operation-sequence-request.json'
+import createProblemResponse from '../../../../openapi/examples/problems/create-response.json'
+import createStringProblem from '../../../../openapi/examples/problems/create-string-request.json'
 import { createMockContract, type MockContract } from '../contract'
 import { createMockApi, type MockApi } from '../handlers'
 
 const ROOM_ID = '11111111-1111-4111-8111-111111111111'
 const PROBLEM_ID = '22222222-2222-4222-8222-222222222221'
+const IDEMPOTENCY_KEY = '44444444-4444-4444-8444-444444444444'
 const BASE_URL = window.location.origin
 const fixtureModules = import.meta.glob('../../../../openapi/examples/**/*.json', {
   eager: true,
@@ -177,6 +182,78 @@ describe('OpenAPI-backed MSW handlers', () => {
     const response = await fetch(`${BASE_URL}/api/rooms/${ROOM_ID}/problems/${PROBLEM_ID}`)
     expect(response.status).toBe(409)
     expect(await response.json()).toEqual(problemLocked)
+  })
+
+  it.each([
+    ['string', createStringProblem],
+    ['operation sequence', createOperationProblem],
+  ])('creates a %s problem from the shared fixture', async (_name, body) => {
+    const mock = startMock()
+
+    const response = await fetch(`${BASE_URL}/api/rooms/${ROOM_ID}/problems`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'Idempotency-Key': IDEMPOTENCY_KEY,
+      },
+      body: JSON.stringify(body),
+    })
+
+    expect(response.status).toBe(201)
+    expect(await response.json()).toEqual(createProblemResponse)
+    expect(mock.state.get('problem_created')).toBe(true)
+    expect(mock.state.get('problem_has_assets')).toBe(false)
+  })
+
+  it('rejects unavailable authoring and invalid idempotency keys', async () => {
+    const mock = startMock()
+    mock.state.patch({ problem_authoring_enabled: false })
+
+    const unavailableResponse = await fetch(`${BASE_URL}/api/rooms/${ROOM_ID}/problems`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'Idempotency-Key': IDEMPOTENCY_KEY,
+      },
+      body: JSON.stringify(createStringProblem),
+    })
+    expect(unavailableResponse.status).toBe(404)
+
+    mock.state.patch({ problem_authoring_enabled: true })
+
+    const invalidKeyResponse = await fetch(`${BASE_URL}/api/rooms/${ROOM_ID}/problems`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'Idempotency-Key': 'not-a-uuid',
+      },
+      body: JSON.stringify(createStringProblem),
+    })
+    expect(invalidKeyResponse.status).toBe(400)
+  })
+
+  it('uploads an image to the newly created problem', async () => {
+    const mock = startMock()
+    const formData = new FormData()
+    formData.set(
+      'file',
+      new File(['mock-image'], 'question.png', {
+        type: 'image/png',
+      }),
+    )
+    formData.set('alt', '問題画像')
+
+    const response = await fetch(`${BASE_URL}/api/rooms/${ROOM_ID}/problems/${PROBLEM_ID}/assets`, {
+      method: 'POST',
+      headers: {
+        'Idempotency-Key': IDEMPOTENCY_KEY,
+      },
+      body: formData,
+    })
+
+    expect(response.status).toBe(201)
+    expect(await response.json()).toEqual(assetCreated)
+    expect(mock.state.get('problem_asset_appended')).toBe(true)
   })
 
   it('returns presigned problem assets with no-store', async () => {

@@ -50,6 +50,10 @@ where
             get(get_room_leaderboard::<I, A, E>),
         )
         .route(
+            "/api/rooms/{room_id}/problems",
+            post(create_problem::<I, A, E>),
+        )
+        .route(
             "/api/rooms/{room_id}/problems/{problem_id}",
             get(get_problem::<I, A, E>),
         )
@@ -756,6 +760,243 @@ where
                 response.body(Body::from(body_content))
             }
             apis::leaderboard::GetRoomLeaderboardResponse::Status500_Server(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(500);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+        },
+        Err(why) => {
+            // Application code returned an error. This should not happen, as the implementation should
+            // return a valid response.
+            return api_impl
+                .as_ref()
+                .handle_error(&method, &host, &cookies, why)
+                .await;
+        }
+    };
+
+    resp.map_err(|e| {
+        error!(error = ?e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })
+}
+
+#[derive(validator::Validate)]
+#[allow(dead_code)]
+struct CreateProblemBodyValidator<'a> {
+    #[validate(nested)]
+    body: &'a models::CreateProblemRequest,
+}
+
+#[tracing::instrument(skip_all)]
+fn create_problem_validation(
+    header_params: models::CreateProblemHeaderParams,
+    path_params: models::CreateProblemPathParams,
+    body: models::CreateProblemRequest,
+) -> std::result::Result<
+    (
+        models::CreateProblemHeaderParams,
+        models::CreateProblemPathParams,
+        models::CreateProblemRequest,
+    ),
+    ValidationErrors,
+> {
+    header_params.validate()?;
+    path_params.validate()?;
+    let b = CreateProblemBodyValidator { body: &body };
+    b.validate()?;
+
+    Ok((header_params, path_params, body))
+}
+/// CreateProblem - POST /api/rooms/{room_id}/problems
+#[tracing::instrument(skip_all)]
+async fn create_problem<I, A, E>(
+    method: Method,
+    TypedHeader(host): TypedHeader<Host>,
+    cookies: CookieJar,
+    headers: HeaderMap,
+    Path(path_params): Path<models::CreateProblemPathParams>,
+    State(api_impl): State<I>,
+    Json(body): Json<models::CreateProblemRequest>,
+) -> Result<Response, StatusCode>
+where
+    I: AsRef<A> + Send + Sync,
+    A: apis::problems::Problems<E> + Send + Sync,
+    E: std::fmt::Debug + Send + Sync + 'static,
+{
+    // Header parameters
+    let header_params = {
+        let header_idempotency_key = headers.get(HeaderName::from_static("idempotency-key"));
+
+        let header_idempotency_key = match header_idempotency_key {
+            Some(v) => match header::IntoHeaderValue::<uuid::Uuid>::try_from((*v).clone()) {
+                Ok(result) => result.0,
+                Err(err) => {
+                    return Response::builder()
+                        .status(StatusCode::BAD_REQUEST)
+                        .body(Body::from(format!(
+                            "Invalid header Idempotency-Key - {err}"
+                        )))
+                        .map_err(|e| {
+                            error!(error = ?e);
+                            StatusCode::INTERNAL_SERVER_ERROR
+                        });
+                }
+            },
+            None => {
+                return Response::builder()
+                    .status(StatusCode::BAD_REQUEST)
+                    .body(Body::from("Missing required header Idempotency-Key"))
+                    .map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    });
+            }
+        };
+
+        models::CreateProblemHeaderParams {
+            idempotency_key: header_idempotency_key,
+        }
+    };
+
+    #[allow(clippy::redundant_closure)]
+    let validation = tokio::task::spawn_blocking(move || {
+        create_problem_validation(header_params, path_params, body)
+    })
+    .await
+    .unwrap();
+
+    let Ok((header_params, path_params, body)) = validation else {
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Body::from(validation.unwrap_err().to_string()))
+            .map_err(|_| StatusCode::BAD_REQUEST);
+    };
+
+    let result = api_impl
+        .as_ref()
+        .create_problem(
+            &method,
+            &host,
+            &cookies,
+            &header_params,
+            &path_params,
+            &body,
+        )
+        .await;
+
+    let resp = match result {
+        Ok(rsp) => match rsp {
+            apis::problems::CreateProblemResponse::Status201(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(201);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::CreateProblemResponse::Status400_Room(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(400);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::CreateProblemResponse::Status404(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(404);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::CreateProblemResponse::Status409(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(409);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::CreateProblemResponse::Status422(body) => {
+                let mut response = Response::builder();
+                let mut response = response.status(422);
+                {
+                    let mut response_headers = response.headers_mut().unwrap();
+                    response_headers
+                        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
+
+                let body_content = tokio::task::spawn_blocking(move || {
+                    serde_json::to_vec(&body).map_err(|e| {
+                        error!(error = ?e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                })
+                .await
+                .unwrap()?;
+                response.body(Body::from(body_content))
+            }
+            apis::problems::CreateProblemResponse::Status500_DB(body) => {
                 let mut response = Response::builder();
                 let mut response = response.status(500);
                 {

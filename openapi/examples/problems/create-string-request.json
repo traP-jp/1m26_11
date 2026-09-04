@@ -1,0 +1,35 @@
+{
+  "number": 4,
+  "problem_type": "final",
+  "title": "最後の問題",
+  "body_markdown": "すべての小なぞを使って答えてください。",
+  "submission_type": "string",
+  "input_schema": {
+    "query": {
+      "type": "operation_sequence",
+      "allowed_controls": ["down", "right", "up", "left"],
+      "max_operations": 100
+    },
+    "answer": {
+      "type": "string",
+      "max_length": 50
+    }
+  },
+  "hints": [
+    {
+      "body_markdown": "これまでの答えを振り返ってください。"
+    }
+  ],
+  "judge_config": {
+    "type": "string",
+    "accepted_answer": "ワンマンソン",
+    "normalization": {
+      "unicode": "nfkc",
+      "trim_outer_whitespace": true,
+      "collapse_internal_whitespace": false,
+      "case_sensitive": false
+    }
+  },
+  "depends_on_problem_id": null,
+  "is_required": true
+}

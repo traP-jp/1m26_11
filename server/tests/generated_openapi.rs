@@ -1,10 +1,11 @@
 use openapi_generated::{
     NullValue,
     models::{
-        ActiveRunResponse, Asset, CorrectQueryResponse, GetProblemAssetsPathParams,
-        IncorrectQueryResponse, LeaderboardResponse, MeDemoUnauthenticated, MeProgressResponse,
-        Operation, ProblemAssetsResponse, UploadProblemAssetHeaderParams,
-        UploadProblemAssetPathParams,
+        ActiveRunResponse, Asset, CorrectQueryResponse, CreateProblemHeaderParams,
+        CreateProblemJudgeConfig, CreateProblemPathParams, CreateProblemRequest,
+        CreateProblemResponse, GetProblemAssetsPathParams, IncorrectQueryResponse,
+        LeaderboardResponse, MeDemoUnauthenticated, MeProgressResponse, Operation,
+        ProblemAssetsResponse, UploadProblemAssetHeaderParams, UploadProblemAssetPathParams,
     },
     types::Nullable,
 };
@@ -48,6 +49,21 @@ const PROBLEM_ASSET_CREATED: &str = include_str!(concat!(
 const PROBLEM_ASSETS_LIST: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../openapi/examples/assets/response-list.json"
+));
+
+const CREATE_OPERATION_PROBLEM_REQUEST: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../openapi/examples/problems/create-operation-sequence-request.json"
+));
+
+const CREATE_STRING_PROBLEM_REQUEST: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../openapi/examples/problems/create-string-request.json"
+));
+
+const CREATE_PROBLEM_RESPONSE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../openapi/examples/problems/create-response.json"
 ));
 
 #[test]
@@ -227,6 +243,59 @@ fn generated_me_progress_responses_match_fixtures() {
         serde_json::from_value::<MeProgressResponse>(negative_genre_count).is_err(),
         "negative genre count must not deserialize into the generated u32 field"
     );
+}
+
+#[test]
+fn generated_problem_creation_contract_matches_fixtures() {
+    let operation_request: CreateProblemRequest =
+        serde_json::from_str(CREATE_OPERATION_PROBLEM_REQUEST)
+            .expect("operation fixture should match generated request model");
+
+    assert_eq!(operation_request.number, 3);
+    assert!(matches!(
+        operation_request.judge_config,
+        CreateProblemJudgeConfig::CreateOperationSequenceJudgeConfig(_)
+    ));
+    assert!(matches!(
+        operation_request.depends_on_problem_id,
+        Nullable::Present(_)
+    ));
+
+    let string_request: CreateProblemRequest = serde_json::from_str(CREATE_STRING_PROBLEM_REQUEST)
+        .expect("string fixture should match generated request model");
+
+    assert_eq!(string_request.number, 4);
+    assert!(matches!(
+        string_request.judge_config,
+        CreateProblemJudgeConfig::CreateStringJudgeConfig(_)
+    ));
+    assert!(matches!(
+        string_request.depends_on_problem_id,
+        Nullable::Null
+    ));
+
+    let expected_response: serde_json::Value = serde_json::from_str(CREATE_PROBLEM_RESPONSE)
+        .expect("create response fixture should be valid JSON");
+
+    let response: CreateProblemResponse = serde_json::from_value(expected_response.clone())
+        .expect("create response fixture should match generated model");
+
+    assert_eq!(
+        serde_json::to_value(response).expect("create response should serialize"),
+        expected_response
+    );
+
+    let room_id =
+        Uuid::parse_str("11111111-1111-4111-8111-111111111111").expect("room UUID should be valid");
+
+    let idempotency_key = Uuid::parse_str("44444444-4444-4444-8444-444444444444")
+        .expect("idempotency key should be valid");
+
+    let path = CreateProblemPathParams { room_id };
+    let header = CreateProblemHeaderParams { idempotency_key };
+
+    assert_eq!(path.room_id, room_id);
+    assert_eq!(header.idempotency_key, idempotency_key);
 }
 
 #[test]

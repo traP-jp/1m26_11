@@ -17,6 +17,21 @@ export type SubmitQueryResponse = JsonContent<operations['submitQuery']['respons
 export type SubmitAnswerPath = operations['submitAnswer']['parameters']['path']
 export type SubmitAnswerRequest = JsonContent<operations['submitAnswer']['requestBody']>
 export type SubmitAnswerResponse = JsonContent<operations['submitAnswer']['responses'][200]>
+export type CreateProblemPath = operations['createProblem']['parameters']['path']
+export type CreateProblemHeaders = operations['createProblem']['parameters']['header']
+export type CreateProblemRequest = JsonContent<operations['createProblem']['requestBody']>
+export type CreateProblemResponse = JsonContent<operations['createProblem']['responses'][201]>
+
+export type UploadProblemAssetPath = operations['uploadProblemAsset']['parameters']['path']
+export type UploadProblemAssetHeaders = operations['uploadProblemAsset']['parameters']['header']
+export type UploadProblemAssetResponse = JsonContent<
+  operations['uploadProblemAsset']['responses'][201]
+>
+
+export interface UploadProblemAssetForm {
+  file: File
+  alt: string
+}
 
 type ApiErrorResponse = components['schemas']['ErrorResponse']
 export type ApiErrorDetails = ApiErrorResponse['error']['details']
@@ -70,6 +85,16 @@ export interface ApiClient {
   getProblem(path: GetProblemPath): Promise<GetProblemResponse>
   submitQuery(path: SubmitQueryPath, body: SubmitQueryRequest): Promise<SubmitQueryResponse>
   submitAnswer(path: SubmitAnswerPath, body: SubmitAnswerRequest): Promise<SubmitAnswerResponse>
+  createProblem(
+    path: CreateProblemPath,
+    headers: CreateProblemHeaders,
+    body: CreateProblemRequest,
+  ): Promise<CreateProblemResponse>
+  uploadProblemAsset(
+    path: UploadProblemAssetPath,
+    headers: UploadProblemAssetHeaders,
+    form: UploadProblemAssetForm,
+  ): Promise<UploadProblemAssetResponse>
 }
 
 export interface CreateApiClientOptions {
@@ -81,7 +106,9 @@ type HttpMethod = 'GET' | 'POST'
 
 interface RequestOptions {
   method: HttpMethod
-  body?: unknown
+  json?: unknown
+  formData?: FormData
+  headers?: Record<string, string>
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -137,16 +164,23 @@ export function createApiClient(options: CreateApiClientOptions = {}): ApiClient
   const fetchApi = options.fetch
 
   async function send(path: string, options: RequestOptions): Promise<Response> {
-    const hasBody = options.body !== undefined
-    const headers: Record<string, string> = { accept: 'application/json' }
-    if (hasBody) headers['content-type'] = 'application/json'
+    const hasJson = options.json !== undefined
+    if (hasJson && options.formData !== undefined) {
+      throw new Error('JSONとFormDataを同じrequestへ指定できません')
+    }
+
+    const headers: Record<string, string> = {
+      accept: 'application/json',
+      ...options.headers,
+    }
+    if (hasJson) headers['content-type'] = 'application/json'
 
     try {
       return await (fetchApi ?? globalThis.fetch)(`${baseUrl}${path}`, {
         method: options.method,
         credentials: 'include',
         headers,
-        body: hasBody ? JSON.stringify(options.body) : undefined,
+        body: options.formData ?? (hasJson ? JSON.stringify(options.json) : undefined),
       })
     } catch (cause) {
       throw new ApiClientError('APIとの通信に失敗しました', {
@@ -188,7 +222,7 @@ export function createApiClient(options: CreateApiClientOptions = {}): ApiClient
     getMe: () => requestJson<GetMeResponse>('/api/me', { method: 'GET' }),
 
     loginGuest: (body) =>
-      requestJson<LoginGuestResponse>('/api/auth/guest', { method: 'POST', body }),
+      requestJson<LoginGuestResponse>('/api/auth/guest', { method: 'POST', json: body }),
 
     logoutDemo: () => requestNoContent('/api/auth/logout', { method: 'POST' }),
 
@@ -211,14 +245,45 @@ export function createApiClient(options: CreateApiClientOptions = {}): ApiClient
     submitQuery: ({ room_id, problem_id }, body) =>
       requestJson<SubmitQueryResponse>(
         `/api/rooms/${encodeURIComponent(room_id)}/problems/${encodeURIComponent(problem_id)}/queries`,
-        { method: 'POST', body },
+        { method: 'POST', json: body },
       ),
 
     submitAnswer: ({ room_id, problem_id }, body) =>
       requestJson<SubmitAnswerResponse>(
         `/api/rooms/${encodeURIComponent(room_id)}/problems/${encodeURIComponent(problem_id)}/answers`,
-        { method: 'POST', body },
+        { method: 'POST', json: body },
       ),
+
+    createProblem: ({ room_id }, headers, body) =>
+      requestJson<CreateProblemResponse>(
+        `/api/rooms/${encodeURIComponent(room_id)}/problems`,
+        {
+          method: 'POST',
+          headers: {
+            'Idempotency-Key': headers['Idempotency-Key'],
+          },
+          json: body,
+        },
+        201,
+      ),
+
+    uploadProblemAsset: ({ room_id, problem_id }, headers, form) => {
+      const formData = new FormData()
+      formData.set('file', form.file)
+      formData.set('alt', form.alt)
+
+      return requestJson<UploadProblemAssetResponse>(
+        `/api/rooms/${encodeURIComponent(room_id)}/problems/${encodeURIComponent(problem_id)}/assets`,
+        {
+          method: 'POST',
+          headers: {
+            'Idempotency-Key': headers['Idempotency-Key'],
+          },
+          formData,
+        },
+        201,
+      )
+    },
   }
 }
 

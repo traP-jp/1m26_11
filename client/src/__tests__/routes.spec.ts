@@ -16,6 +16,10 @@ describe('router', () => {
       name: 'clear',
       params: { roomId: 'room-1' },
     })
+    expect(router.resolve('/author/rooms/room-1/problems/new')).toMatchObject({
+      name: 'problem-author-new',
+      params: { roomId: 'room-1' },
+    })
     expect(router.resolve('/device-poc').name).toBe('device-poc')
   })
 

@@ -17,6 +17,7 @@ const emit = defineEmits<{
   logout: []
   showInstructions: []
   startRoom: [roomId: string]
+  authorRoom: [roomId: string]
 }>()
 
 const guestNameForm = ref<InstanceType<typeof GuestNameForm> | null>(null)
@@ -80,7 +81,19 @@ function handleLogin(): void {
       <p class="portal-page__description">挑戦する部屋を選んでください。</p>
       <MinimalProgressSummary :status="progressStatus" />
       <section aria-label="必須の部屋" class="card-list">
-        <RoomCard :room="requiredRoom" :starting="authBusy" @start="emit('startRoom', $event)" />
+        <div class="space-y-3">
+          <RoomCard :room="requiredRoom" :starting="authBusy" @start="emit('startRoom', $event)" />
+          <button
+            v-if="authMode === 'demo'"
+            type="button"
+            class="w-full rounded-xl border border-sky-700 bg-white px-4 py-3 font-bold text-sky-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60"
+            data-testid="portal-author-problem"
+            :disabled="authBusy"
+            @click="emit('authorRoom', requiredRoom.room_id)"
+          >
+            この部屋の問題を作成
+          </button>
+        </div>
       </section>
     </template>
   </main>

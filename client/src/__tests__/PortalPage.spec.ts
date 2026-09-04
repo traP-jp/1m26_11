@@ -65,16 +65,25 @@ describe('PortalPage', () => {
     )
   })
 
-  it('forwards header and required-room events', () => {
-    const wrapper = mount(PortalPage, { props: portalPageFixtures.demoAuthenticated })
+  it('forwards header and required-room events', async () => {
+    const fixture = portalPageFixtures.demoAuthenticated
+    const wrapper = mount(PortalPage, { props: fixture })
 
     wrapper.getComponent(PortalHeader).vm.$emit('logout')
     wrapper.getComponent(PortalHeader).vm.$emit('showInstructions')
     wrapper.getComponent(RoomCard).vm.$emit('start', 'room-1')
+    await wrapper.get('[data-testid="portal-author-problem"]').trigger('click')
 
     expect(wrapper.emitted('logout')).toHaveLength(1)
     expect(wrapper.emitted('showInstructions')).toHaveLength(1)
     expect(wrapper.emitted('startRoom')).toEqual([['room-1']])
+    expect(wrapper.emitted('authorRoom')).toEqual([[fixture.requiredRoom.room_id]])
+  })
+
+  it('hides problem authoring in NeoShowcase mode', () => {
+    const wrapper = mount(PortalPage, { props: portalPageFixtures.cleared })
+
+    expect(wrapper.find('[data-testid="portal-author-problem"]').exists()).toBe(false)
   })
 
   it('focuses the guest name input when Demo login is requested from the header', () => {

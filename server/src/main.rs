@@ -28,7 +28,8 @@ async fn run() -> Result<(), Box<dyn Error>> {
 
     let repository = Arc::new(SqlxUserRepository::new(pool.clone()));
     let mut state = AppState::new(config.auth_mode, repository)
-        .with_demo_cookie_secure(config.demo_cookie_secure);
+        .with_demo_cookie_secure(config.demo_cookie_secure)
+        .with_problem_authoring_enabled(config.problem_authoring_enabled);
 
     if let Some(storage_config) = config.storage.as_ref() {
         let storage = Arc::new(S3ImageStorage::new(storage_config));

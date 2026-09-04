@@ -70,7 +70,7 @@ pub(super) enum JudgeConfigInput {
     },
 }
 
-#[derive(Clone, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum JudgeConfig {
     OperationSequence {
@@ -128,7 +128,7 @@ pub enum AnswerInputType {
     String,
 }
 
-#[derive(Clone, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Hint {
     pub body_markdown: String,
@@ -141,7 +141,7 @@ pub struct Operation {
     pub count: i32,
 }
 
-#[derive(Clone, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Candidate {
     pub candidate_id: String,
@@ -176,6 +176,21 @@ pub struct Room {
     pub genre: String,
     pub description: String,
     pub problems: Vec<Problem>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct ProblemDraft {
+    pub room_id: Uuid,
+    pub number: i32,
+    pub problem_type: ProblemType,
+    pub title: String,
+    pub body_markdown: String,
+    pub submission_type: SubmissionType,
+    pub input_schema: InputSchema,
+    pub hints: Vec<Hint>,
+    pub judge_config: JudgeConfig,
+    pub depends_on_problem_id: Option<Uuid>,
+    pub is_required: bool,
 }
 
 #[derive(Clone)]
