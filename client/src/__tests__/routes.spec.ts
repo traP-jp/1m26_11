@@ -12,6 +12,10 @@ describe('router', () => {
       name: 'room',
       params: { roomId: 'room-1' },
     })
+    expect(router.resolve('/author/rooms/room-1/problems/new')).toMatchObject({
+      name: 'problem-author-new',
+      params: { roomId: 'room-1' },
+    })
     expect(router.resolve('/device-poc').name).toBe('device-poc')
   })
 
@@ -24,14 +28,6 @@ describe('router', () => {
       name: 'room',
       params: { roomId: 'room-1' },
     })
-<<<<<<< HEAD
-=======
-    expect(router.resolve('/author/rooms/room-1/problems/new')).toMatchObject({
-      name: 'problem-author-new',
-      params: { roomId: 'room-1' },
-    })
-    expect(router.resolve('/device-poc').name).toBe('device-poc')
->>>>>>> main
   })
 
   it('redirects an unknown route to Portal', async () => {
