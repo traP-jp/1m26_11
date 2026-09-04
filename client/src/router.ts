@@ -9,7 +9,6 @@ import {
 import ClearPage from './ClearPage.vue'
 import PortalPage from './PortalPage.vue'
 import RoomPage from './RoomPage.vue'
-import AuthorProblemPage from './AuthorProblemPage.vue'
 
 const developmentRoutes: RouteRecordRaw[] = import.meta.env.DEV
   ? [
@@ -17,6 +16,12 @@ const developmentRoutes: RouteRecordRaw[] = import.meta.env.DEV
         path: '/device-poc',
         name: 'device-poc',
         component: () => import('./DevicePocPage.vue'),
+      },
+      {
+        path: '/author/rooms/:roomId/problems/new',
+        name: 'problem-author-new',
+        component: () => import('./AuthorProblemPage.vue'),
+        props: true,
       },
     ]
   : []
@@ -36,12 +41,6 @@ export const routes: RouteRecordRaw[] = [
     path: '/rooms/:roomId/clear',
     name: 'clear',
     component: ClearPage,
-  },
-  {
-    path: '/author/rooms/:roomId/problems/new',
-    name: 'problem-author-new',
-    component: AuthorProblemPage,
-    props: true,
   },
   ...developmentRoutes,
   {

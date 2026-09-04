@@ -4,7 +4,7 @@ import assetCreated from '../../../../openapi/examples/assets/response-created.j
 import createProblemResult from '../../../../openapi/examples/problems/create-response.json'
 import createStringProblem from '../../../../openapi/examples/problems/create-string-request.json'
 import type {
-  ApiClient,
+  ProblemAuthoringApiClient,
   CreateProblemRequest,
   CreateProblemResponse,
   UploadProblemAssetResponse,
@@ -23,18 +23,12 @@ const STRING_REQUEST = createStringProblem as CreateProblemRequest
 const CREATE_RESPONSE = createProblemResult as CreateProblemResponse
 const UPLOAD_RESPONSE = assetCreated as UploadProblemAssetResponse
 
-function createClient(overrides: Partial<ApiClient> = {}): ApiClient {
+function createClient(
+  overrides: Partial<ProblemAuthoringApiClient> = {},
+): ProblemAuthoringApiClient {
   return {
-    getMe: vi.fn<ApiClient['getMe']>(),
-    loginGuest: vi.fn<ApiClient['loginGuest']>(),
-    logoutDemo: vi.fn<ApiClient['logoutDemo']>(),
-    startOrResumeRun: vi.fn<ApiClient['startOrResumeRun']>(),
-    getCurrentRun: vi.fn<ApiClient['getCurrentRun']>(),
-    getProblem: vi.fn<ApiClient['getProblem']>(),
-    submitQuery: vi.fn<ApiClient['submitQuery']>(),
-    submitAnswer: vi.fn<ApiClient['submitAnswer']>(),
-    createProblem: vi.fn<ApiClient['createProblem']>(),
-    uploadProblemAsset: vi.fn<ApiClient['uploadProblemAsset']>(),
+    createProblem: vi.fn<ProblemAuthoringApiClient['createProblem']>(),
+    uploadProblemAsset: vi.fn<ProblemAuthoringApiClient['uploadProblemAsset']>(),
     ...overrides,
   }
 }
@@ -54,8 +48,10 @@ function sequentialKeys(...keys: string[]): IdempotencyKeyFactory {
 
 describe('ProblemAuthoringController', () => {
   it('creates a problem without uploading an image', async () => {
-    const createProblem = vi.fn<ApiClient['createProblem']>().mockResolvedValue(CREATE_RESPONSE)
-    const uploadProblemAsset = vi.fn<ApiClient['uploadProblemAsset']>()
+    const createProblem = vi
+      .fn<ProblemAuthoringApiClient['createProblem']>()
+      .mockResolvedValue(CREATE_RESPONSE)
+    const uploadProblemAsset = vi.fn<ProblemAuthoringApiClient['uploadProblemAsset']>()
     const controller = new ProblemAuthoringController(
       createClient({ createProblem, uploadProblemAsset }),
       sequentialKeys(CREATE_KEY),
@@ -83,9 +79,11 @@ describe('ProblemAuthoringController', () => {
   })
 
   it('uploads the selected image only after creating the problem', async () => {
-    const createProblem = vi.fn<ApiClient['createProblem']>().mockResolvedValue(CREATE_RESPONSE)
+    const createProblem = vi
+      .fn<ProblemAuthoringApiClient['createProblem']>()
+      .mockResolvedValue(CREATE_RESPONSE)
     const uploadProblemAsset = vi
-      .fn<ApiClient['uploadProblemAsset']>()
+      .fn<ProblemAuthoringApiClient['uploadProblemAsset']>()
       .mockResolvedValue(UPLOAD_RESPONSE)
     const controller = new ProblemAuthoringController(
       createClient({ createProblem, uploadProblemAsset }),
@@ -124,7 +122,7 @@ describe('ProblemAuthoringController', () => {
 
   it('retries problem creation with the same key and request snapshot', async () => {
     const createProblem = vi
-      .fn<ApiClient['createProblem']>()
+      .fn<ProblemAuthoringApiClient['createProblem']>()
       .mockRejectedValueOnce(new Error('connection lost'))
       .mockResolvedValue(CREATE_RESPONSE)
     const keyFactory = vi.fn<IdempotencyKeyFactory>().mockImplementation(sequentialKeys(CREATE_KEY))
@@ -156,9 +154,11 @@ describe('ProblemAuthoringController', () => {
   })
 
   it('retries only the image upload after the problem was created', async () => {
-    const createProblem = vi.fn<ApiClient['createProblem']>().mockResolvedValue(CREATE_RESPONSE)
+    const createProblem = vi
+      .fn<ProblemAuthoringApiClient['createProblem']>()
+      .mockResolvedValue(CREATE_RESPONSE)
     const uploadProblemAsset = vi
-      .fn<ApiClient['uploadProblemAsset']>()
+      .fn<ProblemAuthoringApiClient['uploadProblemAsset']>()
       .mockRejectedValueOnce(new Error('upload failed'))
       .mockResolvedValue(UPLOAD_RESPONSE)
     const keyFactory = vi

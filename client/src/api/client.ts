@@ -33,6 +33,19 @@ export interface UploadProblemAssetForm {
   alt: string
 }
 
+export interface ProblemAuthoringApiClient {
+  createProblem(
+    path: CreateProblemPath,
+    headers: CreateProblemHeaders,
+    body: CreateProblemRequest,
+  ): Promise<CreateProblemResponse>
+  uploadProblemAsset(
+    path: UploadProblemAssetPath,
+    headers: UploadProblemAssetHeaders,
+    form: UploadProblemAssetForm,
+  ): Promise<UploadProblemAssetResponse>
+}
+
 type ApiErrorResponse = components['schemas']['ErrorResponse']
 export type ApiErrorDetails = ApiErrorResponse['error']['details']
 
@@ -85,16 +98,6 @@ export interface ApiClient {
   getProblem(path: GetProblemPath): Promise<GetProblemResponse>
   submitQuery(path: SubmitQueryPath, body: SubmitQueryRequest): Promise<SubmitQueryResponse>
   submitAnswer(path: SubmitAnswerPath, body: SubmitAnswerRequest): Promise<SubmitAnswerResponse>
-  createProblem(
-    path: CreateProblemPath,
-    headers: CreateProblemHeaders,
-    body: CreateProblemRequest,
-  ): Promise<CreateProblemResponse>
-  uploadProblemAsset(
-    path: UploadProblemAssetPath,
-    headers: UploadProblemAssetHeaders,
-    form: UploadProblemAssetForm,
-  ): Promise<UploadProblemAssetResponse>
 }
 
 export interface CreateApiClientOptions {
@@ -159,7 +162,9 @@ async function throwResponseError(response: Response): Promise<never> {
   })
 }
 
-export function createApiClient(options: CreateApiClientOptions = {}): ApiClient {
+export function createApiClient(
+  options: CreateApiClientOptions = {},
+): ApiClient & ProblemAuthoringApiClient {
   const baseUrl = normalizeBaseUrl(options.baseUrl ?? globalThis.location?.origin ?? '')
   const fetchApi = options.fetch
 

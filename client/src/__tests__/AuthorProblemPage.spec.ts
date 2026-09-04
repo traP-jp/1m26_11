@@ -3,29 +3,23 @@ import { describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory } from 'vue-router'
 
 import AuthorProblemPage from '../AuthorProblemPage.vue'
-import { ApiClientError, type ApiClient } from '../api/client'
+import { ApiClientError, type ProblemAuthoringApiClient } from '../api/client'
 import { createAppRouter } from '../router'
-import { authApiClientKey } from '../utils/auth'
+import { problemAuthoringApiClientKey } from '../authoring/problemAuthoringApi'
 
 const roomId = '1411824c-d357-4941-af76-c76cb827dda6'
 const problemId = '22222222-2222-4222-8222-222222222222'
 
-function createClient(): ApiClient {
+function createClient(): ProblemAuthoringApiClient {
   return {
-    getMe: vi.fn<ApiClient['getMe']>(),
-    loginGuest: vi.fn<ApiClient['loginGuest']>(),
-    logoutDemo: vi.fn<ApiClient['logoutDemo']>(),
-    startOrResumeRun: vi.fn<ApiClient['startOrResumeRun']>(),
-    getCurrentRun: vi.fn<ApiClient['getCurrentRun']>(),
-    getProblem: vi.fn<ApiClient['getProblem']>(),
-    submitQuery: vi.fn<ApiClient['submitQuery']>(),
-    submitAnswer: vi.fn<ApiClient['submitAnswer']>(),
-    createProblem: vi.fn<ApiClient['createProblem']>().mockResolvedValue({ problem_id: problemId }),
-    uploadProblemAsset: vi.fn<ApiClient['uploadProblemAsset']>(),
+    createProblem: vi
+      .fn<ProblemAuthoringApiClient['createProblem']>()
+      .mockResolvedValue({ problem_id: problemId }),
+    uploadProblemAsset: vi.fn<ProblemAuthoringApiClient['uploadProblemAsset']>(),
   }
 }
 
-async function mountPage(client: ApiClient = createClient()) {
+async function mountPage(client: ProblemAuthoringApiClient = createClient()) {
   const router = createAppRouter(createMemoryHistory())
   await router.push(`/author/rooms/${roomId}/problems/new`)
 
@@ -34,7 +28,7 @@ async function mountPage(client: ApiClient = createClient()) {
     global: {
       plugins: [router],
       provide: {
-        [authApiClientKey as symbol]: client,
+        [problemAuthoringApiClientKey as symbol]: client,
       },
     },
   })

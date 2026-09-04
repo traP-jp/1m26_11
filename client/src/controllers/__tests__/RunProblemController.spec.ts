@@ -28,8 +28,6 @@ function createClient(overrides: Partial<ApiClient> = {}): ApiClient {
     getProblem: vi.fn<ApiClient['getProblem']>(),
     submitQuery: vi.fn<ApiClient['submitQuery']>(),
     submitAnswer: vi.fn<ApiClient['submitAnswer']>(),
-    createProblem: vi.fn<ApiClient['createProblem']>(),
-    uploadProblemAsset: vi.fn<ApiClient['uploadProblemAsset']>(),
     ...overrides,
   }
 }

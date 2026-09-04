@@ -11,11 +11,11 @@ import {
   type EditableOperation,
 } from './authoring/problemForm'
 import { ProblemAuthoringController } from './controllers/ProblemAuthoringController'
-import { authApiClientKey } from './utils/auth'
+import { problemAuthoringApiClientKey } from './authoring/problemAuthoringApi'
 
 const props = defineProps<{ roomId: string }>()
 
-const controller = new ProblemAuthoringController(inject(authApiClientKey) ?? apiClient)
+const controller = new ProblemAuthoringController(inject(problemAuthoringApiClientKey, apiClient))
 const form = reactive(createDefaultProblemAuthoringForm())
 const validationErrors = ref<string[]>([])
 

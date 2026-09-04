@@ -23,6 +23,27 @@ Vite のみ起動する場合は次を実行します。developmentではMSWが�
 mise run client-dev
 ```
 
+## Problem authoring
+
+development環境では、作問画面を次のURLから直接開けます。
+
+```text
+http://localhost:<Viteが表示したport>/author/rooms/<room_id>/problems/new
+```
+
+作問画面はDevice Web Serial PoCと同様にdevelopment限定routeとして登録され、production buildには
+含まれません。Portalには作問画面への導線を表示しません。
+
+作問APIは既定で無効です。backendを含めて有効化する場合は、リポジトリルートで次を実行します。
+
+```sh
+PROBLEM_AUTHORING_ENABLED=true mise run dev
+```
+
+`<room_id>`には、問題を追加する未公開roomのUUIDを指定します。画像も登録する場合は、作問APIとは別に
+画像upload用のstorage設定が必要です。必要な環境変数は
+[`server/README.md`](../server/README.md)を参照してください。
+
 ## Device Web Serial PoC
 
 development serverには、Raspberry Pi Pico Hから受信したraw byteを観測する診断画面があります。

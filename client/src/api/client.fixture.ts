@@ -25,7 +25,5 @@ export function createFixtureApiClient(): ApiClient {
     getProblem: unsupported,
     submitQuery: unsupported,
     submitAnswer: unsupported,
-    createProblem: unsupported,
-    uploadProblemAsset: unsupported,
   }
 }

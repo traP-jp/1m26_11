@@ -2,7 +2,7 @@ import { reactive } from 'vue'
 
 import {
   ApiClientError,
-  type ApiClient,
+  type ProblemAuthoringApiClient,
   type CreateProblemRequest,
   type CreateProblemResponse,
 } from '@/api/client'
@@ -68,7 +68,7 @@ export class ProblemAuthoringController {
   private pending: PendingSubmission | null = null
 
   constructor(
-    private readonly client: ApiClient,
+    private readonly client: ProblemAuthoringApiClient,
     private readonly createIdempotencyKey: IdempotencyKeyFactory = () => crypto.randomUUID(),
   ) {}
 

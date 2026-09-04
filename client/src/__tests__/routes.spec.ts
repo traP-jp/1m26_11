@@ -4,7 +4,7 @@ import { createMemoryHistory } from 'vue-router'
 import { createAppRouter } from '../router'
 
 describe('router', () => {
-  it('resolves the application routes and the development device PoC route', () => {
+  it('resolves the application routes and the development-only routes', () => {
     const router = createAppRouter(createMemoryHistory())
 
     expect(router.resolve('/').name).toBe('portal')

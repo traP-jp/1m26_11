@@ -55,13 +55,6 @@ function handleRoomSelected(roomId: string): void {
   void router.push({ name: 'room', params: { roomId } })
 }
 
-function handleProblemAuthoring(roomId: string): void {
-  void router.push({
-    name: 'problem-author-new',
-    params: { roomId },
-  })
-}
-
 function handleRoomUiEvent(event: RoomUiEvent): void {
   if (event.type === 'room-exited' || event.type === 'portal-returned') {
     void router.push({ name: 'portal' })
@@ -88,7 +81,6 @@ function handleRoomUiEvent(event: RoomUiEvent): void {
           @guest-login="auth.loginGuest"
           @logout="auth.logout"
           @start-room="handleRoomSelected"
-          @author-room="handleProblemAuthoring"
         />
       </template>
     </template>
@@ -97,11 +89,6 @@ function handleRoomUiEvent(event: RoomUiEvent): void {
       v-else-if="route.name === 'room'"
       :view-model="roomPageFixture"
       @ui-event="handleRoomUiEvent"
-    />
-    <component
-      :is="Component"
-      v-else-if="route.name === 'problem-author-new'"
-      :room-id="typeof route.params.roomId === 'string' ? route.params.roomId : ''"
     />
     <component :is="Component" v-else />
   </RouterView>
