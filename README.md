@@ -52,13 +52,13 @@ Integration test をローカルで実行する場合は、MariaDB を用意し�
 
 ## Docker development
 
-`Dockerfile` と `compose.yaml` は、`server/` と `openapi/` の双方を参照するためリポジトリルートに配置しています。次のコマンドで backend の Compose Watch と frontend の Vite dev server を並列起動します。
+`Dockerfile` と `compose.yaml` は、`server/` と `openapi/` の双方を参照するためリポジトリルートに配置しています。次のコマンドで backend の Compose Watch と frontend の Vite dev server を並列起動します。統合起動ではMSWを無効化し、Viteの`/api`と`/openapi.yaml`を実backendへ転送します。
 
 ```sh
 mise run dev
 ```
 
-Vite のみ起動する場合は `mise run client-dev`、backend のみ watch する場合は `mise run server-dev` を使用します。backend をバックグラウンドで起動・停止する場合も mise から実行できます。
+Vite のみ起動する場合は `mise run client-dev` を使用し、この場合はMSWが既定で有効です。backend のみ watch する場合は `mise run server-dev` を使用します。backend をバックグラウンドで起動・停止する場合も mise から実行できます。
 
 ```sh
 mise run compose-up
