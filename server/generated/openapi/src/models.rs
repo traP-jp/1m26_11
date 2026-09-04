@@ -163,6 +163,13 @@ pub struct SubmitQueryPathParams {
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
 #[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct GetRoomPathParams {
+    /// 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
+    pub room_id: uuid::Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
 pub struct GetCurrentRunPathParams {
     /// 部屋のUUID。下記は契約用例示値であり、開始導線の実room_idではありません。
     pub room_id: uuid::Uuid,
@@ -7341,6 +7348,465 @@ impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<RoomItem> {
             std::result::Result::Err(e) => std::result::Result::Err(format!(
                 r#"Unable to convert header: {hdr_value:?} to string: {e}"#
             )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct RoomRankingSummary {
+    #[serde(rename = "player_count")]
+    #[validate(range(min = 0u32))]
+    pub player_count: u32,
+
+    #[serde(rename = "my_rank")]
+    #[validate(range(min = 1u32))]
+    pub my_rank: Nullable<u32>,
+}
+
+impl RoomRankingSummary {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(player_count: u32, my_rank: Nullable<u32>) -> RoomRankingSummary {
+        RoomRankingSummary {
+            player_count,
+            my_rank,
+        }
+    }
+}
+
+/// Converts the RoomRankingSummary value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for RoomRankingSummary {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            Some("player_count".to_string()),
+            Some(self.player_count.to_string()),
+            Some("my_rank".to_string()),
+            Some(
+                self.my_rank
+                    .as_ref()
+                    .map_or("null".to_string(), |x| x.to_string()),
+            ),
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a RoomRankingSummary value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for RoomRankingSummary {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub player_count: Vec<u32>,
+            pub my_rank: Vec<u32>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing RoomRankingSummary".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "player_count" => intermediate_rep.player_count.push(<u32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?),
+                    "my_rank" => return std::result::Result::Err("Parsing a nullable type in this style is not supported in RoomRankingSummary".to_string()),
+                    _ => return std::result::Result::Err("Unexpected key while parsing RoomRankingSummary".to_string())
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(RoomRankingSummary {
+            player_count: intermediate_rep
+                .player_count
+                .into_iter()
+                .next()
+                .ok_or_else(|| "player_count missing in RoomRankingSummary".to_string())?,
+            my_rank: std::result::Result::Err(
+                "Nullable types not supported in RoomRankingSummary".to_string(),
+            )?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<RoomRankingSummary> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<RoomRankingSummary>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<RoomRankingSummary>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for RoomRankingSummary - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<RoomRankingSummary> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <RoomRankingSummary as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into RoomRankingSummary - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct RoomResponse {
+    #[serde(rename = "id")]
+    pub id: uuid::Uuid,
+
+    #[serde(rename = "number")]
+    #[validate(range(min = 1u32))]
+    pub number: u32,
+
+    #[serde(rename = "name")]
+    #[validate(custom(function = "check_xss_string"))]
+    pub name: String,
+
+    #[serde(rename = "genre")]
+    #[validate(custom(function = "check_xss_string"))]
+    pub genre: String,
+
+    #[serde(rename = "description")]
+    #[validate(custom(function = "check_xss_string"))]
+    pub description: String,
+
+    #[serde(rename = "problem_count")]
+    #[validate(range(min = 0u32))]
+    pub problem_count: u32,
+
+    #[serde(rename = "run_status")]
+    #[validate(nested)]
+    pub run_status: models::RoomRunStatus,
+
+    #[serde(rename = "ranking_summary")]
+    #[validate(nested)]
+    pub ranking_summary: models::RoomRankingSummary,
+}
+
+impl RoomResponse {
+    #[allow(clippy::new_without_default, clippy::too_many_arguments)]
+    pub fn new(
+        id: uuid::Uuid,
+        number: u32,
+        name: String,
+        genre: String,
+        description: String,
+        problem_count: u32,
+        run_status: models::RoomRunStatus,
+        ranking_summary: models::RoomRankingSummary,
+    ) -> RoomResponse {
+        RoomResponse {
+            id,
+            number,
+            name,
+            genre,
+            description,
+            problem_count,
+            run_status,
+            ranking_summary,
+        }
+    }
+}
+
+/// Converts the RoomResponse value to the Query Parameters representation (style=form, explode=false)
+/// specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde serializer
+impl std::fmt::Display for RoomResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params: Vec<Option<String>> = vec![
+            // Skipping id in query parameter serialization
+            Some("number".to_string()),
+            Some(self.number.to_string()),
+            Some("name".to_string()),
+            Some(self.name.to_string()),
+            Some("genre".to_string()),
+            Some(self.genre.to_string()),
+            Some("description".to_string()),
+            Some(self.description.to_string()),
+            Some("problem_count".to_string()),
+            Some(self.problem_count.to_string()),
+            // Skipping run_status in query parameter serialization
+
+            // Skipping ranking_summary in query parameter serialization
+        ];
+
+        write!(
+            f,
+            "{}",
+            params.into_iter().flatten().collect::<Vec<_>>().join(",")
+        )
+    }
+}
+
+/// Converts Query Parameters representation (style=form, explode=false) to a RoomResponse value
+/// as specified in https://swagger.io/docs/specification/serialization/
+/// Should be implemented in a serde deserializer
+impl std::str::FromStr for RoomResponse {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        /// An intermediate representation of the struct to use for parsing.
+        #[derive(Default)]
+        #[allow(dead_code)]
+        struct IntermediateRep {
+            pub id: Vec<uuid::Uuid>,
+            pub number: Vec<u32>,
+            pub name: Vec<String>,
+            pub genre: Vec<String>,
+            pub description: Vec<String>,
+            pub problem_count: Vec<u32>,
+            pub run_status: Vec<models::RoomRunStatus>,
+            pub ranking_summary: Vec<models::RoomRankingSummary>,
+        }
+
+        let mut intermediate_rep = IntermediateRep::default();
+
+        // Parse into intermediate representation
+        let mut string_iter = s.split(',');
+        let mut key_result = string_iter.next();
+
+        while key_result.is_some() {
+            let val = match string_iter.next() {
+                Some(x) => x,
+                None => {
+                    return std::result::Result::Err(
+                        "Missing value while parsing RoomResponse".to_string(),
+                    );
+                }
+            };
+
+            if let Some(key) = key_result {
+                #[allow(clippy::match_single_binding)]
+                match key {
+                    #[allow(clippy::redundant_clone)]
+                    "id" => intermediate_rep.id.push(
+                        <uuid::Uuid as std::str::FromStr>::from_str(val)
+                            .map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "number" => intermediate_rep.number.push(
+                        <u32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "name" => intermediate_rep.name.push(
+                        <String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "genre" => intermediate_rep.genre.push(
+                        <String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "description" => intermediate_rep.description.push(
+                        <String as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "problem_count" => intermediate_rep.problem_count.push(
+                        <u32 as std::str::FromStr>::from_str(val).map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "run_status" => intermediate_rep.run_status.push(
+                        <models::RoomRunStatus as std::str::FromStr>::from_str(val)
+                            .map_err(|x| x.to_string())?,
+                    ),
+                    #[allow(clippy::redundant_clone)]
+                    "ranking_summary" => intermediate_rep.ranking_summary.push(
+                        <models::RoomRankingSummary as std::str::FromStr>::from_str(val)
+                            .map_err(|x| x.to_string())?,
+                    ),
+                    _ => {
+                        return std::result::Result::Err(
+                            "Unexpected key while parsing RoomResponse".to_string(),
+                        );
+                    }
+                }
+            }
+
+            // Get the next key
+            key_result = string_iter.next();
+        }
+
+        // Use the intermediate representation to return the struct
+        std::result::Result::Ok(RoomResponse {
+            id: intermediate_rep
+                .id
+                .into_iter()
+                .next()
+                .ok_or_else(|| "id missing in RoomResponse".to_string())?,
+            number: intermediate_rep
+                .number
+                .into_iter()
+                .next()
+                .ok_or_else(|| "number missing in RoomResponse".to_string())?,
+            name: intermediate_rep
+                .name
+                .into_iter()
+                .next()
+                .ok_or_else(|| "name missing in RoomResponse".to_string())?,
+            genre: intermediate_rep
+                .genre
+                .into_iter()
+                .next()
+                .ok_or_else(|| "genre missing in RoomResponse".to_string())?,
+            description: intermediate_rep
+                .description
+                .into_iter()
+                .next()
+                .ok_or_else(|| "description missing in RoomResponse".to_string())?,
+            problem_count: intermediate_rep
+                .problem_count
+                .into_iter()
+                .next()
+                .ok_or_else(|| "problem_count missing in RoomResponse".to_string())?,
+            run_status: intermediate_rep
+                .run_status
+                .into_iter()
+                .next()
+                .ok_or_else(|| "run_status missing in RoomResponse".to_string())?,
+            ranking_summary: intermediate_rep
+                .ranking_summary
+                .into_iter()
+                .next()
+                .ok_or_else(|| "ranking_summary missing in RoomResponse".to_string())?,
+        })
+    }
+}
+
+// Methods for converting between header::IntoHeaderValue<RoomResponse> and HeaderValue
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<header::IntoHeaderValue<RoomResponse>> for HeaderValue {
+    type Error = String;
+
+    fn try_from(
+        hdr_value: header::IntoHeaderValue<RoomResponse>,
+    ) -> std::result::Result<Self, Self::Error> {
+        let hdr_value = hdr_value.to_string();
+        match HeaderValue::from_str(&hdr_value) {
+            std::result::Result::Ok(value) => std::result::Result::Ok(value),
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Invalid header value for RoomResponse - value: {hdr_value} is invalid {e}"#
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl std::convert::TryFrom<HeaderValue> for header::IntoHeaderValue<RoomResponse> {
+    type Error = String;
+
+    fn try_from(hdr_value: HeaderValue) -> std::result::Result<Self, Self::Error> {
+        match hdr_value.to_str() {
+            std::result::Result::Ok(value) => {
+                match <RoomResponse as std::str::FromStr>::from_str(value) {
+                    std::result::Result::Ok(value) => {
+                        std::result::Result::Ok(header::IntoHeaderValue(value))
+                    }
+                    std::result::Result::Err(err) => std::result::Result::Err(format!(
+                        r#"Unable to convert header value '{value}' into RoomResponse - {err}"#
+                    )),
+                }
+            }
+            std::result::Result::Err(e) => std::result::Result::Err(format!(
+                r#"Unable to convert header: {hdr_value:?} to string: {e}"#
+            )),
+        }
+    }
+}
+
+/// Enumeration of values.
+/// Since this enum's variants do not hold data, we can easily define them as `#[repr(C)]`
+/// which helps with FFI.
+#[allow(non_camel_case_types, clippy::large_enum_variant)]
+#[repr(C)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+#[cfg_attr(feature = "conversion", derive(frunk_enum_derive::LabelledGenericEnum))]
+pub enum RoomRunStatus {
+    #[serde(rename = "not_started")]
+    NotStarted,
+    #[serde(rename = "active")]
+    Active,
+    #[serde(rename = "cleared")]
+    Cleared,
+}
+
+impl validator::Validate for RoomRunStatus {
+    fn validate(&self) -> std::result::Result<(), validator::ValidationErrors> {
+        std::result::Result::Ok(())
+    }
+}
+
+impl std::fmt::Display for RoomRunStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            RoomRunStatus::NotStarted => write!(f, "not_started"),
+            RoomRunStatus::Active => write!(f, "active"),
+            RoomRunStatus::Cleared => write!(f, "cleared"),
+        }
+    }
+}
+
+impl std::str::FromStr for RoomRunStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "not_started" => std::result::Result::Ok(RoomRunStatus::NotStarted),
+            "active" => std::result::Result::Ok(RoomRunStatus::Active),
+            "cleared" => std::result::Result::Ok(RoomRunStatus::Cleared),
+            _ => std::result::Result::Err(format!(r#"Value not valid: {s}"#)),
         }
     }
 }

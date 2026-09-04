@@ -17,7 +17,7 @@ pub(crate) use problem_authoring::create_problem;
 pub(crate) use progress::get_me_progress;
 pub(crate) use queries::submit_query;
 pub(crate) use rooms::{
-    get_current_run, get_problem, get_problem_hint, get_rooms, start_or_resume_run,
+    get_current_run, get_problem, get_problem_hint, get_room, get_rooms, start_or_resume_run,
 };
 
 use axum::{

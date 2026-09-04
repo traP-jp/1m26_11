@@ -2344,6 +2344,18 @@ async fn mariadb_leaderboard_selects_user_best_runs_and_competition_ranks() {
 
     assert!(empty.is_empty());
 
+    let problem_count = repository
+        .count_problems_by_room_id(room_id)
+        .await
+        .expect("problem count lookup should succeed");
+    assert_eq!(problem_count, 2);
+
+    let empty_problem_count = repository
+        .count_problems_by_room_id(Uuid::new_v4())
+        .await
+        .expect("unknown room problem count should succeed");
+    assert_eq!(empty_problem_count, 0);
+
     sqlx::query("DELETE FROM runs WHERE room_id = ?")
         .bind(room_id)
         .execute(&pool)

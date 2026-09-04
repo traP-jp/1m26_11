@@ -456,3 +456,32 @@ cases:
         response:
           status: 200
           example: empty
+
+  - id: room_detail_active
+    preconditions:
+      authenticated: true
+      active_run_exists: true
+    steps:
+      - operation_id: getRoom
+        response:
+          status: 200
+          example: active
+
+  - id: room_detail_not_started
+    preconditions:
+      authenticated: false
+    steps:
+      - operation_id: getRoom
+        response:
+          status: 200
+          example: not_started
+
+  - id: room_detail_cleared
+    preconditions:
+      authenticated: true
+      run_status: cleared
+    steps:
+      - operation_id: getRoom
+        response:
+          status: 200
+          example: cleared

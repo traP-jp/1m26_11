@@ -5,7 +5,8 @@ use openapi_generated::{
         CreateProblemJudgeConfig, CreateProblemPathParams, CreateProblemRequest,
         CreateProblemResponse, GetProblemAssetsPathParams, IncorrectQueryResponse,
         LeaderboardResponse, MeDemoUnauthenticated, MeProgressResponse, Operation,
-        ProblemAssetsResponse, UploadProblemAssetHeaderParams, UploadProblemAssetPathParams,
+        ProblemAssetsResponse, RoomResponse, RoomRunStatus, UploadProblemAssetHeaderParams,
+        UploadProblemAssetPathParams,
     },
     types::Nullable,
 };
@@ -29,6 +30,21 @@ const LEADERBOARD_UNAUTHENTICATED: &str = include_str!(concat!(
 const LEADERBOARD_EMPTY: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../openapi/examples/leaderboard/response-empty.json"
+));
+
+const ROOM_ACTIVE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../openapi/examples/rooms/response-active.json"
+));
+
+const ROOM_NOT_STARTED: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../openapi/examples/rooms/response-not-started.json"
+));
+
+const ROOM_CLEARED: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../openapi/examples/rooms/response-cleared.json"
 ));
 
 const ME_PROGRESS_SUMMARY: &str = include_str!(concat!(
@@ -439,5 +455,53 @@ fn generated_run_and_query_numeric_types_match_contract() {
     assert!(
         serde_json::from_value::<CorrectQueryResponse>(negative_query_count).is_err(),
         "negative query_count must not deserialize into the generated u64 field",
+    );
+}
+
+#[test]
+fn generated_room_responses_match_fixtures() {
+    for fixture in [ROOM_ACTIVE, ROOM_NOT_STARTED, ROOM_CLEARED] {
+        let expected: serde_json::Value =
+            serde_json::from_str(fixture).expect("room fixture should be valid JSON");
+
+        let model: RoomResponse = serde_json::from_value(expected.clone())
+            .expect("room fixture should match generated model");
+
+        assert_eq!(
+            serde_json::to_value(model).expect("generated room model should serialize"),
+            expected
+        );
+    }
+
+    let active: RoomResponse =
+        serde_json::from_str(ROOM_ACTIVE).expect("active fixture should match generated model");
+    assert_eq!(active.run_status, RoomRunStatus::Active);
+    assert_eq!(active.ranking_summary.player_count, 84);
+    assert_eq!(active.ranking_summary.my_rank, Nullable::Present(14));
+
+    let not_started: RoomResponse = serde_json::from_str(ROOM_NOT_STARTED)
+        .expect("not_started fixture should match generated model");
+    assert_eq!(not_started.run_status, RoomRunStatus::NotStarted);
+    assert_eq!(not_started.ranking_summary.my_rank, Nullable::Null);
+
+    let cleared: RoomResponse =
+        serde_json::from_str(ROOM_CLEARED).expect("cleared fixture should match generated model");
+    assert_eq!(cleared.run_status, RoomRunStatus::Cleared);
+    assert_eq!(cleared.ranking_summary.my_rank, Nullable::Present(14));
+
+    let mut missing_my_rank: serde_json::Value =
+        serde_json::from_str(ROOM_NOT_STARTED).expect("fixture should be valid JSON");
+    missing_my_rank
+        .as_object_mut()
+        .unwrap()
+        .get_mut("ranking_summary")
+        .unwrap()
+        .as_object_mut()
+        .unwrap()
+        .remove("my_rank");
+
+    assert!(
+        serde_json::from_value::<RoomResponse>(missing_my_rank).is_err(),
+        "my_rank must be required in ranking_summary even though it accepts null"
     );
 }

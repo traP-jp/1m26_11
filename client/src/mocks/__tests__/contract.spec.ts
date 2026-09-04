@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import currentRun from '../../../../openapi/examples/runs/active-response.json'
+import roomActive from '../../../../openapi/examples/rooms/response-active.json'
 import openApiSource from '../../../../openapi/openapi-v1.yaml?raw'
 import scenarioSource from '../../../../openapi/scenarios/p0-cases.yaml?raw'
 import { createMockContract } from '../contract'
@@ -16,8 +17,9 @@ describe('OpenAPI mock contract', () => {
   it('resolves scenario response examples from the shared OpenAPI fixtures', () => {
     const contract = createMockContract(openApiSource, scenarioSource, fixtureModules)
 
-    expect(contract.scenarios).toHaveLength(36)
+    expect(contract.scenarios).toHaveLength(39)
     expect(contract.getResponseExample('getCurrentRun', 200, 'current_run')).toEqual(currentRun)
+    expect(contract.getResponseExample('getRoom', 200, 'active')).toEqual(roomActive)
   })
 
   it('loads the problem authoring and image upload scenario documents together', () => {
@@ -27,7 +29,7 @@ describe('OpenAPI mock contract', () => {
       fixtureModules,
     )
 
-    expect(contract.scenarios).toHaveLength(40)
+    expect(contract.scenarios).toHaveLength(43)
     expect(contract.getScenario('create_string_problem').steps[0]?.operationId).toBe(
       'createProblem',
     )

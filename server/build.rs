@@ -8,11 +8,12 @@ use std::{
 use serde_yaml::Value;
 
 const OPENAPI_VERSION: &str = "3.1.0";
-const REQUIRED_OPERATIONS: [(&str, &str, &str); 11] = [
+const REQUIRED_OPERATIONS: [(&str, &str, &str); 12] = [
     ("/openapi.yaml", "get", "getOpenApi"),
     ("/api/me", "get", "getMe"),
     ("/api/auth/guest", "post", "loginGuest"),
     ("/api/auth/logout", "post", "logoutDemo"),
+    ("/api/rooms/{room_id}", "get", "getRoom"),
     ("/api/rooms/{room_id}/runs", "post", "startOrResumeRun"),
     ("/api/rooms/{room_id}/runs/current", "get", "getCurrentRun"),
     ("/api/rooms/{room_id}/problems", "post", "createProblem"),
