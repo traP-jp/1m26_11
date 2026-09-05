@@ -314,6 +314,8 @@ async function selectProblem(roomId: string, problemId: string): Promise<void> {
   roomLoading.value = true
   roomLoadError.value = null
   try {
+    await runProblem.restoreCurrentRun(roomId)
+    if (generation !== roomLoadGeneration) return
     await runProblem.loadSelectedProblem(roomId, problemId)
     if (generation !== roomLoadGeneration) return
     queryAnswer.setAnswerMaxLength(runProblem.state.problem?.input_schema.answer.max_length ?? null)
