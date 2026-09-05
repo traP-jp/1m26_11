@@ -231,6 +231,26 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
       return HttpResponse.json(result.body, { status: result.status })
     }),
 
+    http.get('/api/rooms/{room_id}', ({ params, response }) => {
+      if (!requestHasValidResourceIds(params)) return response(400).json(errorBody(400))
+      if (!state.get('room_exists')) return response(404).json(errorBody(404))
+
+      const scenarioId = !state.get('authenticated')
+        ? 'room_detail_not_started'
+        : state.get('run_status') === 'cleared' || state.get('cleared_run_exists')
+          ? 'room_detail_cleared'
+          : state.get('active_run_exists')
+            ? 'room_detail_active'
+            : 'room_detail_not_started'
+      const result = responseFromStep<Schemas['RoomResponse']>(
+        contract,
+        state,
+        scenarioId,
+        'getRoom',
+      )
+      return HttpResponse.json(result.body, { status: result.status })
+    }),
+
     http.post('/api/rooms/{room_id}/runs', ({ params, response }) => {
       if (!requestHasValidResourceIds(params)) return response(400).json(errorBody(400))
       if (!state.get('authenticated')) {
@@ -281,6 +301,29 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
         state,
         'get_current_run',
         'getCurrentRun',
+      )
+      return HttpResponse.json(result.body, { status: result.status })
+    }),
+
+    http.get('/api/rooms/{room_id}/problems', ({ params, response }) => {
+      if (!requestHasValidResourceIds(params)) return response(400).json(errorBody(400))
+      if (!state.get('authenticated')) {
+        return response(401).json(
+          responseExample<Schemas['ErrorResponse']>(contract, 'getProblems', 401, 'unauthorized'),
+        )
+      }
+      if (!state.get('room_exists')) return response(404).json(errorBody(404))
+      if (!state.get('active_run_exists')) {
+        return response(404).json(
+          responseExample<Schemas['ErrorResponse']>(contract, 'getProblems', 404, 'run_not_found'),
+        )
+      }
+
+      const result = responseFromStep<Schemas['ProblemsResponse']>(
+        contract,
+        state,
+        'get_available_problem',
+        'getProblems',
       )
       return HttpResponse.json(result.body, { status: result.status })
     }),

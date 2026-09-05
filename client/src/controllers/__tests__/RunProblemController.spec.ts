@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import currentRun from '../../../../openapi/examples/runs/active-response.json'
+import problemAssets from '../../../../openapi/examples/assets/response-list.json'
 import newRun from '../../../../openapi/examples/runs/start-new-response.json'
 import problemResponse from '../../../../openapi/examples/problems/available-response.json'
 import {
@@ -8,6 +9,7 @@ import {
   type ApiClient,
   type GetCurrentRunResponse,
   type GetProblemResponse,
+  type GetProblemAssetsResponse,
   type StartOrResumeRunResponse,
 } from '@/api/client'
 
@@ -17,15 +19,25 @@ const ROOM_ID = '11111111-1111-4111-8111-111111111111'
 const PROBLEM_ID = '22222222-2222-4222-8222-222222222221'
 const NEXT_ROOM_ID = '11111111-1111-4111-8111-111111111112'
 const NEXT_PROBLEM_ID = '22222222-2222-4222-8222-222222222222'
+const problemWithAssets = {
+  ...problemResponse,
+  assets: problemAssets.items,
+} as GetProblemResponse
 
 function createClient(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
     getMe: vi.fn<ApiClient['getMe']>(),
     loginGuest: vi.fn<ApiClient['loginGuest']>(),
     logoutDemo: vi.fn<ApiClient['logoutDemo']>(),
+    getRooms: vi.fn<ApiClient['getRooms']>(),
+    getRoom: vi.fn<ApiClient['getRoom']>(),
     startOrResumeRun: vi.fn<ApiClient['startOrResumeRun']>(),
     getCurrentRun: vi.fn<ApiClient['getCurrentRun']>(),
+    getProblems: vi.fn<ApiClient['getProblems']>(),
     getProblem: vi.fn<ApiClient['getProblem']>(),
+    getProblemAssets: vi
+      .fn<ApiClient['getProblemAssets']>()
+      .mockResolvedValue(problemAssets as GetProblemAssetsResponse),
     submitQuery: vi.fn<ApiClient['submitQuery']>(),
     submitAnswer: vi.fn<ApiClient['submitAnswer']>(),
     ...overrides,
@@ -95,12 +107,12 @@ describe('RunProblemController', () => {
     const result = await controller.loadProblem(ROOM_ID, PROBLEM_ID)
 
     expect(getProblem).toHaveBeenCalledWith({ room_id: ROOM_ID, problem_id: PROBLEM_ID })
-    expect(result).toEqual(problemResponse)
+    expect(result).toEqual(problemWithAssets)
     expect(controller.state).toMatchObject({
       phase: 'ready',
       roomId: ROOM_ID,
       run: newRun,
-      problem: problemResponse,
+      problem: problemWithAssets,
       error: null,
     })
   })
@@ -168,14 +180,40 @@ describe('RunProblemController', () => {
     const getProblem = vi
       .fn<ApiClient['getProblem']>()
       .mockResolvedValue(problemResponse as GetProblemResponse)
+    const getProblemAssets = vi
+      .fn<ApiClient['getProblemAssets']>()
+      .mockResolvedValue(problemAssets as GetProblemAssetsResponse)
     const problemSelection = createProblemSelectionHandler()
-    const controller = new RunProblemController(createClient({ getProblem }), problemSelection)
+    const controller = new RunProblemController(
+      createClient({ getProblem, getProblemAssets }),
+      problemSelection,
+    )
 
     await controller.loadSelectedProblem(ROOM_ID, PROBLEM_ID)
 
     expect(getProblem).toHaveBeenCalledWith({ room_id: ROOM_ID, problem_id: PROBLEM_ID })
+    expect(getProblemAssets).toHaveBeenCalledWith({
+      room_id: ROOM_ID,
+      problem_id: PROBLEM_ID,
+    })
     expect(problemSelection.selectProblem).toHaveBeenCalledExactlyOnceWith(PROBLEM_ID)
     expect(controller.state.problem?.id).toBe(problemResponse.id)
+    expect(controller.state.problem?.assets).toEqual(problemAssets.items)
+  })
+
+  it('does not request download URLs when the problem has no assets', async () => {
+    const problemWithoutAssets = { ...problemResponse, assets: [] } as GetProblemResponse
+    const getProblem = vi.fn<ApiClient['getProblem']>().mockResolvedValue(problemWithoutAssets)
+    const getProblemAssets = vi.fn<ApiClient['getProblemAssets']>()
+    const controller = new RunProblemController(
+      createClient({ getProblem, getProblemAssets }),
+      createProblemSelectionHandler(),
+    )
+
+    const result = await controller.loadProblem(ROOM_ID, PROBLEM_ID)
+
+    expect(getProblemAssets).not.toHaveBeenCalled()
+    expect(result.assets).toEqual([])
   })
 
   it('keeps the latest problem when an earlier request finishes last', async () => {
@@ -184,6 +222,7 @@ describe('RunProblemController', () => {
       resolveFirstProblem = resolve
     })
     const nextProblem = { ...problemResponse, id: NEXT_PROBLEM_ID } as GetProblemResponse
+    const nextProblemWithAssets = { ...nextProblem, assets: problemAssets.items }
     const getProblem = vi
       .fn<ApiClient['getProblem']>()
       .mockReturnValueOnce(firstProblem)
@@ -202,7 +241,7 @@ describe('RunProblemController', () => {
       phase: 'ready',
       problemStatus: nextProblem.status,
       roomId: ROOM_ID,
-      problem: nextProblem,
+      problem: nextProblemWithAssets,
       error: null,
     })
   })
@@ -258,7 +297,7 @@ describe('RunProblemController', () => {
       phase: 'ready',
       roomId: ROOM_ID,
       run: newRun,
-      problem: problemResponse,
+      problem: problemWithAssets,
       error: null,
     })
   })
@@ -381,7 +420,7 @@ describe('RunProblemController', () => {
       phase: 'ready',
       roomId: NEXT_ROOM_ID,
       run: null,
-      problem: problemResponse,
+      problem: problemWithAssets,
       error: null,
     })
   })
@@ -406,7 +445,7 @@ describe('RunProblemController', () => {
       roomId: NEXT_ROOM_ID,
       run: null,
       elapsedMs: null,
-      problem: problemResponse,
+      problem: problemWithAssets,
       error: null,
     })
   })

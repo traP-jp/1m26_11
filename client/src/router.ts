@@ -6,7 +6,6 @@ import {
   type RouteRecordRaw,
 } from 'vue-router'
 
-import ClearPage from './ClearPage.vue'
 import PortalPage from './PortalPage.vue'
 import RoomPage from './RoomPage.vue'
 
@@ -39,8 +38,7 @@ export const routes: RouteRecordRaw[] = [
   },
   {
     path: '/rooms/:roomId/clear',
-    name: 'clear',
-    component: ClearPage,
+    redirect: (to) => ({ name: 'room', params: { roomId: to.params.roomId } }),
   },
   ...developmentRoutes,
   {

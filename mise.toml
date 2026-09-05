@@ -188,7 +188,10 @@ run = "pnpm histoire:preview"
 
 [tasks.dev]
 description = "Run the backend stack and Vite development server"
-depends = ["server-dev", "client-dev"]
+depends = [
+  "server-dev",
+  { task = "client-dev", env = { VITE_ENABLE_MSW = "false" } },
+]
 
 [tasks.compose-up]
 description = "Start the server development stack"

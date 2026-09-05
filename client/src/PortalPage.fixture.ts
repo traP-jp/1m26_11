@@ -1,17 +1,22 @@
-import type { PortalPageProps } from './PortalPage.types'
+import type { PortalPageProps, PortalRoom } from './PortalPage.types'
+
+const room = {
+  room_id: '1411824c-d357-4941-af76-c76cb827dda6',
+  number: 1,
+  name: '最初の部屋',
+  genre: 'logic',
+  description: '動作確認用の問題セットです',
+}
+
+function rooms(progressStatus: PortalRoom['progressStatus']): PortalRoom[] {
+  return [{ room, progressStatus }]
+}
 
 const common = {
   authBusy: false,
   loginHref: null,
   logoutHref: null,
-  requiredRoom: {
-    room_id: '1411824c-d357-4941-af76-c76cb827dda6',
-    number: 1,
-    name: '最初の部屋',
-    genre: 'logic',
-    description: '動作確認用の問題セットです',
-  },
-  progressStatus: 'not_started',
+  rooms: rooms('not_started'),
 } as const
 
 export const portalPageFixtures = {
@@ -33,7 +38,7 @@ export const portalPageFixtures = {
     authenticated: true,
     authMode: 'demo',
     displayName: 'kaomojikun',
-    progressStatus: 'active',
+    rooms: rooms('active'),
   },
   cleared: {
     ...common,
@@ -41,6 +46,6 @@ export const portalPageFixtures = {
     authMode: 'neoshowcase',
     displayName: 'kaomojikun',
     logoutHref: '/_oauth/logout?redirect=/',
-    progressStatus: 'cleared',
+    rooms: rooms('cleared'),
   },
 } satisfies Record<string, PortalPageProps>

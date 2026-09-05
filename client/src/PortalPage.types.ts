@@ -3,6 +3,11 @@ import type { ProgressStatus } from './components/portal/MinimalProgressSummary.
 
 export type PortalAuthMode = 'demo' | 'neoshowcase'
 
+export interface PortalRoom {
+  room: Room
+  progressStatus: ProgressStatus
+}
+
 export interface PortalPageProps {
   authenticated: boolean
   authMode: PortalAuthMode
@@ -10,6 +15,7 @@ export interface PortalPageProps {
   authBusy: boolean
   loginHref: string | null
   logoutHref: string | null
-  requiredRoom: Room
-  progressStatus: ProgressStatus
+  rooms: PortalRoom[]
+  roomsLoading?: boolean
+  roomsError?: string | null
 }

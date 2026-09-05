@@ -27,6 +27,16 @@ interface BrowserSerialFixture {
   close: ReturnType<typeof vi.fn>
 }
 
+function stringProblemViewModel() {
+  return {
+    ...roomPageFixture,
+    selectedProblem: {
+      ...roomPageFixture.selectedProblem!,
+      submissionType: 'string' as const,
+    },
+  }
+}
+
 function createBrowserSerialFixture(): BrowserSerialFixture {
   let controller!: ReadableStreamDefaultController<Uint8Array>
   const cancel = vi.fn<() => void>()
@@ -103,14 +113,56 @@ describe('RoomPage', () => {
     )
     expect(wrapper.getComponent(QuestionArea).props('smallTotal')).toBe(3)
 
+    expect(wrapper.findComponent(AnswerPanel).exists()).toBe(false)
     wrapper.getComponent(RoomTopBar).vm.$emit('exit')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('uiEvent')).toEqual([[{ type: 'room-exited' }]])
+  })
+
+  it('shows the existing answer panel only for string problems and forwards its answer', async () => {
+    const wrapper = mount(RoomPage, { props: { viewModel: stringProblemViewModel() } })
+
+    expect(wrapper.findComponent(ConditionBoxList).exists()).toBe(false)
     wrapper.getComponent(AnswerPanel).vm.$emit('submit', 'fixture answer', 'mouse')
     await wrapper.vm.$nextTick()
 
     expect(wrapper.emitted('uiEvent')).toEqual([
-      [{ type: 'room-exited' }],
       [{ type: 'answer-submitted', source: 'mouse', answer: 'fixture answer' }],
     ])
+  })
+
+  it('resets both existing answer inputs when the selected problem changes', async () => {
+    const wrapper = mount(RoomPage, { props: { viewModel: stringProblemViewModel() } })
+
+    await wrapper.getComponent(AnswerPanel).get('textarea').setValue('old panel answer')
+    await wrapper.get('[data-testid="use-screen"]').trigger('click')
+    await wrapper.get('[data-testid="screen-answer-input"]').setValue('old screen answer')
+
+    const nextProblemId = '22222222-2222-4222-8222-222222222222'
+    await wrapper.setProps({
+      viewModel: {
+        ...stringProblemViewModel(),
+        problems: [
+          {
+            ...roomPageFixture.problems[0]!,
+            id: nextProblemId,
+            selected: true,
+          },
+        ],
+        selectedProblem: {
+          ...stringProblemViewModel().selectedProblem,
+          id: nextProblemId,
+        },
+      },
+    })
+
+    expect(
+      wrapper.getComponent(AnswerPanel).get<HTMLTextAreaElement>('textarea').element.value,
+    ).toBe('')
+    expect(
+      wrapper.get<HTMLTextAreaElement>('[data-testid="screen-answer-input"]').element.value,
+    ).toBe('')
   })
 
   it('forwards problem navigation and condition editing from the shell', async () => {
@@ -158,15 +210,45 @@ describe('RoomPage', () => {
       [{ type: 'problem-selected', problemId: 'previous-problem' }],
       [{ type: 'problem-selected', problemId: 'next-problem' }],
       [{ type: 'condition-changed', source: 'mouse', control: 'up', count: 1 }],
-      [{ type: 'condition-changed', source: 'mouse', control: 'right', count: -1 }],
-      [{ type: 'condition-changed', source: 'mouse', control: 'up', count: -2 }],
-      [{ type: 'condition-changed', source: 'mouse', control: 'right', count: -1 }],
+      [{ type: 'query-operation-removed', index: 1 }],
+      [{ type: 'query-operations-cleared' }],
     ])
+  })
+
+  it('disables problem navigation while a submission is pending', () => {
+    const viewModel = {
+      ...roomPageFixture,
+      problems: [
+        {
+          id: 'previous-problem',
+          number: 1,
+          title: '前の問題',
+          status: 'available' as const,
+          selected: false,
+        },
+        { ...roomPageFixture.problems[0]!, selected: true },
+        {
+          id: 'next-problem',
+          number: 3,
+          title: '次の問題',
+          status: 'available' as const,
+          selected: false,
+        },
+      ],
+      answerJudgement: { state: 'pending' as const },
+    }
+    const wrapper = mount(RoomPage, { props: { viewModel } })
+
+    expect(
+      wrapper
+        .findAllComponents(QuestionNavigationButton)
+        .every((button) => button.props('disabled') === true),
+    ).toBe(true)
   })
 
   it('disables answer submission while a query is pending', () => {
     const viewModel = {
-      ...roomPageFixture,
+      ...stringProblemViewModel(),
       queryJudgement: { state: 'pending' as const },
     }
     const wrapper = mount(RoomPage, { props: { viewModel } })
@@ -496,6 +578,7 @@ describe('RoomPage', () => {
       await wrapper.get('[data-testid="screen-submit-query"]').trigger('click')
       await vi.waitFor(() => expect(submittedQueries).toHaveLength(2))
 
+      await wrapper.setProps({ viewModel: stringProblemViewModel() })
       await wrapper.get('[data-testid="screen-answer-input"]').setValue('screen answer')
       await wrapper.get('[data-testid="screen-submit-answer"]').trigger('click')
       await vi.waitFor(() => expect(submittedAnswers).toHaveLength(1))

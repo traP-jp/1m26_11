@@ -11,7 +11,9 @@ import meAuthenticated from '../../../../openapi/examples/auth/me-demo-authentic
 import meUnauthenticated from '../../../../openapi/examples/auth/me-demo-unauthenticated.json'
 import unauthorized from '../../../../openapi/examples/auth/error-unauthorized.json'
 import problemLocked from '../../../../openapi/examples/problems/error-problem-locked.json'
+import problemsResponse from '../../../../openapi/examples/problems/list-response.json'
 import queryCorrect from '../../../../openapi/examples/queries/response-correct.json'
+import roomActive from '../../../../openapi/examples/rooms/response-active.json'
 import currentRun from '../../../../openapi/examples/runs/active-response.json'
 import runNotFound from '../../../../openapi/examples/runs/error-run-not-found.json'
 import newRun from '../../../../openapi/examples/runs/start-new-response.json'
@@ -71,6 +73,44 @@ describe('OpenAPI-backed MSW handlers', () => {
 
     const currentResponse = await fetch(`${BASE_URL}/api/rooms/${ROOM_ID}/runs/current`)
     expect(await currentResponse.json()).toEqual(currentRun)
+  })
+
+  it('returns active room details from the shared OpenAPI fixture', async () => {
+    startMock('room_detail_active')
+
+    const response = await fetch(`${BASE_URL}/api/rooms/${ROOM_ID}`)
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(roomActive)
+  })
+
+  it.each([
+    {
+      name: 'an invalid room UUID',
+      roomId: 'not-a-uuid',
+      state: null,
+      expectedStatus: 400,
+    },
+    {
+      name: 'a missing room',
+      roomId: ROOM_ID,
+      state: { room_exists: false },
+      expectedStatus: 404,
+    },
+  ])('returns a contract-shaped error for $name', async ({ roomId, state, expectedStatus }) => {
+    const mock = startMock('room_detail_active')
+    if (state !== null) mock.state.patch(state)
+
+    const response = await fetch(`${BASE_URL}/api/rooms/${roomId}`)
+
+    expect(response.status).toBe(expectedStatus)
+    expect(response.headers.get('content-type')).toContain('application/json')
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'MOCK_UNSPECIFIED',
+        details: {},
+      },
+    })
   })
 
   it('follows demo login and logout state transitions', async () => {
@@ -182,6 +222,15 @@ describe('OpenAPI-backed MSW handlers', () => {
     const response = await fetch(`${BASE_URL}/api/rooms/${ROOM_ID}/problems/${PROBLEM_ID}`)
     expect(response.status).toBe(409)
     expect(await response.json()).toEqual(problemLocked)
+  })
+
+  it('returns the active run problem list from the shared fixture', async () => {
+    startMock('get_available_problem')
+
+    const response = await fetch(`${BASE_URL}/api/rooms/${ROOM_ID}/problems`)
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(problemsResponse)
   })
 
   it.each([

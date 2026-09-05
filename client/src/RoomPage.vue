@@ -25,10 +25,21 @@ const emit = defineEmits<{ uiEvent: [event: RoomUiEvent] }>()
 const inputMode = ref<InputMode>('serial')
 const screenAnswer = ref(props.viewModel.answerInput.value)
 const inputError = ref<string | null>(null)
-const inputDisabled = computed(
-  () => props.viewModel.selectedProblem === null || props.viewModel.clear.cleared,
+const selectedProblemStatus = computed(
+  () => props.viewModel.problems.find((problem) => problem.selected)?.status,
 )
-
+const isOperationProblem = computed(
+  () => props.viewModel.selectedProblem?.submissionType === 'operation_sequence',
+)
+const operationCount = computed(() =>
+  props.viewModel.queryInput.operations.reduce((total, operation) => total + operation.count, 0),
+)
+const inputDisabled = computed(
+  () =>
+    props.viewModel.selectedProblem === null ||
+    selectedProblemStatus.value !== 'available' ||
+    props.viewModel.clear.cleared,
+)
 const roomDispatcher = createGuardedInputDispatcher(
   (event: InputAdapterEvent) => {
     inputError.value = null
@@ -46,6 +57,21 @@ const roomDispatcher = createGuardedInputDispatcher(
   },
 )
 const inputUnavailable = computed(() => inputDisabled.value || roomDispatcher.busy)
+const controlInputUnavailable = computed(
+  () =>
+    inputUnavailable.value ||
+    !isOperationProblem.value ||
+    operationCount.value >= props.viewModel.queryInput.maxOperations,
+)
+const querySubmissionUnavailable = computed(
+  () =>
+    inputUnavailable.value ||
+    !isOperationProblem.value ||
+    props.viewModel.queryInput.operations.length === 0,
+)
+const answerSubmissionUnavailable = computed(
+  () => inputUnavailable.value || props.viewModel.selectedProblem?.submissionType !== 'string',
+)
 
 function createModeDispatcher(mode: InputMode): InputAdapterDispatcher {
   return {
@@ -60,7 +86,11 @@ function createModeDispatcher(mode: InputMode): InputAdapterDispatcher {
 }
 
 function isControlAllowed(control: Control): boolean {
-  return props.viewModel.queryInput.allowedControls.includes(control)
+  return (
+    isOperationProblem.value &&
+    operationCount.value < props.viewModel.queryInput.maxOperations &&
+    props.viewModel.queryInput.allowedControls.includes(control)
+  )
 }
 
 const keyboardInput = createKeyboardInputAdapter({
@@ -86,6 +116,10 @@ watch(
   },
   { immediate: true },
 )
+
+watch([() => props.viewModel.room.id, () => props.viewModel.selectedProblem?.id], () => {
+  screenAnswer.value = props.viewModel.answerInput.value
+})
 
 function toNoticeStatus(state: SerialConnectionState): SerialStatus {
   switch (state.phase) {
@@ -220,14 +254,19 @@ onBeforeUnmount(() => keyboardInput.stop())
           {{ keyboardInstructions }}
         </p>
         <div v-else class="mt-3 space-y-4">
-          <div class="flex flex-wrap gap-2" role="group" :aria-labelledby="inputModeLabelId">
+          <div
+            v-if="isOperationProblem"
+            class="flex flex-wrap gap-2"
+            role="group"
+            :aria-labelledby="inputModeLabelId"
+          >
             <button
               v-for="control in viewModel.queryInput.allowedControls"
               :key="control"
               type="button"
               class="min-h-10 min-w-16 rounded-lg bg-[#2864e8] px-4 text-sm font-bold text-white transition-colors hover:bg-[#1f56cc] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2864e8] disabled:cursor-not-allowed disabled:bg-[#a7b8d8]"
               :data-control="control"
-              :disabled="inputUnavailable"
+              :disabled="controlInputUnavailable"
               @click="pressScreenControl(control)"
             >
               {{ controlLabel(control) }}
@@ -235,16 +274,21 @@ onBeforeUnmount(() => keyboardInput.stop())
           </div>
 
           <button
+            v-if="isOperationProblem"
             type="button"
             data-testid="screen-submit-query"
             class="min-h-10 rounded-lg border border-[#2864e8] bg-white px-4 text-sm font-bold text-[#1f56cc] hover:bg-[#eef4ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2864e8] disabled:cursor-not-allowed disabled:border-[#a7b8d8] disabled:text-[#78869a]"
-            :disabled="inputUnavailable"
+            :disabled="querySubmissionUnavailable"
             @click="submitScreenQuery"
           >
             操作列を送信
           </button>
 
-          <form class="space-y-2" @submit.prevent="submitScreenAnswer">
+          <form
+            v-if="viewModel.selectedProblem?.submissionType === 'string'"
+            class="space-y-2"
+            @submit.prevent="submitScreenAnswer"
+          >
             <label class="block text-sm font-bold">
               文字列回答
               <textarea
@@ -252,7 +296,7 @@ onBeforeUnmount(() => keyboardInput.stop())
                 data-testid="screen-answer-input"
                 rows="2"
                 :maxlength="viewModel.answerInput.maxLength"
-                :disabled="inputUnavailable"
+                :disabled="answerSubmissionUnavailable"
                 class="mt-1 block w-full rounded-lg border border-[#7aa7ff] bg-[#fbfcff] px-3 py-2 text-sm outline-none focus:border-[#2e6bea] focus:ring-2 focus:ring-[#2e6bea]/20 disabled:cursor-not-allowed disabled:bg-[#f1f4f8]"
               />
             </label>
@@ -260,7 +304,7 @@ onBeforeUnmount(() => keyboardInput.stop())
               type="submit"
               data-testid="screen-submit-answer"
               class="min-h-10 rounded-lg bg-[#2864e8] px-4 text-sm font-bold text-white hover:bg-[#1f56cc] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2864e8] disabled:cursor-not-allowed disabled:bg-[#a7b8d8]"
-              :disabled="inputUnavailable"
+              :disabled="answerSubmissionUnavailable"
             >
               回答を送信
             </button>
@@ -272,7 +316,11 @@ onBeforeUnmount(() => keyboardInput.stop())
         </p>
       </section>
     </aside>
-    <RoomPageShell :view-model="viewModel" @ui-event="emit('uiEvent', $event)" />
+    <RoomPageShell
+      :key="`${viewModel.room.id}:${viewModel.selectedProblem?.id ?? 'no-problem'}`"
+      :view-model="viewModel"
+      @ui-event="emit('uiEvent', $event)"
+    />
   </template>
   <ClearScreen
     v-else

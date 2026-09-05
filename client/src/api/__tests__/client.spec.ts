@@ -9,14 +9,18 @@ import guestRequest from '../../../../openapi/examples/auth/guest-request.json'
 import guestResponse from '../../../../openapi/examples/auth/guest-response.json'
 import meAuthenticated from '../../../../openapi/examples/auth/me-demo-authenticated.json'
 import problemLocked from '../../../../openapi/examples/problems/error-problem-locked.json'
+import problemsResponse from '../../../../openapi/examples/problems/list-response.json'
 import problemResponse from '../../../../openapi/examples/problems/available-response.json'
 import queryRequest from '../../../../openapi/examples/queries/request-serial.json'
 import queryIncorrect from '../../../../openapi/examples/queries/response-incorrect.json'
+import roomActive from '../../../../openapi/examples/rooms/response-active.json'
+import roomsResponse from '../../../../openapi/examples/rooms/response-authenticated-active.json'
 import currentRun from '../../../../openapi/examples/runs/active-response.json'
 import runNotFound from '../../../../openapi/examples/runs/error-run-not-found.json'
 import newRun from '../../../../openapi/examples/runs/start-new-response.json'
 import { ApiClientError, createApiClient, type CreateProblemRequest } from '@/api/client'
 import assetCreated from '../../../../openapi/examples/assets/response-created.json'
+import problemAssets from '../../../../openapi/examples/assets/response-list.json'
 import createProblemRequest from '../../../../openapi/examples/problems/create-string-request.json'
 import createProblemResponse from '../../../../openapi/examples/problems/create-response.json'
 
@@ -25,6 +29,7 @@ const ROOM_ID = '11111111-1111-4111-8111-111111111111'
 const PROBLEM_ID = '22222222-2222-4222-8222-222222222221'
 const IDEMPOTENCY_KEY = '44444444-4444-4444-8444-444444444444'
 
+const roomPath = { room_id: ROOM_ID }
 const runPath = { room_id: ROOM_ID }
 const problemPath = { room_id: ROOM_ID, problem_id: PROBLEM_ID }
 const createProblemPath = { room_id: ROOM_ID }
@@ -120,6 +125,22 @@ describe('ApiClient', () => {
       expectedResult: undefined,
     },
     {
+      name: 'getRooms',
+      method: 'GET',
+      path: '/api/rooms',
+      invoke: () => client.getRooms(),
+      response: HttpResponse.json(roomsResponse),
+      expectedResult: roomsResponse,
+    },
+    {
+      name: 'getRoom',
+      method: 'GET',
+      path: `/api/rooms/${ROOM_ID}`,
+      invoke: () => client.getRoom(roomPath),
+      response: HttpResponse.json(roomActive),
+      expectedResult: roomActive,
+    },
+    {
       name: 'startOrResumeRun',
       method: 'POST',
       path: `/api/rooms/${ROOM_ID}/runs`,
@@ -136,12 +157,28 @@ describe('ApiClient', () => {
       expectedResult: currentRun,
     },
     {
+      name: 'getProblems',
+      method: 'GET',
+      path: `/api/rooms/${ROOM_ID}/problems`,
+      invoke: () => client.getProblems(roomPath),
+      response: HttpResponse.json(problemsResponse),
+      expectedResult: problemsResponse,
+    },
+    {
       name: 'getProblem',
       method: 'GET',
       path: `/api/rooms/${ROOM_ID}/problems/${PROBLEM_ID}`,
       invoke: () => client.getProblem(problemPath),
       response: HttpResponse.json(problemResponse),
       expectedResult: problemResponse,
+    },
+    {
+      name: 'getProblemAssets',
+      method: 'GET',
+      path: `/api/rooms/${ROOM_ID}/problems/${PROBLEM_ID}/assets`,
+      invoke: () => client.getProblemAssets(problemPath),
+      response: HttpResponse.json(problemAssets),
+      expectedResult: problemAssets,
     },
     {
       name: 'submitQuery',

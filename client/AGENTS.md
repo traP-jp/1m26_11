@@ -82,13 +82,15 @@ Room本番画面の主コンテンツは、次の構成を確定方針としま�
 
 ## MSW
 
-- developmentではMSWが既定で有効で、production buildでは常に無効です。
+- `mise run client-dev`ではMSWが既定で有効です。`mise run dev`の統合起動ではMSWを無効化し、
+  実backendへ接続します。production buildでも常に無効です。
 - mockの正本は `openapi/openapi-v1.yaml`、`openapi/examples/`、
   `openapi/scenarios/p0-cases.yaml` です。scenarioやpayloadをclient独自形式で重複管理しません。
 - endpointのmock behaviorは `src/mocks/handlers.ts`、状態遷移は `src/mocks/state.ts`、契約読込みは
   `src/mocks/contract.ts` と `src/mocks/data.ts` で管理します。
-- 実backendへ接続する場合は、追跡対象外の `client/.env.local` で `VITE_ENABLE_MSW=false` を設定し、
-  必要に応じて `API_PROXY_TARGET` を設定します。Viteは `/api` と `/openapi.yaml` をproxyします。
+- `client-dev`を単独起動して実backendへ接続する場合は、追跡対象外の `client/.env.local` で
+  `VITE_ENABLE_MSW=false` を設定し、必要に応じて `API_PROXY_TARGET` を設定します。Viteは `/api` と
+  `/openapi.yaml` をproxyします。
 - 特定状態からmockを開始する場合は、`VITE_MSW_SCENARIO` にscenarioのcase IDを指定します。
 - `public/mockServiceWorker.js` は手作業で編集せず、production配布物へ含めない既存設定を維持します。
 - endpointを追加・変更した場合は、OpenAPI example／scenario、MSW handler、関連testの整合を

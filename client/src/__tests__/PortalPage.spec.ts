@@ -54,15 +54,47 @@ describe('PortalPage', () => {
     expect(wrapper.emitted('guestLogin')).toEqual([['kaomojikun']])
   })
 
-  it('shows one required room and progress after authentication', () => {
+  it('shows every published room with its progress after authentication', () => {
     const fixture = portalPageFixtures.demoAuthenticated
-    const wrapper = mount(PortalPage, { props: fixture })
+    const secondRoom = {
+      room: { ...fixture.rooms[0]!.room, room_id: 'room-2', number: 2, name: '次の部屋' },
+      progressStatus: 'cleared' as const,
+    }
+    const wrapper = mount(PortalPage, {
+      props: { ...fixture, rooms: [...fixture.rooms, secondRoom] },
+    })
 
     expect(wrapper.findComponent(PortalLoginPrompt).exists()).toBe(false)
-    expect(wrapper.getComponent(RoomCard).props('room')).toEqual(fixture.requiredRoom)
-    expect(wrapper.getComponent(MinimalProgressSummary).props('status')).toBe(
-      fixture.progressStatus,
-    )
+    expect(wrapper.findAllComponents(RoomCard).map((card) => card.props('room'))).toEqual([
+      fixture.rooms[0]!.room,
+      secondRoom.room,
+    ])
+    expect(
+      wrapper.findAllComponents(MinimalProgressSummary).map((summary) => summary.props('status')),
+    ).toEqual(['active', 'cleared'])
+  })
+
+  it('shows an explicit empty state when no rooms are published', () => {
+    const wrapper = mount(PortalPage, {
+      props: { ...portalPageFixtures.demoAuthenticated, rooms: [] },
+    })
+
+    expect(wrapper.text()).toContain('公開中の部屋はありません。')
+    expect(wrapper.findComponent(RoomCard).exists()).toBe(false)
+  })
+
+  it('shows a Room loading error and emits a retry request', async () => {
+    const wrapper = mount(PortalPage, {
+      props: {
+        ...portalPageFixtures.demoAuthenticated,
+        rooms: [],
+        roomsError: 'Room一覧を読み込めませんでした。',
+      },
+    })
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('Room一覧を読み込めませんでした。')
+    await wrapper.get('[role="alert"] button').trigger('click')
+    expect(wrapper.emitted('retryRooms')).toHaveLength(1)
   })
 
   it('forwards header and required-room events', () => {

@@ -12,15 +12,22 @@ describe('router', () => {
       name: 'room',
       params: { roomId: 'room-1' },
     })
-    expect(router.resolve('/rooms/room-1/clear')).toMatchObject({
-      name: 'clear',
-      params: { roomId: 'room-1' },
-    })
     expect(router.resolve('/author/rooms/room-1/problems/new')).toMatchObject({
       name: 'problem-author-new',
       params: { roomId: 'room-1' },
     })
     expect(router.resolve('/device-poc').name).toBe('device-poc')
+  })
+
+  it('redirects the legacy Clear URL to the canonical Room route', async () => {
+    const router = createAppRouter(createMemoryHistory())
+
+    await router.push('/rooms/room-1/clear')
+
+    expect(router.currentRoute.value).toMatchObject({
+      name: 'room',
+      params: { roomId: 'room-1' },
+    })
   })
 
   it('redirects an unknown route to Portal', async () => {

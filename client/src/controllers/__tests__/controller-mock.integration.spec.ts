@@ -3,6 +3,7 @@ import { setupServer } from 'msw/node'
 
 import answerRequest from '../../../../openapi/examples/answers/request.json'
 import answerCorrectAndClearsRun from '../../../../openapi/examples/answers/response-correct-cleared.json'
+import problemAssets from '../../../../openapi/examples/assets/response-list.json'
 import problemResponse from '../../../../openapi/examples/problems/available-response.json'
 import queryRequest from '../../../../openapi/examples/queries/request-serial.json'
 import { createApiClient } from '@/api/client'
@@ -48,7 +49,7 @@ describe('controllers with the OpenAPI-backed mock API', () => {
       phase: 'ready',
       problemStatus: 'available',
       run: { status: 'active', elapsed_ms: 65000 },
-      problem: problemResponse,
+      problem: { ...problemResponse, assets: problemAssets.items },
       elapsedMs: 65000,
     })
 
@@ -85,6 +86,7 @@ describe('controllers with the OpenAPI-backed mock API', () => {
     const queryAnswer = new QueryAnswerController(client, operationBuffer)
     const runProblem = new RunProblemController(client, queryAnswer)
 
+    await runProblem.startOrResume(ROOM_ID)
     await runProblem.loadSelectedProblem(ROOM_ID, PROBLEM_ID)
     for (const operation of queryRequest.operations) operationBuffer.append(operation)
     queryAnswer.setQueryInput(queryRequest)

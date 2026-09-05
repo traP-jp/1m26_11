@@ -12,6 +12,7 @@ mise run client-install
 ## Development
 
 backend、MariaDB、Adminer と Vite dev server をまとめて起動します。
+この統合起動ではMSWを無効化し、Viteから実backendへAPI requestを転送します。
 
 ```sh
 mise run dev
@@ -174,7 +175,7 @@ buttonやlinkへfocus中は`Enter`をnative操作へ譲りますが、7 control�
 
 mock responseは`../openapi/openapi-v1.yaml`、`../openapi/examples/`、`../openapi/scenarios/p0-cases.yaml`を直接読みます。response payloadをclient内に複製していないため、OpenAPIのexampleとscenarioがmockの正本です。
 
-実backendへ接続する場合は`.env.example`を参考に`client/.env.local`を作成し、`VITE_ENABLE_MSW=false`を設定してください。その場合、Viteは`/api`と`/openapi.yaml`を`API_PROXY_TARGET`（既定は`http://127.0.0.1:8080`）へproxyします。特定の状態からmockを開始する場合は、`VITE_MSW_SCENARIO`へscenarioのcase id（例: `demo_login_and_logout`、`query_correct`）を指定します。production buildではMSWは常に無効です。
+`mise run dev`では`VITE_ENABLE_MSW=false`が自動設定されます。`mise run client-dev`を単独で実行しながら実backendへ接続する場合は、`.env.example`を参考に`client/.env.local`を作成し、同じ変数を設定してください。MSWを無効にすると、Viteは`/api`と`/openapi.yaml`を`API_PROXY_TARGET`（既定は`http://127.0.0.1:8080`）へproxyします。特定の状態からmockを開始する場合は、`VITE_MSW_SCENARIO`へscenarioのcase id（例: `demo_login_and_logout`、`query_correct`）を指定します。production buildではMSWは常に無効です。
 
 ## Component preview (Histoire)
 
