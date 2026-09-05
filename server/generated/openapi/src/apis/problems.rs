@@ -86,6 +86,22 @@ pub enum GetProblemHintResponse {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[must_use]
 #[allow(clippy::large_enum_variant)]
+pub enum GetProblemsResponse {
+    /// 挑戦中の部屋の問題一覧
+    Status200(models::ProblemsResponse),
+    /// JSON構文不正またはpath parameterのUUID形式不正。具体的なerror.codeは未確定です。
+    Status400_JSON(models::ErrorResponse),
+    /// 未ログイン
+    Status401(models::ErrorResponse),
+    /// activeなrunが存在しません。
+    Status404_Active(models::ErrorResponse),
+    /// server内部エラー。具体的なerror.codeは未確定です。
+    Status500_Server(models::ErrorResponse),
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[must_use]
+#[allow(clippy::large_enum_variant)]
 pub enum UploadProblemAssetResponse {
     /// 画像をuploadし、対象problemへの紐付けが完了しました。
     Status201(models::Asset),
@@ -164,6 +180,18 @@ pub trait Problems<E: std::fmt::Debug + Send + Sync + 'static = ()>:
         cookies: &CookieJar,
         path_params: &models::GetProblemHintPathParams,
     ) -> Result<GetProblemHintResponse, E>;
+
+    /// 挑戦中の部屋の問題一覧を取得する.
+    ///
+    /// GetProblems - GET /api/rooms/{room_id}/problems
+    async fn get_problems(
+        &self,
+
+        method: &Method,
+        host: &Host,
+        cookies: &CookieJar,
+        path_params: &models::GetProblemsPathParams,
+    ) -> Result<GetProblemsResponse, E>;
 
     /// 作問用画像をアップロードする.
     ///

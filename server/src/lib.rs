@@ -107,6 +107,12 @@ pub fn app(state: AppState) -> Router {
     let image_download_route_enabled = state.image_url_signer.is_some();
     let image_upload_route_enabled =
         state.auth_mode == AuthMode::Demo && state.image_storage.is_some();
+    let problem_collection_routes = if problem_authoring_route_enabled {
+        get(handler::get_problems).post(handler::create_problem)
+    } else {
+        get(handler::get_problems).post(handler::not_found)
+    }
+    .fallback(handler::method_not_allowed);
 
     let mut router = Router::new()
         .route(
@@ -145,6 +151,7 @@ pub fn app(state: AppState) -> Router {
             "/api/rooms/{room_id}/runs",
             post(handler::start_or_resume_run).fallback(handler::method_not_allowed),
         )
+        .route("/api/rooms/{room_id}/problems", problem_collection_routes)
         .route(
             "/api/rooms/{room_id}/problems/{problem_id}",
             get(handler::get_problem).fallback(handler::method_not_allowed),
@@ -169,13 +176,6 @@ pub fn app(state: AppState) -> Router {
             "/api/rooms/{room_id}/problems/{problem_id}/answers",
             post(handler::submit_answer).fallback(handler::method_not_allowed),
         );
-
-    if problem_authoring_route_enabled {
-        router = router.route(
-            "/api/rooms/{room_id}/problems",
-            post(handler::create_problem).fallback(handler::method_not_allowed),
-        );
-    }
 
     if image_download_route_enabled && image_upload_route_enabled {
         router = router.route(

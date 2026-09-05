@@ -124,6 +124,90 @@ async fn start_run_already_cleared_returns_409() {
 }
 
 #[tokio::test]
+async fn get_problems_matches_openapi_fixture() {
+    let app = problem_test_app();
+
+    let req = Request::get(format!("/api/rooms/{MOCK_RESUME_ROOM_ID}/problems"))
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
+
+    let actual: serde_json::Value = body_json(response).await;
+    let expected: serde_json::Value = serde_json::from_str(include_str!(
+        "../../openapi/examples/problems/list-response.json"
+    ))
+    .expect("OpenAPI fixture should be valid JSON");
+
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn get_problems_unauthorized() {
+    let app = problem_test_app();
+
+    let req = Request::get(format!("/api/rooms/{MOCK_RESUME_ROOM_ID}/problems"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let actual: serde_json::Value = body_json(response).await;
+    let expected: serde_json::Value = serde_json::from_str(include_str!(
+        "../../openapi/examples/auth/error-unauthorized.json"
+    ))
+    .expect("OpenAPI fixture should be valid JSON");
+
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn get_problems_without_active_run() {
+    let app = problem_test_app();
+
+    let req = Request::get(format!("/api/rooms/{MOCK_NEW_ROOM_ID}/problems"))
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let actual: serde_json::Value = body_json(response).await;
+    let expected: serde_json::Value = serde_json::from_str(include_str!(
+        "../../openapi/examples/runs/error-run-not-found.json"
+    ))
+    .expect("OpenAPI fixture should be valid JSON");
+
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn get_problems_invalid_room_id_returns_400() {
+    let app = problem_test_app();
+
+    let req = Request::get("/api/rooms/not-a-uuid/problems")
+        .header(header::COOKIE, format!("demo_session={MOCK_SESSION_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = request(&app, req).await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body: serde_json::Value = body_json(response).await;
+    assert_eq!(body["error"]["code"], "BAD_REQUEST");
+    assert_eq!(body["error"]["message"], "invalid room_id");
+}
+
+#[tokio::test]
 async fn get_available_problem_matches_openapi_fixture() {
     let app = problem_test_app();
 

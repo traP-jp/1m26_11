@@ -162,6 +162,10 @@ cases:
       active_run_exists: true
       problem_status: available
     steps:
+      - operation_id: getProblems
+        response:
+          status: 200
+          example: listed
       - operation_id: getProblem
         response:
           status: 200

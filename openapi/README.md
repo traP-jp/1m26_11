@@ -68,6 +68,7 @@ Rustの`rust-axum` Generator 7.24.0はOpenAPI 3.1の`type: "null"`を標準で�
 | `getCurrentRun` | なし | `200`: `current_run`; `401`: `unauthorized`; `404`: `run_not_found` |
 | `getRoomLeaderboard` | なし | `200`: `ranked`, `unauthenticated`, `empty` |
 | `createProblem` | `operation_sequence`, `string` | `201`: `created`; `400`／`404`／`409`／`422`／`500`: `ErrorResponse` |
+| `getProblems` | なし | `200`: `listed`; `401`: `unauthorized`; `404`: `run_not_found` |
 | `getProblem` | なし | `200`: `available_problem`; `401`: `unauthorized`; `409`: `problem_locked` |
 | `getProblemAssets` | なし | `200`: `listed`; `401`: `unauthorized`; `404`: `run_not_found`, `image_not_found`; `409`: `problem_locked` |
 | `uploadProblemAsset` | multipartの`file`／`alt`と`Idempotency-Key` | `201`: `created`; `400`／`404`／`409`／`413`／`415`／`422`／`500`／`502`／`503`: `ErrorResponse` |
