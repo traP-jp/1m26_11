@@ -2,14 +2,18 @@
 import { computed, inject, onMounted, ref, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 
-import { ApiClientError, apiClient, type GetRoomResponse } from './api/client'
+import {
+  ApiClientError,
+  apiClient,
+  type GetProblemsResponse,
+  type GetRoomResponse,
+  type GetRoomsResponse,
+} from './api/client'
 import { QueryAnswerController } from './controllers/QueryAnswerController'
 import { RunProblemController } from './controllers/RunProblemController'
 import type { Operation } from './input/InputAdapter.types'
 import { createOperationBuffer } from './input/operationBuffer'
-import { portalPageFixtures } from './PortalPage.fixture'
 import type { PortalPageProps } from './PortalPage.types'
-import { roomPageFixture } from './RoomPage.fixture'
 import type { JudgementState, RoomUiEvent, RoomViewModel } from './RoomPage.types'
 import { authApiClientKey, authNavigationHandlerKey, createAuthController } from './utils/auth'
 
@@ -21,38 +25,56 @@ const operationBuffer = createOperationBuffer()
 const queryAnswer = new QueryAnswerController(client, operationBuffer)
 const runProblem = new RunProblemController(client, queryAnswer)
 
+const portalRoomsLoading = ref(false)
+const portalRoomsLoadError = ref<unknown | null>(null)
+const portalRooms = ref<GetRoomsResponse['items']>([])
 const roomLoading = ref(false)
 const roomLoadError = ref<unknown | null>(null)
 const roomDetails = ref<GetRoomResponse | null>(null)
+const roomProblems = ref<GetProblemsResponse['items']>([])
+const roomProgress = ref<GetRoomsResponse['items'][number]['progress'] | null>(null)
 const bufferedOperations = ref<Operation[]>([])
 const lastSubmission = ref<'query' | 'answer' | null>(null)
+let portalRoomsLoadGeneration = 0
 let roomLoadGeneration = 0
 let roomStartRequestedFor: string | null = null
-
-const initialProblemId = roomPageFixture.selectedProblem?.id ?? null
 
 const portalPageProps = computed<PortalPageProps | null>(() => {
   const state = auth.state.value
   if (state.status === 'unauthenticated') {
     return {
-      ...portalPageFixtures.demoUnauthenticated,
       authenticated: false,
       authMode: state.authMode,
       displayName: null,
       authBusy: state.busy,
       loginHref: state.loginUrl,
       logoutHref: null,
+      rooms: [],
     }
   }
   if (state.status === 'authenticated') {
     return {
-      ...portalPageFixtures.demoAuthenticated,
       authenticated: true,
       authMode: state.authMode,
       displayName: state.displayName,
       authBusy: state.busy,
       loginHref: null,
       logoutHref: state.logoutUrl,
+      rooms: portalRooms.value.map((item) => ({
+        room: {
+          room_id: item.room_id,
+          number: item.number,
+          name: item.name,
+          genre: item.genre,
+          description: item.description,
+        },
+        progressStatus: item.progress.status,
+      })),
+      roomsLoading: portalRoomsLoading.value,
+      roomsError:
+        portalRoomsLoadError.value === null
+          ? null
+          : portalRoomsErrorMessage(portalRoomsLoadError.value),
     }
   }
   return null
@@ -89,10 +111,10 @@ const roomViewModel = computed<RoomViewModel | null>(() => {
       number: room.number,
       name: room.name,
     },
-    problems: roomPageFixture.problems.map((item) => ({
+    problems: roomProblems.value.map((item) => ({
       ...item,
       status:
-        item.id === problem.id && problemWasCleared
+        run.cleared_problem_ids.includes(item.id) || (item.id === problem.id && problemWasCleared)
           ? 'cleared'
           : queryAnswer.state.unlockedProblemIds.includes(item.id)
             ? 'available'
@@ -125,8 +147,12 @@ const roomViewModel = computed<RoomViewModel | null>(() => {
     answerJudgement: { state: visibleJudgementState.value },
     clear: {
       cleared: queryAnswer.state.clear.cleared,
-      clearedCount: progress?.cleared_count ?? run.cleared_problem_ids.length,
-      requiredCount: progress?.required_count ?? roomPageFixture.clear.requiredCount,
+      clearedCount:
+        progress?.cleared_count ??
+        roomProgress.value?.cleared_count ??
+        run.cleared_problem_ids.length,
+      requiredCount:
+        progress?.required_count ?? roomProgress.value?.required_count ?? room.problem_count,
     },
   }
 })
@@ -136,23 +162,62 @@ onMounted(() => void auth.refresh())
 watch(
   [() => route.name, () => route.params.roomId, () => auth.state.value.status],
   ([routeName, roomId, authStatus]) => {
-    if (routeName !== 'room') {
-      roomLoadGeneration += 1
-      return
-    }
     if (authStatus === 'unauthenticated') {
+      clearPortalRooms()
       roomStartRequestedFor = null
-      void router.replace({ name: 'portal' })
+      if (routeName === 'room') void router.replace({ name: 'portal' })
       return
     }
-    if (authStatus === 'authenticated' && typeof roomId === 'string') {
+
+    if (authStatus !== 'authenticated') return
+
+    if (routeName === 'portal') {
+      roomLoadGeneration += 1
+      void loadPortalRooms()
+      return
+    }
+
+    portalRoomsLoadGeneration += 1
+    portalRoomsLoading.value = false
+    portalRoomsLoadError.value = null
+
+    if (routeName === 'room' && typeof roomId === 'string') {
       const shouldStart = roomStartRequestedFor === roomId
       roomStartRequestedFor = null
       void loadRoom(roomId, shouldStart ? 'start' : 'restore')
+      return
     }
+
+    roomLoadGeneration += 1
   },
   { immediate: true },
 )
+
+function clearPortalRooms(): void {
+  portalRoomsLoadGeneration += 1
+  portalRoomsLoading.value = false
+  portalRoomsLoadError.value = null
+  portalRooms.value = []
+}
+
+async function loadPortalRooms(): Promise<void> {
+  const generation = ++portalRoomsLoadGeneration
+  portalRoomsLoading.value = true
+  portalRoomsLoadError.value = null
+
+  try {
+    const response = await client.getRooms()
+    if (generation !== portalRoomsLoadGeneration) return
+    portalRooms.value = response.items
+  } catch (error) {
+    if (generation === portalRoomsLoadGeneration) {
+      portalRooms.value = []
+      portalRoomsLoadError.value = error
+    }
+  } finally {
+    if (generation === portalRoomsLoadGeneration) portalRoomsLoading.value = false
+  }
+}
 
 function handleLogin(): void {
   void auth.login()
@@ -180,11 +245,29 @@ function clearRoomInput(): void {
   lastSubmission.value = null
 }
 
+function selectInitialProblem(
+  items: GetProblemsResponse['items'],
+): GetProblemsResponse['items'][number] {
+  if (items.length === 0) {
+    throw new Error('このRoomには問題が登録されていません。')
+  }
+
+  const problem =
+    items.find((item) => item.status === 'available') ??
+    items.find((item) => item.status === 'cleared')
+  if (problem === undefined) {
+    throw new Error('表示できる問題がありません。すべての問題が未解放です。')
+  }
+  return problem
+}
+
 async function loadRoom(roomId: string, mode: 'restore' | 'start' = 'restore'): Promise<void> {
   const generation = ++roomLoadGeneration
   roomLoading.value = true
   roomLoadError.value = null
   roomDetails.value = null
+  roomProblems.value = []
+  roomProgress.value = null
   clearRoomInput()
 
   try {
@@ -204,10 +287,18 @@ async function loadRoom(roomId: string, mode: 'restore' | 'start' = 'restore'): 
     }
     if (generation !== roomLoadGeneration) return
 
-    if (initialProblemId === null) {
-      throw new Error('最初に表示する問題がfixtureにありません')
-    }
-    await runProblem.loadSelectedProblem(roomId, initialProblemId)
+    const [problemsResponse, roomsResponse] = await Promise.all([
+      client.getProblems({ room_id: roomId }),
+      client.getRooms(),
+    ])
+    if (generation !== roomLoadGeneration) return
+
+    const initialProblem = selectInitialProblem(problemsResponse.items)
+    roomProblems.value = problemsResponse.items
+    roomProgress.value =
+      roomsResponse.items.find((item) => item.room_id === roomId)?.progress ?? null
+
+    await runProblem.loadSelectedProblem(roomId, initialProblem.id)
     if (generation !== roomLoadGeneration) return
     roomDetails.value = nextRoomDetails
     queryAnswer.setAnswerMaxLength(runProblem.state.problem?.input_schema.answer.max_length ?? null)
@@ -331,6 +422,10 @@ function bufferedOperationCount(): number {
 function roomErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Roomを読み込めませんでした。'
 }
+
+function portalRoomsErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Room一覧を読み込めませんでした。'
+}
 </script>
 
 <template>
@@ -351,6 +446,7 @@ function roomErrorMessage(error: unknown): string {
           @login="handleLogin"
           @guest-login="auth.loginGuest"
           @logout="auth.logout"
+          @retry-rooms="loadPortalRooms"
           @start-room="handleRoomSelected"
         />
       </template>

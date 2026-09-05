@@ -11,6 +11,7 @@ import meAuthenticated from '../../../../openapi/examples/auth/me-demo-authentic
 import meUnauthenticated from '../../../../openapi/examples/auth/me-demo-unauthenticated.json'
 import unauthorized from '../../../../openapi/examples/auth/error-unauthorized.json'
 import problemLocked from '../../../../openapi/examples/problems/error-problem-locked.json'
+import problemsResponse from '../../../../openapi/examples/problems/list-response.json'
 import queryCorrect from '../../../../openapi/examples/queries/response-correct.json'
 import roomActive from '../../../../openapi/examples/rooms/response-active.json'
 import currentRun from '../../../../openapi/examples/runs/active-response.json'
@@ -221,6 +222,15 @@ describe('OpenAPI-backed MSW handlers', () => {
     const response = await fetch(`${BASE_URL}/api/rooms/${ROOM_ID}/problems/${PROBLEM_ID}`)
     expect(response.status).toBe(409)
     expect(await response.json()).toEqual(problemLocked)
+  })
+
+  it('returns the active run problem list from the shared fixture', async () => {
+    startMock('get_available_problem')
+
+    const response = await fetch(`${BASE_URL}/api/rooms/${ROOM_ID}/problems`)
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(problemsResponse)
   })
 
   it.each([

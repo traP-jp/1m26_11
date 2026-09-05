@@ -10,13 +10,17 @@ import type { PortalUserStatusState } from './components/portal/PortalHeader.typ
 import type { PortalPageProps } from './PortalPage.types'
 import RoomCard from './RoomCard.vue'
 
-const props = defineProps<PortalPageProps>()
+const props = withDefaults(defineProps<PortalPageProps>(), {
+  roomsLoading: false,
+  roomsError: null,
+})
 const emit = defineEmits<{
   login: []
   guestLogin: [displayName: string]
   logout: []
   showInstructions: []
   startRoom: [roomId: string]
+  retryRooms: []
 }>()
 
 const guestNameForm = ref<InstanceType<typeof GuestNameForm> | null>(null)
@@ -78,9 +82,17 @@ function handleLogin(): void {
     <template v-else>
       <h1 class="portal-page__title">Portal</h1>
       <p class="portal-page__description">挑戦する部屋を選んでください。</p>
-      <MinimalProgressSummary :status="progressStatus" />
-      <section aria-label="必須の部屋" class="card-list">
-        <RoomCard :room="requiredRoom" :starting="authBusy" @start="emit('startRoom', $event)" />
+      <p v-if="roomsLoading" role="status">Room一覧を読み込んでいます…</p>
+      <section v-else-if="roomsError" role="alert">
+        <p>{{ roomsError }}</p>
+        <button type="button" @click="emit('retryRooms')">再試行</button>
+      </section>
+      <section v-else aria-label="公開中の部屋" class="card-list">
+        <p v-if="rooms.length === 0" role="status">公開中の部屋はありません。</p>
+        <div v-for="item in rooms" v-else :key="item.room.room_id" class="room-entry">
+          <MinimalProgressSummary :status="item.progressStatus" />
+          <RoomCard :room="item.room" :starting="authBusy" @start="emit('startRoom', $event)" />
+        </div>
       </section>
     </template>
   </main>

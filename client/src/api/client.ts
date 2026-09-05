@@ -5,12 +5,15 @@ type JsonContent<T> = T extends { content: { 'application/json': infer Body } } 
 export type GetMeResponse = JsonContent<operations['getMe']['responses'][200]>
 export type LoginGuestRequest = JsonContent<operations['loginGuest']['requestBody']>
 export type LoginGuestResponse = JsonContent<operations['loginGuest']['responses'][200]>
+export type GetRoomsResponse = JsonContent<operations['getRooms']['responses'][200]>
 export type GetRoomPath = operations['getRoom']['parameters']['path']
 export type GetRoomResponse = JsonContent<operations['getRoom']['responses'][200]>
 export type StartOrResumeRunPath = operations['startOrResumeRun']['parameters']['path']
 export type StartOrResumeRunResponse = JsonContent<operations['startOrResumeRun']['responses'][200]>
 export type GetCurrentRunPath = operations['getCurrentRun']['parameters']['path']
 export type GetCurrentRunResponse = JsonContent<operations['getCurrentRun']['responses'][200]>
+export type GetProblemsPath = operations['getProblems']['parameters']['path']
+export type GetProblemsResponse = JsonContent<operations['getProblems']['responses'][200]>
 export type GetProblemPath = operations['getProblem']['parameters']['path']
 export type GetProblemResponse = JsonContent<operations['getProblem']['responses'][200]>
 export type GetProblemAssetsPath = operations['getProblemAssets']['parameters']['path']
@@ -97,9 +100,11 @@ export interface ApiClient {
   getMe(): Promise<GetMeResponse>
   loginGuest(body: LoginGuestRequest): Promise<LoginGuestResponse>
   logoutDemo(): Promise<void>
+  getRooms(): Promise<GetRoomsResponse>
   getRoom(path: GetRoomPath): Promise<GetRoomResponse>
   startOrResumeRun(path: StartOrResumeRunPath): Promise<StartOrResumeRunResponse>
   getCurrentRun(path: GetCurrentRunPath): Promise<GetCurrentRunResponse>
+  getProblems(path: GetProblemsPath): Promise<GetProblemsResponse>
   getProblem(path: GetProblemPath): Promise<GetProblemResponse>
   getProblemAssets(path: GetProblemAssetsPath): Promise<GetProblemAssetsResponse>
   submitQuery(path: SubmitQueryPath, body: SubmitQueryRequest): Promise<SubmitQueryResponse>
@@ -237,6 +242,8 @@ export function createApiClient(
 
     logoutDemo: () => requestNoContent('/api/auth/logout', { method: 'POST' }),
 
+    getRooms: () => requestJson<GetRoomsResponse>('/api/rooms', { method: 'GET' }),
+
     getRoom: ({ room_id }) =>
       requestJson<GetRoomResponse>(`/api/rooms/${encodeURIComponent(room_id)}`, {
         method: 'GET',
@@ -249,6 +256,11 @@ export function createApiClient(
 
     getCurrentRun: ({ room_id }) =>
       requestJson<GetCurrentRunResponse>(`/api/rooms/${encodeURIComponent(room_id)}/runs/current`, {
+        method: 'GET',
+      }),
+
+    getProblems: ({ room_id }) =>
+      requestJson<GetProblemsResponse>(`/api/rooms/${encodeURIComponent(room_id)}/problems`, {
         method: 'GET',
       }),
 

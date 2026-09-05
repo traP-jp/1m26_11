@@ -9,10 +9,12 @@ import guestRequest from '../../../../openapi/examples/auth/guest-request.json'
 import guestResponse from '../../../../openapi/examples/auth/guest-response.json'
 import meAuthenticated from '../../../../openapi/examples/auth/me-demo-authenticated.json'
 import problemLocked from '../../../../openapi/examples/problems/error-problem-locked.json'
+import problemsResponse from '../../../../openapi/examples/problems/list-response.json'
 import problemResponse from '../../../../openapi/examples/problems/available-response.json'
 import queryRequest from '../../../../openapi/examples/queries/request-serial.json'
 import queryIncorrect from '../../../../openapi/examples/queries/response-incorrect.json'
 import roomActive from '../../../../openapi/examples/rooms/response-active.json'
+import roomsResponse from '../../../../openapi/examples/rooms/response-authenticated-active.json'
 import currentRun from '../../../../openapi/examples/runs/active-response.json'
 import runNotFound from '../../../../openapi/examples/runs/error-run-not-found.json'
 import newRun from '../../../../openapi/examples/runs/start-new-response.json'
@@ -123,6 +125,14 @@ describe('ApiClient', () => {
       expectedResult: undefined,
     },
     {
+      name: 'getRooms',
+      method: 'GET',
+      path: '/api/rooms',
+      invoke: () => client.getRooms(),
+      response: HttpResponse.json(roomsResponse),
+      expectedResult: roomsResponse,
+    },
+    {
       name: 'getRoom',
       method: 'GET',
       path: `/api/rooms/${ROOM_ID}`,
@@ -145,6 +155,14 @@ describe('ApiClient', () => {
       invoke: () => client.getCurrentRun(runPath),
       response: HttpResponse.json(currentRun),
       expectedResult: currentRun,
+    },
+    {
+      name: 'getProblems',
+      method: 'GET',
+      path: `/api/rooms/${ROOM_ID}/problems`,
+      invoke: () => client.getProblems(roomPath),
+      response: HttpResponse.json(problemsResponse),
+      expectedResult: problemsResponse,
     },
     {
       name: 'getProblem',

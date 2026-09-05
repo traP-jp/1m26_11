@@ -5,6 +5,7 @@ import { createMemoryHistory, type Router } from 'vue-router'
 import App from '../App.vue'
 import PortalPage from '../PortalPage.vue'
 import RoomPage from '../RoomPage.vue'
+import RoomCard from '../RoomCard.vue'
 import AuthActionButton from '../components/auth/AuthActionButton.vue'
 import UserMenu from '../components/auth/UserMenu.vue'
 import AuthorProblemPage from '../AuthorProblemPage.vue'
@@ -15,7 +16,9 @@ import meUnauthenticated from '../../../openapi/examples/auth/me-demo-unauthenti
 import meNeoshowcaseAuthenticated from '../../../openapi/examples/auth/me-neoshowcase-authenticated.json'
 import meNeoshowcaseUnauthenticated from '../../../openapi/examples/auth/me-neoshowcase-unauthenticated.json'
 import problemResponse from '../../../openapi/examples/problems/available-response.json'
+import problemsResponse from '../../../openapi/examples/problems/list-response.json'
 import roomActive from '../../../openapi/examples/rooms/response-active.json'
+import roomsResponse from '../../../openapi/examples/rooms/response-authenticated-active.json'
 import currentRun from '../../../openapi/examples/runs/active-response.json'
 import newRun from '../../../openapi/examples/runs/start-new-response.json'
 import answerCleared from '../../../openapi/examples/answers/response-correct-cleared.json'
@@ -26,8 +29,10 @@ import {
   type ApiClient,
   type GetCurrentRunResponse,
   type GetMeResponse,
+  type GetProblemsResponse,
   type GetProblemResponse,
   type GetRoomResponse,
+  type GetRoomsResponse,
   type LoginGuestResponse,
   type StartOrResumeRunResponse,
   type SubmitAnswerResponse,
@@ -57,6 +62,7 @@ function createAppApiClient(overrides: Partial<ApiClient> = {}): ApiClient {
     getMe: vi.fn<ApiClient['getMe']>().mockResolvedValue(meAuthenticated as GetMeResponse),
     loginGuest: vi.fn<ApiClient['loginGuest']>(),
     logoutDemo: vi.fn<ApiClient['logoutDemo']>(),
+    getRooms: vi.fn<ApiClient['getRooms']>().mockResolvedValue(roomsResponse as GetRoomsResponse),
     getRoom: vi.fn<ApiClient['getRoom']>(({ room_id }) =>
       Promise.resolve({ ...(roomActive as GetRoomResponse), id: room_id }),
     ),
@@ -71,6 +77,9 @@ function createAppApiClient(overrides: Partial<ApiClient> = {}): ApiClient {
         details: {},
       }),
     ),
+    getProblems: vi
+      .fn<ApiClient['getProblems']>()
+      .mockResolvedValue(problemsResponse as GetProblemsResponse),
     getProblem: vi
       .fn<ApiClient['getProblem']>()
       .mockResolvedValue(problemResponse as GetProblemResponse),
@@ -125,21 +134,27 @@ describe('App', () => {
   it('navigates from Portal to Room and back through semantic UI events', async () => {
     const client = createAppApiClient()
     const { router, wrapper } = await mountAt('/', client)
+    const roomId = (roomsResponse as GetRoomsResponse).items[0]!.room_id
+    const roomCard = wrapper.getComponent(RoomCard)
 
-    wrapper.getComponent(PortalPage).vm.$emit('startRoom', '1411824c-d357-4941-af76-c76cb827dda6')
+    await roomCard.get('.room-card__header').trigger('click')
+    await roomCard.get('.room-card__start').trigger('click')
     await flushPromises()
 
-    expect(router.currentRoute.value.fullPath).toBe('/rooms/1411824c-d357-4941-af76-c76cb827dda6')
+    expect(router.currentRoute.value.fullPath).toBe(`/rooms/${roomId}`)
     expect(wrapper.findComponent(RoomPage).exists()).toBe(true)
     expect(client.getRoom).toHaveBeenCalledExactlyOnceWith({
-      room_id: '1411824c-d357-4941-af76-c76cb827dda6',
+      room_id: roomId,
     })
     expect(client.getCurrentRun).not.toHaveBeenCalled()
     expect(client.startOrResumeRun).toHaveBeenCalledExactlyOnceWith({
-      room_id: '1411824c-d357-4941-af76-c76cb827dda6',
+      room_id: roomId,
+    })
+    expect(client.getProblems).toHaveBeenCalledExactlyOnceWith({
+      room_id: roomId,
     })
     expect(client.getProblem).toHaveBeenCalledExactlyOnceWith({
-      room_id: '1411824c-d357-4941-af76-c76cb827dda6',
+      room_id: roomId,
       problem_id: problemResponse.id,
     })
 
@@ -163,15 +178,52 @@ describe('App', () => {
       room_id: '1411824c-d357-4941-af76-c76cb827dda6',
     })
     expect(startOrResumeRun).not.toHaveBeenCalled()
-    expect(wrapper.getComponent(RoomPage).props('viewModel')).toMatchObject({
+    const viewModel = wrapper.getComponent(RoomPage).props('viewModel')
+    expect(viewModel).toMatchObject({
       room: {
         id: '1411824c-d357-4941-af76-c76cb827dda6',
         number: roomActive.number,
         name: roomActive.name,
       },
       serverElapsedMs: currentRun.elapsed_ms,
-      problems: [{ id: problemResponse.id, status: 'cleared', selected: true }],
       clear: { clearedCount: currentRun.cleared_problem_ids.length },
+    })
+    expect(viewModel.problems).toHaveLength(problemsResponse.items.length)
+    expect(viewModel.problems[0]).toMatchObject({
+      id: problemResponse.id,
+      status: 'cleared',
+      selected: true,
+    })
+  })
+
+  it('loads the first available problem ID returned by the API', async () => {
+    const apiProblemId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const typedProblems = problemsResponse as GetProblemsResponse
+    const firstProblem = typedProblems.items[0]!
+    const secondProblem = typedProblems.items[1]!
+    const getProblems = vi.fn<ApiClient['getProblems']>().mockResolvedValue({
+      items: [
+        {
+          ...firstProblem,
+          status: 'locked',
+        },
+        {
+          ...secondProblem,
+          id: apiProblemId,
+          status: 'available',
+        },
+      ],
+    })
+    const getProblem = vi.fn<ApiClient['getProblem']>(({ problem_id }) =>
+      Promise.resolve({ ...(problemResponse as GetProblemResponse), id: problem_id }),
+    )
+    const client = createAppApiClient({ getProblems, getProblem })
+
+    await mountAt('/rooms/1411824c-d357-4941-af76-c76cb827dda6', client)
+
+    expect(getProblem).toHaveBeenCalledExactlyOnceWith({
+      room_id: '1411824c-d357-4941-af76-c76cb827dda6',
+      problem_id: apiProblemId,
     })
   })
 
