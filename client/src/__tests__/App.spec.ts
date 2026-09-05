@@ -227,6 +227,40 @@ describe('App', () => {
     })
   })
 
+  it('refreshes the server elapsed time when selecting another problem', async () => {
+    const roomId = '1411824c-d357-4941-af76-c76cb827dda6'
+    const nextProblemId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const refreshedRun: GetCurrentRunResponse = {
+      ...(currentRun as GetCurrentRunResponse),
+      elapsed_ms: currentRun.elapsed_ms + 30_000,
+    }
+    const getCurrentRun = vi
+      .fn<ApiClient['getCurrentRun']>()
+      .mockResolvedValueOnce(currentRun as GetCurrentRunResponse)
+      .mockResolvedValueOnce(refreshedRun)
+    const getProblem = vi.fn<ApiClient['getProblem']>(({ problem_id }) =>
+      Promise.resolve({ ...(problemResponse as GetProblemResponse), id: problem_id }),
+    )
+    const client = createAppApiClient({ getCurrentRun, getProblem })
+    const { wrapper } = await mountAt(`/rooms/${roomId}`, client)
+
+    wrapper.getComponent(RoomPage).vm.$emit('uiEvent', {
+      type: 'problem-selected',
+      problemId: nextProblemId,
+    })
+    await flushPromises()
+
+    expect(getCurrentRun).toHaveBeenCalledTimes(2)
+    expect(getCurrentRun).toHaveBeenLastCalledWith({ room_id: roomId })
+    expect(getProblem).toHaveBeenLastCalledWith({
+      room_id: roomId,
+      problem_id: nextProblemId,
+    })
+    expect(wrapper.getComponent(RoomPage).props('viewModel').serverElapsedMs).toBe(
+      refreshedRun.elapsed_ms,
+    )
+  })
+
   it('keeps the newest Room when an older restore finishes later', async () => {
     const firstRoomId = '1411824c-d357-4941-af76-c76cb827dda6'
     const secondRoomId = '1411824c-d357-4941-af76-c76cb827dda7'
