@@ -112,16 +112,23 @@ export class RunProblemController {
     this.state.problemStatus = 'loading'
 
     try {
-      const problem = await this.client.getProblem({ room_id: roomId, problem_id: problemId })
+      const path = { room_id: roomId, problem_id: problemId }
+      const problem = await this.client.getProblem(path)
+      const assets =
+        problem.assets.length > 0 ? (await this.client.getProblemAssets(path)).items : []
+      const problemWithDownloadUrls: GetProblemResponse = {
+        ...problem,
+        assets,
+      }
       if (generation.payload === this.problemRequestGeneration) {
-        this.state.problem = problem
-        this.state.problemStatus = problem.status
+        this.state.problem = problemWithDownloadUrls
+        this.state.problemStatus = problemWithDownloadUrls.status
         if (generation.state === this.stateRequestGeneration) {
           this.state.phase = 'ready'
           this.state.error = null
         }
       }
-      return problem
+      return problemWithDownloadUrls
     } catch (error) {
       throw this.failProblem(error, generation)
     }
